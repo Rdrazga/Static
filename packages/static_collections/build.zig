@@ -30,13 +30,6 @@ pub fn build(b: *std.Build) void {
     options.addOption([]const u8, "static_package", "static_collections");
     const options_mod = options.createModule();
 
-    const core_dep = b.dependency("static_core", .{
-        .target = target,
-        .optimize = optimize,
-        .single_threaded = single_threaded,
-        .enable_os_backends = enable_os_backends,
-        .enable_tracing = enable_tracing,
-    });
     const memory_dep = b.dependency("static_memory", .{
         .target = target,
         .optimize = optimize,
@@ -52,7 +45,6 @@ pub fn build(b: *std.Build) void {
         .enable_tracing = enable_tracing,
     });
 
-    const core_mod = core_dep.module("static_core");
     const memory_mod = memory_dep.module("static_memory");
     const hash_mod = hash_dep.module("static_hash");
 
@@ -61,7 +53,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .imports = &.{
             .{ .name = "static_build_options", .module = options_mod },
-            .{ .name = "static_core", .module = core_mod },
             .{ .name = "static_memory", .module = memory_mod },
             .{ .name = "static_hash", .module = hash_mod },
         },

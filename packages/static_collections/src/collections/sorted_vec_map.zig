@@ -55,6 +55,37 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             self.budget_reserved_capacity = needed;
         }
 
+        /// Grows the entry backing array to at least `required` capacity using
+        /// geometric growth. Budget tracks actual allocated capacity so that
+        /// budget accounting matches real memory usage.
+        fn ensureEntryGrowth(self: *Self, required: usize) Error!void {
+            if (required <= self.entries.capacity) return;
+
+            const old_capacity = self.entries.capacity;
+            const candidate = if (old_capacity == 0)
+                required
+            else blk: {
+                const doubled = std.math.mul(usize, old_capacity, 2) catch return error.Overflow;
+                break :blk @max(required, doubled);
+            };
+
+            const old_budget = self.budget_reserved_capacity;
+            try self.ensureBudgetCapacity(candidate);
+
+            self.entries.ensureTotalCapacityPrecise(self.allocator, candidate) catch {
+                if (self.budget) |budget| {
+                    if (self.budget_reserved_capacity > old_budget) {
+                        const rollback = (entryBytesForCapacity(self.budget_reserved_capacity) catch unreachable) -
+                            (entryBytesForCapacity(old_budget) catch unreachable);
+                        budget.release(rollback);
+                        self.budget_reserved_capacity = old_budget;
+                    }
+                }
+                return error.OutOfMemory;
+            };
+            assert(self.entries.capacity >= candidate);
+        }
+
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
             var self: Self = .{
                 .allocator = allocator,
@@ -71,12 +102,71 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
                     return error.OutOfMemory;
                 };
             }
-            self.assertInvariants();
+            self.assertFullInvariants();
             return self;
         }
 
+        /// Shrinks backing capacity to match the current logical length.
+        pub fn shrinkToFit(self: *Self) void {
+            self.assertStructuralInvariants();
+            const old_capacity = self.entries.capacity;
+            self.entries.shrinkAndFree(self.allocator, self.entries.items.len);
+            const new_capacity = self.entries.capacity;
+            if (self.budget != null and new_capacity < old_capacity) {
+                const released = (entryBytesForCapacity(old_capacity) catch unreachable) -
+                    (entryBytesForCapacity(new_capacity) catch unreachable);
+                self.budget.?.release(released);
+                self.budget_reserved_capacity = new_capacity;
+            }
+            self.assertFullInvariants();
+        }
+
+        /// Creates an independent copy with its own backing memory.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertFullInvariants();
+            const cap = self.entries.capacity;
+            const len_val = self.entries.items.len;
+
+            if (cap == 0) {
+                return Self{
+                    .allocator = self.allocator,
+                    .budget = self.budget,
+                };
+            }
+
+            if (self.budget) |budget| {
+                const bytes = entryBytesForCapacity(cap) catch return error.Overflow;
+                budget.tryReserve(bytes) catch |err| switch (err) {
+                    error.NoSpaceLeft => return error.NoSpaceLeft,
+                    error.InvalidConfig => return error.InvalidConfig,
+                    error.Overflow => return error.Overflow,
+                };
+            }
+
+            const new_buf = self.allocator.alloc(Entry, cap) catch {
+                if (self.budget) |budget| {
+                    const bytes = entryBytesForCapacity(cap) catch unreachable;
+                    budget.release(bytes);
+                }
+                return error.OutOfMemory;
+            };
+            @memcpy(new_buf[0..len_val], self.entries.items);
+
+            var result: Self = .{
+                .allocator = self.allocator,
+                .budget = self.budget,
+                .budget_reserved_capacity = self.budget_reserved_capacity,
+                .entries = .{
+                    .items = new_buf[0..len_val],
+                    .capacity = cap,
+                },
+            };
+            result.assertFullInvariants();
+            return result;
+        }
+
         pub fn deinit(self: *Self) void {
-            self.assertInvariants();
+            self.assertFullInvariants();
             if (self.budget) |budget| {
                 const bytes = entryBytesForCapacity(self.budget_reserved_capacity) catch unreachable;
                 budget.release(bytes);
@@ -86,12 +176,12 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         }
 
         pub fn len(self: *const Self) usize {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             return self.entries.items.len;
         }
 
         pub fn get(self: *Self, key: K) ?*V {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             const search = self.findIndex(key);
             if (!search.found) return null;
             assert(search.index < self.entries.items.len);
@@ -99,26 +189,34 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         }
 
         pub fn getConst(self: *const Self, key: K) ?*const V {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             const search = self.findIndex(key);
             if (!search.found) return null;
             assert(search.index < self.entries.items.len);
             return &self.entries.items[search.index].value;
         }
 
+        /// Resets the map to empty without releasing backing memory or budget.
+        /// Capacity and budget remain unchanged.
+        pub fn clear(self: *Self) void {
+            self.assertStructuralInvariants();
+            self.entries.clearRetainingCapacity();
+            assert(self.entries.items.len == 0);
+            self.assertFullInvariants();
+        }
+
         pub fn put(self: *Self, key: K, value: V) Error!void {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             const search = self.findIndex(key);
             if (search.found) {
                 self.entries.items[search.index].value = value;
-                self.assertInvariants();
+                self.assertFullInvariants();
                 return;
             }
 
             // Reserve budget and backing capacity before mutating.
             const needed_capacity = std.math.add(usize, self.entries.items.len, 1) catch return error.Overflow;
-            try self.ensureBudgetCapacity(needed_capacity);
-            self.entries.ensureUnusedCapacity(self.allocator, 1) catch return error.OutOfMemory;
+            try self.ensureEntryGrowth(needed_capacity);
 
             const old_len = self.entries.items.len;
 
@@ -142,11 +240,11 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
                 );
             }
             self.entries.items[search.index] = .{ .key = key, .value = value };
-            self.assertInvariants();
+            self.assertFullInvariants();
         }
 
         pub fn remove(self: *Self, key: K) (error{NotFound} || Error)!V {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             const search = self.findIndex(key);
             if (!search.found) return error.NotFound;
             const old_len = self.entries.items.len;
@@ -160,7 +258,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             }
             _ = self.entries.pop();
             assert(self.entries.items.len == old_len - 1);
-            self.assertInvariants();
+            self.assertFullInvariants();
             return old;
         }
 
@@ -199,7 +297,15 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             return std.math.order(a, b);
         }
 
-        fn assertInvariants(self: *const Self) void {
+        /// O(1) structural check: entry count within capacity.
+        fn assertStructuralInvariants(self: *const Self) void {
+            assert(self.entries.items.len <= self.entries.capacity);
+        }
+
+        /// O(n) full validation: verifies strict sorted order of all entries.
+        /// Called only after mutations (put, remove) and at init/deinit.
+        fn assertFullInvariants(self: *const Self) void {
+            self.assertStructuralInvariants();
             const list = self.entries.items;
             if (list.len <= 1) return;
 
@@ -283,4 +389,41 @@ test "sorted vec map honors custom comparator" {
     try std.testing.expectEqual(@as(u32, 3), m.entries.items[0].key);
     try std.testing.expectEqual(@as(u32, 2), m.entries.items[1].key);
     try std.testing.expectEqual(@as(u32, 1), m.entries.items[2].key);
+}
+
+test "sorted vec map clear resets length and allows reuse" {
+    // Goal: confirm clear empties the map while preserving capacity.
+    // Method: insert values, clear, verify empty, then reinsert.
+    const Cmp = struct {};
+    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{});
+    defer m.deinit();
+    try m.put(1, 10);
+    try m.put(2, 20);
+    assert(m.len() == 2);
+
+    m.clear();
+    try std.testing.expectEqual(@as(usize, 0), m.len());
+    try std.testing.expect(m.get(1) == null);
+
+    try m.put(3, 30);
+    try std.testing.expectEqual(@as(usize, 1), m.len());
+    try std.testing.expectEqual(@as(u32, 30), m.get(3).?.*);
+}
+
+test "sorted vec map budget tracks capacity" {
+    // Goal: verify budget is reserved on insert and fully released on deinit.
+    // Method: create with budget, insert values, verify used > 0, deinit, verify zero.
+    const Cmp = struct {};
+    const entry_size = @sizeOf(SortedVecMap(u32, u32, Cmp).Entry);
+    var budget = try memory.budget.Budget.init(entry_size * 16);
+
+    {
+        var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = &budget });
+        defer m.deinit();
+
+        try m.put(1, 10);
+        try m.put(2, 20);
+        try std.testing.expect(budget.used() > 0);
+    }
+    try std.testing.expectEqual(@as(u64, 0), budget.used());
 }

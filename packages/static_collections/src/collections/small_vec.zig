@@ -4,9 +4,10 @@
 //! When the inline buffer is exceeded the data is moved to a heap-backed `Vec(T)`.
 //!
 //! Spill is permanent: once heap-allocated, the SmallVec remains heap-backed
-//! regardless of subsequent element count. Callers who need to reclaim the heap
-//! allocation must `deinit` and reconstruct. Use `ensureCapacity` during setup
-//! to pre-allocate if the expected size is known to exceed inline capacity.
+//! regardless of subsequent element count. `shrinkToFit()` may still reduce the
+//! spilled Vec's reserved capacity, but it never migrates elements back into the
+//! inline buffer. Use `ensureCapacity` during setup to pre-allocate if the
+//! expected size is known to exceed inline capacity.
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
@@ -65,18 +66,58 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             return self.inline_items[0..self.inline_len];
         }
 
+        pub fn pop(self: *Self) ?T {
+            self.assertInvariants();
+            if (self.spill) |*spill| {
+                const out = spill.pop();
+                self.assertInvariants();
+                return out;
+            }
+            if (self.inline_len == 0) return null;
+            self.inline_len -= 1;
+            const out = self.inline_items[self.inline_len];
+            assert(self.inline_len <= InlineN);
+            self.assertInvariants();
+            return out;
+        }
+
+        /// Shrinks the spilled Vec's capacity to match its length. No-op if inline.
+        pub fn shrinkToFit(self: *Self) void {
+            self.assertInvariants();
+            if (self.spill) |*spill| spill.shrinkToFit();
+            self.assertInvariants();
+        }
+
+        /// Creates an independent copy. If spilled, the inner Vec is cloned.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertInvariants();
+            var result: Self = .{
+                .allocator = self.allocator,
+                .budget = self.budget,
+            };
+            if (self.spill) |spill| {
+                result.spill = try spill.clone();
+                result.inline_len = 0;
+            } else {
+                result.inline_len = self.inline_len;
+                @memcpy(result.inline_items[0..self.inline_len], self.inline_items[0..self.inline_len]);
+            }
+            result.assertInvariants();
+            return result;
+        }
+
         /// Pre-allocates spill capacity so that subsequent appends up to `n`
         /// total elements do not allocate. If `n <= InlineN`, this is a no-op.
         pub fn ensureCapacity(self: *Self, n: usize) Error!void {
             self.assertInvariants();
             if (n <= InlineN) return;
+            if (n > std.math.maxInt(u32)) return error.Overflow;
             if (self.spill) |*spill| {
                 try spill.ensureCapacity(n);
                 self.assertInvariants();
                 return;
             }
             // Trigger spill with sufficient capacity.
-            assert(n <= std.math.maxInt(u32));
             var spill = try vec_mod.Vec(T).init(self.allocator, .{
                 .initial_capacity = @intCast(n),
                 .budget = self.budget,
@@ -86,6 +127,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
                 try spill.append(item);
             }
             self.spill = spill;
+            self.inline_len = 0;
             self.assertInvariants();
         }
 
@@ -107,7 +149,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             const needed_capacity = std.math.add(usize, self.inline_len, 1) catch return error.Overflow;
             // Narrowing: needed_capacity is bounded by InlineN + 1 (a comptime constant) at this
             // code path (reached only when inline_len >= InlineN), so the u32 cast is safe.
-            assert(needed_capacity <= std.math.maxInt(u32));
+            if (needed_capacity > std.math.maxInt(u32)) return error.Overflow;
             const spill_initial_capacity: u32 = if (self.budget != null)
                 @intCast(needed_capacity)
             else if (InlineN == 0)
@@ -129,6 +171,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             // element that triggered spill.
             try spill.append(value);
             self.spill = spill;
+            self.inline_len = 0;
             assert(self.spill != null);
             self.assertInvariants();
         }
@@ -137,12 +180,10 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             // Invariant: inline_len never exceeds the compile-time inline capacity.
             assert(self.inline_len <= InlineN);
             if (self.spill) |spill| {
-                // Invariant: discriminant matches storage — if spill exists it holds at
-                // least as many elements as were migrated from inline storage.
-                assert(spill.len() >= self.inline_len);
-                // Invariant: once spilled, inline_len is frozen at its migration value
-                // which is at most InlineN; spill owns the authoritative length.
-                assert(self.inline_len <= InlineN);
+                // Once spilled, the heap-backed Vec becomes the only authoritative
+                // storage and the inline prefix is retired.
+                assert(self.inline_len == 0);
+                assert(spill.len() == spill.itemsConst().len);
             }
         }
     };
@@ -183,4 +224,66 @@ test "small vec inline capacity zero spills immediately" {
     try s.append(9);
     try std.testing.expectEqual(@as(usize, 1), s.len());
     try std.testing.expectEqual(@as(u8, 9), s.items()[0]);
+}
+
+test "small vec pop returns last element from inline and spill" {
+    // Goal: validate LIFO pop semantics across inline and spill storage.
+    // Method: pop inline items, then pop after spill transition.
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    defer s.deinit();
+
+    try std.testing.expect(s.pop() == null);
+    try s.append(1);
+    try s.append(2);
+    try std.testing.expectEqual(@as(u8, 2), s.pop().?);
+    try std.testing.expectEqual(@as(u8, 1), s.pop().?);
+    try std.testing.expect(s.pop() == null);
+
+    // After spill
+    try s.append(10);
+    try s.append(20);
+    try s.append(30);
+    try std.testing.expectEqual(@as(u8, 30), s.pop().?);
+    try std.testing.expectEqual(@as(usize, 2), s.len());
+}
+
+test "small vec spilled storage can drain back to empty" {
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    defer s.deinit();
+
+    try s.append(1);
+    try s.append(2);
+    try s.append(3);
+
+    try std.testing.expectEqual(@as(u8, 3), s.pop().?);
+    try std.testing.expectEqual(@as(u8, 2), s.pop().?);
+    try std.testing.expectEqual(@as(u8, 1), s.pop().?);
+    try std.testing.expect(s.pop() == null);
+    try std.testing.expectEqual(@as(usize, 0), s.len());
+}
+
+test "small vec spilled storage may shrink below inline capacity without respilling inline" {
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    defer s.deinit();
+
+    try s.append(1);
+    try s.append(2);
+    try s.append(3);
+    try std.testing.expect(s.spill != null);
+
+    _ = s.pop();
+    _ = s.pop();
+    try std.testing.expectEqual(@as(usize, 1), s.len());
+
+    s.shrinkToFit();
+    try std.testing.expect(s.spill != null);
+    try std.testing.expectEqual(@as(usize, 1), s.spill.?.capacity());
+    try std.testing.expectEqual(@as(u8, 1), s.items()[0]);
+}
+
+test "small vec ensureCapacity returns Overflow for oversized public requests" {
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    defer s.deinit();
+
+    try std.testing.expectError(error.Overflow, s.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));
 }

@@ -1,6 +1,6 @@
 //! Sparse set: O(1) insert, remove, and membership test with dense iteration.
 //!
-//! Key type: `SparseSet(T)`. Uses a paired sparse array (indexed by ID) and a dense
+//! Key type: `SparseSet`. Uses a paired sparse array (indexed by ID) and a dense
 //! array (packed values). Membership tests and mutations are O(1); iteration over
 //! all members is cache-friendly via the dense array.
 //!
@@ -57,12 +57,12 @@ pub const SparseSet = struct {
             .budget_reserved_bytes = sparse_bytes,
             .sparse = sparse,
         };
-        self.assertInvariants();
+        self.assertFullInvariants();
         return self;
     }
 
     pub fn deinit(self: *SparseSet) void {
-        self.assertInvariants();
+        self.assertFullInvariants();
         if (self.budget) |budget| {
             budget.release(self.budget_reserved_bytes);
         }
@@ -71,13 +71,58 @@ pub const SparseSet = struct {
         self.* = undefined;
     }
 
+    /// Creates an independent copy with its own backing memory.
+    pub fn clone(self: *const SparseSet) Error!SparseSet {
+        self.assertStructuralInvariants();
+        const sparse_bytes = std.math.mul(usize, self.sparse.len, @sizeOf(u32)) catch return error.Overflow;
+        const dense_bytes = std.math.mul(usize, self.dense.capacity, @sizeOf(u32)) catch return error.Overflow;
+        const total_bytes = std.math.add(usize, sparse_bytes, dense_bytes) catch return error.Overflow;
+
+        if (self.budget) |budget| {
+            budget.tryReserve(total_bytes) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+        }
+
+        const new_sparse = self.allocator.alloc(u32, self.sparse.len) catch {
+            if (self.budget) |budget| budget.release(total_bytes);
+            return error.OutOfMemory;
+        };
+        errdefer {
+            self.allocator.free(new_sparse);
+            if (self.budget) |budget| budget.release(total_bytes);
+        }
+        @memcpy(new_sparse, self.sparse);
+
+        const dense_cap = self.dense.capacity;
+        const dense_len = self.dense.items.len;
+        var new_dense: std.ArrayListUnmanaged(u32) = .{};
+        if (dense_cap > 0) {
+            new_dense.ensureTotalCapacityPrecise(self.allocator, dense_cap) catch return error.OutOfMemory;
+            @memcpy(new_dense.items.ptr[0..dense_len], self.dense.items);
+            new_dense.items.len = dense_len;
+        }
+
+        var result: SparseSet = .{
+            .allocator = self.allocator,
+            .budget = self.budget,
+            .budget_reserved_bytes = total_bytes,
+            .sparse = new_sparse,
+            .dense = new_dense,
+        };
+        result.assertFullInvariants();
+        return result;
+    }
+
     pub fn len(self: *const SparseSet) usize {
-        self.assertInvariants();
+        self.assertStructuralInvariants();
         return self.dense.items.len;
     }
 
     pub fn contains(self: *const SparseSet, value: u32) bool {
-        self.assertInvariants();
+        self.assertStructuralInvariants();
         const idx: usize = value;
         if (idx >= self.sparse.len) return false;
         const dense_idx = self.sparse[idx];
@@ -91,48 +136,53 @@ pub const SparseSet = struct {
     /// Use `ensureDenseCapacity` during setup to pre-allocate if allocation-free
     /// inserts are required after initialization.
     pub fn insert(self: *SparseSet, value: u32) Error!void {
-        self.assertInvariants();
+        self.assertStructuralInvariants();
         if (self.contains(value)) return;
         const idx: usize = value;
         if (idx >= self.sparse.len) return error.InvalidInput;
         const before_len = self.dense.items.len;
 
-        // Reserve budget for the new dense entry before allocating.
-        if (self.budget) |budget| {
-            const needed = std.math.add(usize, before_len, 1) catch return error.Overflow;
-            const needed_bytes = std.math.mul(usize, needed, @sizeOf(u32)) catch return error.Overflow;
-            const sparse_bytes = self.sparse.len * @sizeOf(u32);
-            const total_needed = std.math.add(usize, sparse_bytes, needed_bytes) catch return error.Overflow;
-            if (total_needed > self.budget_reserved_bytes) {
-                const delta = total_needed - self.budget_reserved_bytes;
-                budget.tryReserve(delta) catch |err| switch (err) {
-                    error.NoSpaceLeft => return error.NoSpaceLeft,
-                    error.InvalidConfig => return error.InvalidConfig,
-                    error.Overflow => return error.Overflow,
-                };
-                self.budget_reserved_bytes = total_needed;
-            }
-        }
+        const needed = std.math.add(usize, before_len, 1) catch return error.Overflow;
+        try self.ensureDenseGrowth(needed);
 
-        self.dense.append(self.allocator, value) catch return error.OutOfMemory;
+        self.dense.appendAssumeCapacity(value);
         assert(self.dense.items.len > before_len);
         // Overflow guard: dense length must fit in u32 before casting back to sparse index.
         assert(self.dense.items.len - 1 <= std.math.maxInt(u32));
         self.sparse[idx] = @intCast(self.dense.items.len - 1);
         assert(self.dense.items.len == before_len + 1);
         assert(self.contains(value));
-        self.assertInvariants();
+        self.assertFullInvariants();
     }
 
     /// Pre-allocates the dense backing array so that subsequent inserts up to
     /// `count` members do not allocate. Callers who need allocation-free
     /// inserts after setup should call this during initialization.
     pub fn ensureDenseCapacity(self: *SparseSet, count: usize) Error!void {
-        self.assertInvariants();
+        self.assertStructuralInvariants();
+        try self.ensureDenseGrowth(count);
+        self.assertStructuralInvariants();
+    }
+
+    /// Grows the dense backing array to at least `required` capacity using
+    /// geometric growth. Budget tracks the actual allocated capacity (not
+    /// logical length) so that budget accounting matches real memory usage.
+    fn ensureDenseGrowth(self: *SparseSet, required: usize) Error!void {
+        if (required <= self.dense.capacity) return;
+
+        const old_capacity = self.dense.capacity;
+        const candidate = if (old_capacity == 0)
+            required
+        else blk: {
+            const doubled = std.math.mul(usize, old_capacity, 2) catch return error.Overflow;
+            break :blk @max(required, doubled);
+        };
+
+        const sparse_bytes = std.math.mul(usize, self.sparse.len, @sizeOf(u32)) catch return error.Overflow;
+
         if (self.budget) |budget| {
-            const needed_bytes = std.math.mul(usize, count, @sizeOf(u32)) catch return error.Overflow;
-            const sparse_bytes = self.sparse.len * @sizeOf(u32);
-            const total_needed = std.math.add(usize, sparse_bytes, needed_bytes) catch return error.Overflow;
+            const new_dense_bytes = std.math.mul(usize, candidate, @sizeOf(u32)) catch return error.Overflow;
+            const total_needed = std.math.add(usize, sparse_bytes, new_dense_bytes) catch return error.Overflow;
             if (total_needed > self.budget_reserved_bytes) {
                 const delta = total_needed - self.budget_reserved_bytes;
                 budget.tryReserve(delta) catch |err| switch (err) {
@@ -143,12 +193,33 @@ pub const SparseSet = struct {
                 self.budget_reserved_bytes = total_needed;
             }
         }
-        self.dense.ensureTotalCapacity(self.allocator, count) catch return error.OutOfMemory;
-        self.assertInvariants();
+
+        self.dense.ensureTotalCapacityPrecise(self.allocator, candidate) catch {
+            if (self.budget) |budget| {
+                const old_dense_bytes = std.math.mul(usize, old_capacity, @sizeOf(u32)) catch unreachable;
+                const old_total = std.math.add(usize, sparse_bytes, old_dense_bytes) catch unreachable;
+                if (self.budget_reserved_bytes > old_total) {
+                    budget.release(self.budget_reserved_bytes - old_total);
+                    self.budget_reserved_bytes = old_total;
+                }
+            }
+            return error.OutOfMemory;
+        };
+        assert(self.dense.capacity >= candidate);
+    }
+
+    /// Resets the set to empty without releasing backing memory or budget.
+    /// Capacity and budget remain unchanged.
+    pub fn clear(self: *SparseSet) void {
+        self.assertStructuralInvariants();
+        @memset(self.sparse, invalid);
+        self.dense.clearRetainingCapacity();
+        assert(self.dense.items.len == 0);
+        self.assertFullInvariants();
     }
 
     pub fn remove(self: *SparseSet, value: u32) error{InvalidInput}!void {
-        self.assertInvariants();
+        self.assertStructuralInvariants();
         if (!self.contains(value)) return error.InvalidInput;
         const before_len = self.dense.items.len;
         assert(before_len > 0);
@@ -167,18 +238,24 @@ pub const SparseSet = struct {
         self.sparse[idx] = invalid;
         assert(self.dense.items.len == before_len - 1);
         assert(!self.contains(value));
-        self.assertInvariants();
+        self.assertFullInvariants();
     }
 
     pub fn items(self: *const SparseSet) []const u32 {
-        self.assertInvariants();
+        self.assertStructuralInvariants();
         return self.dense.items;
     }
 
-    fn assertInvariants(self: *const SparseSet) void {
-        // Structural invariant: the dense array can never be larger than the sparse array,
-        // because every dense slot corresponds to exactly one sparse entry.
+    /// O(1) structural check: dense array cannot exceed sparse array size.
+    fn assertStructuralInvariants(self: *const SparseSet) void {
         assert(self.dense.items.len <= self.sparse.len);
+    }
+
+    /// O(n) full validation: walks the dense array and verifies every
+    /// dense-to-sparse back-reference is consistent. Called only after
+    /// mutations (insert, remove) and at init/deinit.
+    fn assertFullInvariants(self: *const SparseSet) void {
+        self.assertStructuralInvariants();
         var i: usize = 0;
         while (i < self.dense.items.len) : (i += 1) {
             const value = self.dense.items[i];
@@ -240,4 +317,39 @@ test "sparse set contains returns false for out-of-universe values" {
     var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 4 });
     defer s.deinit();
     try std.testing.expect(!s.contains(9));
+}
+
+test "sparse set clear resets membership and allows reuse" {
+    // Goal: confirm clear empties the set while preserving backing memory.
+    // Method: insert values, clear, verify empty, then reinsert.
+    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 8 });
+    defer s.deinit();
+    try s.insert(3);
+    try s.insert(5);
+    try std.testing.expectEqual(@as(usize, 2), s.len());
+
+    s.clear();
+    try std.testing.expectEqual(@as(usize, 0), s.len());
+    try std.testing.expect(!s.contains(3));
+    try std.testing.expect(!s.contains(5));
+
+    try s.insert(7);
+    try std.testing.expectEqual(@as(usize, 1), s.len());
+    try std.testing.expect(s.contains(7));
+}
+
+test "sparse set ensureDenseCapacity pre-allocates for inserts" {
+    // Goal: verify ensureDenseCapacity prevents allocation during inserts.
+    // Method: pre-allocate, then insert up to that count without error.
+    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 16 });
+    defer s.deinit();
+
+    try s.ensureDenseCapacity(4);
+    try std.testing.expect(s.dense.capacity >= 4);
+
+    try s.insert(0);
+    try s.insert(1);
+    try s.insert(2);
+    try s.insert(3);
+    try std.testing.expectEqual(@as(usize, 4), s.len());
 }

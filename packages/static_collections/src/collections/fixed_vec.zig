@@ -4,15 +4,22 @@
 //! allocation; suitable for small collections with known upper bounds (e.g. scratch
 //! buffers, per-frame work lists).
 //!
-//! Attempting to push beyond `N` returns `error.Full`.
+//! Attempting to push beyond `N` returns `error.NoSpaceLeft`.
+//!
+//! Note: the error set (`error{NoSpaceLeft}`) is narrower than `Vec.Error`.
+//! FixedVec is not a drop-in substitute for Vec without adjusting error handling.
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
 const assert = std.debug.assert;
 
 pub fn FixedVec(comptime T: type, comptime N: usize) type {
-    // Comptime guard: a zero-capacity FixedVec is always full and useless as a container.
-    comptime assert(N > 0);
+    comptime {
+        // A zero-capacity FixedVec is always full and useless as a container.
+        assert(N > 0);
+        // max_capacity is stored as u32; reject values that would overflow.
+        if (N > std.math.maxInt(u32)) @compileError("FixedVec capacity N exceeds u32 range");
+    }
 
     return struct {
         const Self = @This();
@@ -59,6 +66,26 @@ pub fn FixedVec(comptime T: type, comptime N: usize) type {
             assert(self.len_value > 0);
         }
 
+        /// Returns an independent copy. FixedVec is stack-allocated,
+        /// so this is a simple struct copy.
+        pub fn clone(self: *const Self) Self {
+            assert(self.len_value <= N);
+            var result: Self = .{
+                .len_value = self.len_value,
+            };
+            @memcpy(result.items_storage[0..self.len_value], self.items_storage[0..self.len_value]);
+            return result;
+        }
+
+        pub fn pop(self: *Self) ?T {
+            assert(self.len_value <= N);
+            if (self.len_value == 0) return null;
+            self.len_value -= 1;
+            const out = self.items_storage[self.len_value];
+            assert(self.len_value <= N);
+            return out;
+        }
+
         pub fn clear(self: *Self) void {
             assert(self.len_value <= N);
             self.len_value = 0;
@@ -100,4 +127,17 @@ test "fixed vec items reflects append order" {
     try std.testing.expectEqual(@as(usize, 2), values.len);
     try std.testing.expectEqual(@as(u16, 11), values[0]);
     try std.testing.expectEqual(@as(u16, 22), values[1]);
+}
+
+test "fixed vec pop returns last element or null when empty" {
+    // Goal: validate LIFO pop semantics and empty-vector behavior.
+    // Method: pop from empty, then append/pop values back to empty.
+    var v = FixedVec(u8, 3){};
+    try std.testing.expect(v.pop() == null);
+    try v.append(10);
+    try v.append(20);
+    try std.testing.expectEqual(@as(u8, 20), v.pop().?);
+    try std.testing.expectEqual(@as(u8, 10), v.pop().?);
+    try std.testing.expect(v.pop() == null);
+    try std.testing.expectEqual(@as(usize, 0), v.len());
 }

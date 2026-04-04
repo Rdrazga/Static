@@ -102,7 +102,11 @@ Workspace for the `static_*` Zig packages.
   `SlotMap` runtime mutation sequences, `IndexPool` handle invalidation,
   generation-bump reuse, and exhaustion behavior, plus `Vec`
   budget-aware growth, exact-capacity fallback, `NoSpaceLeft` stability,
-  append/pop order, and budget accounting.
+  append/pop order, and budget accounting, direct `SlotMap` iterator
+  handle/value visibility coverage, and shared benchmark-workflow adoption for
+  `flat_hash_map` lookup-hit and insert/remove churn review artifacts, while
+  the root surface now keeps only the collection families plus the `memory`
+  alias.
 - `static_meta` now serves as the narrow runtime-registry downstream adopter of
   `static_testing` bounded mutation and lookup sequence review.
 - `static_profile` now has package-level integration coverage for exact mixed

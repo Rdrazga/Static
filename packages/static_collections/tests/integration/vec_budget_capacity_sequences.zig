@@ -119,7 +119,7 @@ const Context = struct {
         std.debug.assert(self.budget.used() <= self.budget.limit());
         std.debug.assert(self.budget.remaining() + self.budget.used() == self.budget.limit());
 
-        const items = self.vec.items();
+        const items = self.vec.itemsConst();
         std.debug.assert(items.len == self.len);
         for (items, 0..) |item, index| {
             std.debug.assert(item == self.values[index]);

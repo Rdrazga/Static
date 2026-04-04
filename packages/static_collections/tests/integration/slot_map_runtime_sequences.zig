@@ -78,7 +78,6 @@ const ReferenceState = struct {
         std.debug.assert(self.len <= max_live_handles);
         return removed;
     }
-
 };
 
 const Context = struct {
@@ -228,6 +227,32 @@ test "slot map reuses the most recently removed slot first" {
     try std.testing.expect(sm.get(second) == null);
     try std.testing.expectError(error.NotFound, sm.remove(first));
     try std.testing.expectError(error.NotFound, sm.remove(second));
+}
+
+test "slot map iterator yields handle and pointer pairs until the next structural mutation" {
+    var sm = try SlotMap.init(std.testing.allocator, .{});
+    defer sm.deinit();
+
+    const first = try sm.insert(10);
+    const second = try sm.insert(20);
+    _ = try sm.insert(30);
+    _ = try sm.remove(second);
+
+    var it = sm.iterator();
+    var seen: usize = 0;
+    while (it.next()) |entry| {
+        const current = sm.get(entry.handle) orelse unreachable;
+        try std.testing.expect(entry.value_ptr == current);
+        entry.value_ptr.* += 1;
+        seen += 1;
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), seen);
+    try std.testing.expectEqual(@as(u32, 11), sm.get(first).?.*);
+
+    sm.clear();
+    try std.testing.expectEqual(@as(usize, 0), sm.len());
+    try std.testing.expect(sm.get(first) == null);
 }
 
 fn nextAction(

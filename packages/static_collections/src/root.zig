@@ -1,8 +1,12 @@
 //! Fixed-capacity collection types and handle-based containers for bounded data management.
+//!
+//! Each module defines a local `Error` union tailored to its failure modes. The unions
+//! overlap intentionally (e.g. `OutOfMemory`, `NoSpaceLeft`) but are not identical,
+//! keeping modules independently compilable without a shared error import.
 
-pub const core = @import("static_core");
+/// Shared memory-budget utilities remain re-exported because multiple
+/// collection families use them as part of their public configuration surface.
 pub const memory = @import("static_memory");
-pub const hash = @import("static_hash");
 
 pub const vec = @import("collections/vec.zig");
 pub const fixed_vec = @import("collections/fixed_vec.zig");
@@ -20,9 +24,7 @@ pub const min_heap = @import("collections/min_heap.zig");
 test {
     // Goal: compile-import every public module so each file's inline tests run.
     // Method: reference each re-exported module to force build-time resolution.
-    _ = core;
     _ = memory;
-    _ = hash;
     _ = vec;
     _ = fixed_vec;
     _ = small_vec;

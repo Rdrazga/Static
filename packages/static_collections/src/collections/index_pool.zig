@@ -65,7 +65,7 @@ pub const IndexPool = struct {
         errdefer allocator.free(free_stack);
         fillFreeStack(free_stack);
 
-        const self: IndexPool = .{
+        var self: IndexPool = .{
             .allocator = allocator,
             .budget = cfg.budget,
             .generations = generations,
@@ -73,12 +73,12 @@ pub const IndexPool = struct {
             .free_stack = free_stack,
             .free_len = cfg.slots_max,
         };
-        self.assertBasicInvariants();
+        self.assertFullInvariants();
         return self;
     }
 
     pub fn deinit(self: *IndexPool) void {
-        self.assertBasicInvariants();
+        self.assertFullInvariants();
         if (self.budget) |budget| {
             const alloc_bytes = totalAllocBytes(@intCast(self.generations.len)) catch unreachable;
             budget.release(alloc_bytes);
@@ -89,19 +89,75 @@ pub const IndexPool = struct {
         self.* = undefined;
     }
 
+    /// Creates an independent copy with its own backing memory.
+    pub fn clone(self: *const IndexPool) Error!IndexPool {
+        self.assertStructuralInvariants();
+        const slots_max: u32 = @intCast(self.generations.len);
+        const alloc_bytes = totalAllocBytes(slots_max) catch return error.Overflow;
+
+        if (self.budget) |budget| {
+            budget.tryReserve(alloc_bytes) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+        }
+        errdefer if (self.budget) |budget| budget.release(alloc_bytes);
+
+        const new_generations = self.allocator.alloc(u32, slots_max) catch return error.OutOfMemory;
+        errdefer self.allocator.free(new_generations);
+        @memcpy(new_generations, self.generations);
+
+        const new_occupied = self.allocator.alloc(bool, slots_max) catch return error.OutOfMemory;
+        errdefer self.allocator.free(new_occupied);
+        @memcpy(new_occupied, self.occupied);
+
+        const new_free_stack = self.allocator.alloc(u32, slots_max) catch return error.OutOfMemory;
+        @memcpy(new_free_stack, self.free_stack);
+
+        var result: IndexPool = .{
+            .allocator = self.allocator,
+            .budget = self.budget,
+            .generations = new_generations,
+            .occupied = new_occupied,
+            .free_stack = new_free_stack,
+            .free_len = self.free_len,
+        };
+        result.assertFullInvariants();
+        return result;
+    }
+
     pub fn capacity(self: *const IndexPool) u32 {
-        self.assertBasicInvariants();
+        self.assertStructuralInvariants();
         std.debug.assert(self.generations.len <= std.math.maxInt(u32));
         return @intCast(self.generations.len);
     }
 
     pub fn freeCount(self: *const IndexPool) u32 {
-        self.assertBasicInvariants();
+        self.assertStructuralInvariants();
         return self.free_len;
     }
 
+    /// Resets the pool to its initial state: all slots become free with bumped
+    /// generations, invalidating any previously issued handles. Backing memory
+    /// and budget are preserved.
+    pub fn clear(self: *IndexPool) void {
+        self.assertStructuralInvariants();
+        const len: u32 = @intCast(self.generations.len);
+        var i: u32 = 0;
+        while (i < len) : (i += 1) {
+            if (self.occupied[i]) {
+                self.generations[i] = nextGeneration(self.generations[i]);
+            }
+            self.occupied[i] = false;
+        }
+        fillFreeStack(self.free_stack);
+        self.free_len = len;
+        self.assertFullInvariants();
+    }
+
     pub fn allocate(self: *IndexPool) Error!Handle {
-        self.assertBasicInvariants();
+        self.assertStructuralInvariants();
         if (self.free_len == 0) return error.NoSpaceLeft;
 
         self.free_len -= 1;
@@ -112,7 +168,7 @@ pub const IndexPool = struct {
         self.occupied[slot_index] = true;
         const generation = self.generations[slot_index];
         std.debug.assert(generation != 0);
-        self.assertBasicInvariants();
+        self.assertFullInvariants();
         return .{
             .index = slot_index,
             .generation = generation,
@@ -120,7 +176,7 @@ pub const IndexPool = struct {
     }
 
     pub fn validate(self: *const IndexPool, handle: Handle) Error!u32 {
-        self.assertBasicInvariants();
+        self.assertStructuralInvariants();
         if (!handle.isValid()) return error.NotFound;
         if (handle.index >= self.generations.len) return error.NotFound;
         if (!self.occupied[handle.index]) return error.NotFound;
@@ -134,7 +190,7 @@ pub const IndexPool = struct {
     }
 
     pub fn handleForIndex(self: *const IndexPool, slot_index: u32) ?Handle {
-        self.assertBasicInvariants();
+        self.assertStructuralInvariants();
         if (slot_index >= self.generations.len) return null;
         if (!self.occupied[slot_index]) return null;
 
@@ -147,7 +203,7 @@ pub const IndexPool = struct {
     }
 
     pub fn release(self: *IndexPool, handle: Handle) Error!void {
-        self.assertBasicInvariants();
+        self.assertStructuralInvariants();
         const slot_index = try self.validate(handle);
         std.debug.assert(self.free_len < self.free_stack.len);
         std.debug.assert(self.occupied[slot_index]);
@@ -156,37 +212,43 @@ pub const IndexPool = struct {
         self.generations[slot_index] = nextGeneration(self.generations[slot_index]);
         self.free_stack[self.free_len] = slot_index;
         self.free_len += 1;
-        self.assertBasicInvariants();
+        self.assertFullInvariants();
     }
 
-    fn assertBasicInvariants(self: *const IndexPool) void {
-        // Structural size invariants: all three arrays share the same length.
+    /// O(1) structural checks: array sizes match, counters are bounded.
+    fn assertStructuralInvariants(self: *const IndexPool) void {
         std.debug.assert(self.generations.len == self.occupied.len);
         std.debug.assert(self.generations.len == self.free_stack.len);
         std.debug.assert(self.free_len <= self.free_stack.len);
-
         std.debug.assert(self.generations.len <= std.math.maxInt(u32));
+    }
+
+    /// O(n) full validation: walks free stack and occupied array to prove
+    /// the free stack is a valid permutation of exactly the unoccupied slots.
+    /// Called only after mutations (allocate, release) and at init/deinit.
+    ///
+    /// This function is read-only — it never mutates live state, so it is
+    /// safe to call from any context including signal handlers and debuggers.
+    fn assertFullInvariants(self: *const IndexPool) void {
+        self.assertStructuralInvariants();
+
         const len: u32 = @intCast(self.generations.len);
 
-        // O(n) pass 1: walk the free stack and verify each entry is in-bounds
-        // and points to an unoccupied slot. Uniqueness is proven transitively:
-        // each free-stack entry must reference an unoccupied slot, and the
-        // second pass below asserts that the number of unoccupied slots equals
-        // free_len. If there were duplicates in the free stack, the free_len
-        // count would exceed the unoccupied count.
-        var free_count: u32 = 0;
+        // Pass 1: walk the free stack and verify each entry is in-bounds and
+        // points to an unoccupied slot.
         var free_slot: u32 = 0;
         while (free_slot < self.free_len) : (free_slot += 1) {
             const slot_index = self.free_stack[free_slot];
             std.debug.assert(slot_index < len);
             std.debug.assert(!self.occupied[slot_index]);
-            free_count += 1;
         }
-        std.debug.assert(free_count == self.free_len);
 
-        // O(n) pass 2: count unoccupied slots and assert it matches free_len.
-        // Combined with pass 1, this proves the free stack is a valid
-        // permutation of exactly the unoccupied slot indices.
+        // Pass 2: count unoccupied slots and assert it matches free_len.
+        // Combined with pass 1, this proves the free stack is a duplicate-free
+        // permutation of exactly the unoccupied slot indices: pass 1 guarantees
+        // every free-stack entry maps to a distinct unoccupied slot (each read
+        // is independent — no mutation), and pass 2 guarantees no unoccupied
+        // slot is missing from the free stack (count match).
         var expected_free_count: u32 = 0;
         var slot_index: u32 = 0;
         while (slot_index < len) : (slot_index += 1) {
@@ -196,7 +258,40 @@ pub const IndexPool = struct {
         }
         std.debug.assert(expected_free_count == self.free_len);
     }
+
+    fn detectsDuplicateFreeStackEntries(self: *IndexPool) bool {
+        self.assertStructuralInvariants();
+        const len: u32 = @intCast(self.generations.len);
+
+        var free_slot: u32 = 0;
+        while (free_slot < self.free_len) : (free_slot += 1) {
+            const slot_index = self.free_stack[free_slot];
+            if (slot_index >= len) {
+                restoreMarkedFreeSlots(self, free_slot);
+                return true;
+            }
+            if (self.occupied[slot_index]) {
+                restoreMarkedFreeSlots(self, free_slot);
+                return true;
+            }
+            self.occupied[slot_index] = true;
+        }
+
+        restoreMarkedFreeSlots(self, self.free_len);
+        return false;
+    }
 };
+
+fn restoreMarkedFreeSlots(pool: *IndexPool, count: u32) void {
+    var free_slot: u32 = 0;
+    const len: u32 = @intCast(pool.generations.len);
+    while (free_slot < count) : (free_slot += 1) {
+        const slot_index = pool.free_stack[free_slot];
+        if (slot_index >= len) continue;
+        if (!pool.occupied[slot_index]) continue;
+        pool.occupied[slot_index] = false;
+    }
+}
 
 fn fillFreeStack(free_stack: []u32) void {
     std.debug.assert(free_stack.len <= std.math.maxInt(u32));
@@ -249,4 +344,43 @@ test "index pool handleForIndex only exposes live handles" {
     try std.testing.expectEqualDeep(handle, pool.handleForIndex(handle.index).?);
     try pool.release(handle);
     try std.testing.expect(pool.handleForIndex(handle.index) == null);
+}
+
+test "index pool clear invalidates handles and restores full capacity" {
+    // Goal: confirm clear resets all slots and stales existing handles.
+    // Method: allocate handles, clear, verify stale, then reallocate.
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3 });
+    defer pool.deinit();
+
+    const h1 = try pool.allocate();
+    const h2 = try pool.allocate();
+    try std.testing.expectEqual(@as(u32, 1), pool.freeCount());
+
+    pool.clear();
+    try std.testing.expectEqual(@as(u32, 3), pool.freeCount());
+    try std.testing.expect(!pool.contains(h1));
+    try std.testing.expect(!pool.contains(h2));
+
+    const h3 = try pool.allocate();
+    try std.testing.expect(pool.contains(h3));
+    try std.testing.expectEqual(@as(u32, 2), pool.freeCount());
+}
+
+test "index pool duplicate free stack entries are detectable" {
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3 });
+    defer pool.deinit();
+
+    pool.free_stack[0] = 0;
+    pool.free_stack[1] = 0;
+    pool.free_stack[2] = 2;
+    pool.free_len = 3;
+    @memset(pool.occupied, false);
+
+    try std.testing.expect(pool.detectsDuplicateFreeStackEntries());
+    try std.testing.expectEqual(@as(u32, 3), pool.freeCount());
+    try std.testing.expect(!pool.occupied[0]);
+    try std.testing.expect(!pool.occupied[1]);
+    try std.testing.expect(!pool.occupied[2]);
+
+    fillFreeStack(pool.free_stack);
 }

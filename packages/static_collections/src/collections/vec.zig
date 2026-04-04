@@ -68,7 +68,12 @@ pub fn Vec(comptime T: type) type {
             return self.storage.capacity;
         }
 
-        pub fn items(self: *const Self) []T {
+        pub fn items(self: *Self) []T {
+            self.assertInvariants();
+            return self.storage.items;
+        }
+
+        pub fn itemsConst(self: *const Self) []const T {
             self.assertInvariants();
             return self.storage.items;
         }
@@ -76,6 +81,7 @@ pub fn Vec(comptime T: type) type {
         pub fn append(self: *Self, value: T) Error!void {
             self.assertInvariants();
             const before_len = self.storage.items.len;
+            // Defensive: physically unreachable but guards the arithmetic contract.
             const needed_capacity = std.math.add(usize, before_len, 1) catch return error.Overflow;
             try self.ensureCapacity(needed_capacity);
             assert(self.storage.capacity > before_len);
@@ -137,6 +143,67 @@ pub fn Vec(comptime T: type) type {
             const out = self.storage.pop();
             self.assertInvariants();
             return out;
+        }
+
+        /// Creates an independent copy with its own backing memory.
+        /// Uses the same allocator and budget as the source.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertInvariants();
+            const cap = self.storage.capacity;
+            const len_val = self.storage.items.len;
+
+            if (cap == 0) {
+                return Self{
+                    .allocator = self.allocator,
+                    .budget = self.budget,
+                };
+            }
+
+            if (self.budget) |budget| {
+                const bytes = bytesForCapacity(cap) catch return error.Overflow;
+                budget.tryReserve(bytes) catch |err| switch (err) {
+                    error.NoSpaceLeft => return error.NoSpaceLeft,
+                    error.InvalidConfig => return error.InvalidConfig,
+                    error.Overflow => return error.Overflow,
+                };
+            }
+
+            const new_buf = self.allocator.alloc(T, cap) catch {
+                if (self.budget) |budget| {
+                    budget.release(bytesForCapacityExact(cap));
+                }
+                return error.OutOfMemory;
+            };
+            @memcpy(new_buf[0..len_val], self.storage.items);
+
+            var result: Self = .{
+                .allocator = self.allocator,
+                .budget = self.budget,
+                .budget_reserved_capacity = self.budget_reserved_capacity,
+                .storage = .{
+                    .items = new_buf[0..len_val],
+                    .capacity = cap,
+                },
+            };
+            result.assertInvariants();
+            return result;
+        }
+
+        /// Shrinks backing capacity to match the current logical length.
+        /// Best-effort: if the allocator cannot shrink in-place, capacity
+        /// stays unchanged. Budget is released proportionally.
+        pub fn shrinkToFit(self: *Self) void {
+            self.assertInvariants();
+            const old_capacity = self.storage.capacity;
+            self.storage.shrinkAndFree(self.allocator, self.storage.items.len);
+            const new_capacity = self.storage.capacity;
+            if (self.budget != null and new_capacity < old_capacity) {
+                const released = bytesForCapacityExact(old_capacity) - bytesForCapacityExact(new_capacity);
+                self.budget.?.release(released);
+                assert(new_capacity <= std.math.maxInt(u32));
+                self.budget_reserved_capacity = @intCast(new_capacity);
+            }
+            self.assertInvariants();
         }
 
         /// Resets the logical length to zero without releasing backing memory
@@ -318,4 +385,33 @@ test "vec ensureCapacity detects element-size overflow" {
 
     const max_count = std.math.maxInt(usize) / @sizeOf(u16);
     try std.testing.expectError(error.Overflow, v.ensureCapacity(max_count + 1));
+}
+
+test "vec clone produces independent copy" {
+    // Goal: verify clone creates a separate copy; mutations are independent.
+    // Method: clone, mutate clone, verify original unchanged.
+    var v = try Vec(u32).init(std.testing.allocator, .{});
+    defer v.deinit();
+    try v.append(10);
+    try v.append(20);
+
+    var c = try v.clone();
+    defer c.deinit();
+    try std.testing.expectEqual(@as(usize, 2), c.len());
+    try std.testing.expectEqual(@as(u32, 10), c.items()[0]);
+
+    try c.append(30);
+    try std.testing.expectEqual(@as(usize, 3), c.len());
+    try std.testing.expectEqual(@as(usize, 2), v.len());
+}
+
+test "vec const item access is read-only" {
+    var v = try Vec(u32).init(std.testing.allocator, .{});
+    defer v.deinit();
+    try v.append(10);
+
+    const const_v: *const Vec(u32) = &v;
+    const items = const_v.itemsConst();
+    try std.testing.expectEqual(@as(usize, 1), items.len);
+    try std.testing.expectEqual(@as(u32, 10), items[0]);
 }

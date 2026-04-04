@@ -55,7 +55,7 @@ pub fn DenseArray(comptime T: type) type {
 
         pub fn itemsConst(self: *const Self) []const T {
             self.assertInvariants();
-            return self.data.items();
+            return self.data.itemsConst();
         }
 
         pub fn capacity(self: *const Self) usize {
@@ -70,6 +70,21 @@ pub fn DenseArray(comptime T: type) type {
             self.data.clear();
             assert(self.data.len() == 0);
             self.assertInvariants();
+        }
+
+        /// Shrinks backing capacity to match the current logical length.
+        pub fn shrinkToFit(self: *Self) void {
+            self.assertInvariants();
+            self.data.shrinkToFit();
+            self.assertInvariants();
+        }
+
+        /// Creates an independent copy with its own backing memory.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertInvariants();
+            var result: Self = .{ .data = try self.data.clone() };
+            result.assertInvariants();
+            return result;
         }
 
         pub fn append(self: *Self, value: T) Error!usize {
@@ -92,7 +107,7 @@ pub fn DenseArray(comptime T: type) type {
             self.assertInvariants();
             if (index >= self.data.len()) return null;
             assert(index < self.data.len());
-            return &self.data.items()[index];
+            return &self.data.itemsConst()[index];
         }
 
         /// Removes the element at `index` by swapping it with the last element.
@@ -123,7 +138,7 @@ pub fn DenseArray(comptime T: type) type {
         }
 
         fn assertInvariants(self: *const Self) void {
-            assert(self.data.len() == self.data.items().len);
+            assert(self.data.len() == self.data.itemsConst().len);
             assert(self.data.capacity() >= self.data.len());
         }
     };

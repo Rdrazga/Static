@@ -12,8 +12,10 @@
 //!   way to track live indices after mutations that move elements.
 //!
 //! Heap indices are invalidated by any mutation (`push`, `popMin`, `updateAt`,
-//! `removeAt`). Callers must use `Ctx.setIndex` to maintain a live index for
-//! each element, or find elements by linear scan before each indexed operation.
+//! `removeAt`). `clear()` additionally calls `Ctx.setIndex` with
+//! `invalid_index` for every live element when index tracking is enabled.
+//! Callers must use `Ctx.setIndex` to maintain a live index for each element,
+//! or find elements by linear scan before each indexed operation.
 //!
 //! When `Ctx == void`, `T` must implement `fn lessThan(a: T, b: T) bool`.
 //! The void-context path does not support `updateAt` or `removeAt` with
@@ -47,6 +49,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             budget: ?*memory.budget.Budget = null,
         };
         pub const PushError = error{NoSpaceLeft};
+        pub const invalid_index = std.math.maxInt(usize);
 
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
@@ -105,10 +108,44 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             return self.items.len;
         }
 
+        /// Resets the heap to empty while retaining storage.
+        /// When `Ctx.setIndex` exists, every previously live element is
+        /// invalidated via `setIndex(..., invalid_index)` before len becomes 0.
         pub fn clear(self: *Self) void {
             self.assertStorageInvariant();
+            var index: usize = 0;
+            while (index < self.len_value) : (index += 1) {
+                self.invalidateIndex(index);
+            }
             self.len_value = 0;
             std.debug.assert(self.len_value == 0);
+        }
+
+        /// Creates an independent copy of the heap storage.
+        /// The comparator context is copied by value. If `Ctx` wraps pointers
+        /// or other shared external state, the clone observes that same state.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertStorageInvariant();
+            const cap = self.items.len;
+            const bytes = try bytesForCapacity(cap);
+            try reserveBudget(self.budget, bytes);
+
+            const new_items = self.allocator.alloc(T, cap) catch {
+                if (self.budget) |budget| budget.release(bytes);
+                return Error.OutOfMemory;
+            };
+            @memcpy(new_items[0..self.len_value], self.items[0..self.len_value]);
+
+            var result: Self = .{
+                .allocator = self.allocator,
+                .budget = self.budget,
+                .items = new_items,
+                .len_value = self.len_value,
+                .ctx = self.ctx,
+            };
+            result.assertStorageInvariant();
+            result.assertHeapInvariant();
+            return result;
         }
 
         /// Push a value into the heap.
@@ -127,10 +164,13 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         /// Pop and return the minimum value. Returns null if the heap is empty.
+        /// When index tracking is active, the returned value has already been
+        /// invalidated through `Ctx.setIndex(..., invalid_index)`.
         pub fn popMin(self: *Self) ?T {
             self.assertStorageInvariant();
             if (self.len_value == 0) return null;
 
+            self.invalidateIndex(0);
             const value = self.items[0];
             self.len_value -= 1;
             if (self.len_value > 0) {
@@ -169,10 +209,13 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         /// Removes and returns the value currently stored at `index`.
+        /// When index tracking is active, the returned value has already been
+        /// invalidated through `Ctx.setIndex(..., invalid_index)`.
         pub fn removeAt(self: *Self, index: usize) T {
             self.assertStorageInvariant();
             std.debug.assert(index < self.len_value);
 
+            self.invalidateIndex(index);
             const value = self.items[index];
             self.len_value -= 1;
             if (index < self.len_value) {
@@ -229,6 +272,12 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         fn syncIndex(self: *Self, index: usize) void {
             if (comptime Ctx != void and std.meta.hasFn(Ctx, "setIndex")) {
                 self.ctx.setIndex(&self.items[index], index);
+            }
+        }
+
+        fn invalidateIndex(self: *Self, index: usize) void {
+            if (comptime Ctx != void and std.meta.hasFn(Ctx, "setIndex")) {
+                self.ctx.setIndex(&self.items[index], invalid_index);
             }
         }
 
@@ -482,4 +531,112 @@ test "MinHeap supports type-defined comparator when Ctx is void" {
     try std.testing.expectEqual(@as(u32, 1), heap.popMin().?.value);
     try std.testing.expectEqual(@as(u32, 4), heap.popMin().?.value);
     try std.testing.expectEqual(@as(u32, 9), heap.popMin().?.value);
+}
+
+test "MinHeap clear invalidates tracked indices with the sentinel" {
+    const Item = struct {
+        id: u32,
+        priority: u32,
+        index: usize = 0,
+    };
+    const Ctx = struct {
+        pub fn lessThan(_: @This(), a: Item, b: Item) bool {
+            return a.priority < b.priority;
+        }
+
+        pub fn setIndex(_: @This(), item: *Item, index: usize) void {
+            item.index = index;
+        }
+    };
+    const Heap = MinHeap(Item, Ctx);
+
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    defer heap.deinit();
+
+    try heap.push(.{ .id = 1, .priority = 20 });
+    try heap.push(.{ .id = 2, .priority = 10 });
+    try heap.push(.{ .id = 3, .priority = 30 });
+
+    heap.clear();
+
+    try std.testing.expectEqual(@as(usize, 0), heap.len());
+    try std.testing.expectEqual(Heap.invalid_index, heap.items[0].index);
+    try std.testing.expectEqual(Heap.invalid_index, heap.items[1].index);
+    try std.testing.expectEqual(Heap.invalid_index, heap.items[2].index);
+}
+
+test "MinHeap clone keeps storage independent and copies context by value" {
+    const Item = struct {
+        priority: u32,
+    };
+    const Ctx = struct {
+        clear_events: *u32,
+
+        pub fn lessThan(_: @This(), a: Item, b: Item) bool {
+            return a.priority < b.priority;
+        }
+
+        pub fn setIndex(self: @This(), item: *Item, index: usize) void {
+            _ = item;
+            if (index == std.math.maxInt(usize)) {
+                self.clear_events.* += 1;
+            }
+        }
+    };
+    const Heap = MinHeap(Item, Ctx);
+
+    var clear_events: u32 = 0;
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{ .clear_events = &clear_events });
+    defer heap.deinit();
+    try heap.push(.{ .priority = 20 });
+    try heap.push(.{ .priority = 10 });
+
+    var clone = try heap.clone();
+    defer clone.deinit();
+
+    try std.testing.expect(clone.ctx.clear_events == heap.ctx.clear_events);
+    clone.clear();
+    try std.testing.expectEqual(@as(usize, 2), heap.len());
+    try std.testing.expectEqual(@as(usize, 0), clone.len());
+    try std.testing.expectEqual(@as(u32, 2), clear_events);
+    try std.testing.expectEqual(@as(u32, 10), heap.peekMin().?.priority);
+}
+
+test "MinHeap popMin and removeAt invalidate removed tracked indices" {
+    const Item = struct {
+        id: u32,
+        priority: u32,
+        index: usize = 0,
+    };
+    const Ctx = struct {
+        pub fn lessThan(_: @This(), a: Item, b: Item) bool {
+            return a.priority < b.priority;
+        }
+
+        pub fn setIndex(_: @This(), item: *Item, index: usize) void {
+            item.index = index;
+        }
+    };
+    const Heap = MinHeap(Item, Ctx);
+
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    defer heap.deinit();
+
+    try heap.push(.{ .id = 1, .priority = 30 });
+    try heap.push(.{ .id = 2, .priority = 10 });
+    try heap.push(.{ .id = 3, .priority = 20 });
+
+    const popped = heap.popMin().?;
+    try std.testing.expectEqual(@as(u32, 2), popped.id);
+    try std.testing.expectEqual(Heap.invalid_index, popped.index);
+
+    var remove_index: ?usize = null;
+    for (heap.items[0..heap.len_value], 0..) |item, index| {
+        if (item.id == 3) remove_index = index;
+    }
+    try std.testing.expect(remove_index != null);
+
+    const removed = heap.removeAt(remove_index.?);
+    try std.testing.expectEqual(@as(u32, 3), removed.id);
+    try std.testing.expectEqual(Heap.invalid_index, removed.index);
 }

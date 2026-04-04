@@ -62,7 +62,10 @@ Examples:
   on over-release in all builds.
 - `static_collections` keeps bounded container ownership package-local while
   now using `static_testing` for package-owned `SlotMap`, `IndexPool`, and
-  `Vec` mutation/resource-boundary sequence review.
+  `Vec` mutation/resource-boundary sequence review, direct `SlotMap` iterator
+  visibility proof, and shared `flat_hash_map` benchmark-workflow review,
+  while the root surface keeps the `memory` alias and cuts the `core` and
+  `hash` aliases.
 - `static_scheduling` keeps scheduler coordination policy package-local while
   now using `static_testing` for replay-backed task-graph invariants,
   sequence-sensitive timer-wheel review, shared planning benchmark workflows,

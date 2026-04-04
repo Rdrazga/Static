@@ -69,6 +69,37 @@ pub fn SlotMap(comptime T: type) type {
             self.budget_reserved_capacity = needed;
         }
 
+        /// Grows the slot backing array to at least `required` capacity using
+        /// geometric growth. Budget tracks the actual allocated capacity (not
+        /// logical length) so that budget accounting matches real memory usage.
+        fn ensureSlotGrowth(self: *Self, required: usize) Error!void {
+            if (required <= self.slots.capacity) return;
+
+            const old_capacity = self.slots.capacity;
+            const candidate = if (old_capacity == 0)
+                required
+            else blk: {
+                const doubled = std.math.mul(usize, old_capacity, 2) catch return error.Overflow;
+                break :blk @max(required, doubled);
+            };
+
+            const old_budget = self.budget_reserved_capacity;
+            try self.ensureBudgetCapacity(candidate);
+
+            self.slots.ensureTotalCapacityPrecise(self.allocator, candidate) catch {
+                if (self.budget) |budget| {
+                    if (self.budget_reserved_capacity > old_budget) {
+                        const rollback = (slotBytesForCapacity(self.budget_reserved_capacity) catch unreachable) -
+                            (slotBytesForCapacity(old_budget) catch unreachable);
+                        budget.release(rollback);
+                        self.budget_reserved_capacity = old_budget;
+                    }
+                }
+                return error.OutOfMemory;
+            };
+            assert(self.slots.capacity >= candidate);
+        }
+
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
             var self: Self = .{
                 .allocator = allocator,
@@ -85,12 +116,12 @@ pub fn SlotMap(comptime T: type) type {
                     return error.OutOfMemory;
                 };
             }
-            self.assertInvariants();
+            self.assertFullInvariants();
             return self;
         }
 
         pub fn deinit(self: *Self) void {
-            self.assertInvariants();
+            self.assertFullInvariants();
             if (self.budget) |budget| {
                 const bytes = slotBytesForCapacity(self.budget_reserved_capacity) catch unreachable;
                 budget.release(bytes);
@@ -99,13 +130,71 @@ pub fn SlotMap(comptime T: type) type {
             self.* = undefined;
         }
 
+        /// Creates an independent copy with its own backing memory.
+        /// The free list is embedded in the slot array. Only occupied slots'
+        /// payloads are copied; free slots keep undefined payload state.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertStructuralInvariants();
+            const cap = self.slots.capacity;
+            const slot_len = self.slots.items.len;
+
+            if (cap == 0) {
+                return Self{
+                    .allocator = self.allocator,
+                    .budget = self.budget,
+                    .free_head = self.free_head,
+                    .live = self.live,
+                };
+            }
+
+            const bytes = slotBytesForCapacity(cap) catch return error.Overflow;
+            if (self.budget) |budget| {
+                budget.tryReserve(bytes) catch |err| switch (err) {
+                    error.NoSpaceLeft => return error.NoSpaceLeft,
+                    error.InvalidConfig => return error.InvalidConfig,
+                    error.Overflow => return error.Overflow,
+                };
+            }
+
+            const new_buf = self.allocator.alloc(Slot, cap) catch {
+                if (self.budget) |budget| budget.release(bytes);
+                return error.OutOfMemory;
+            };
+            var index: usize = 0;
+            while (index < slot_len) : (index += 1) {
+                const src = self.slots.items[index];
+                new_buf[index].generation = src.generation;
+                new_buf[index].occupied = src.occupied;
+                new_buf[index].next_free = src.next_free;
+                if (src.occupied) {
+                    new_buf[index].value = src.value;
+                } else {
+                    new_buf[index].value = undefined;
+                }
+            }
+
+            var result: Self = .{
+                .allocator = self.allocator,
+                .budget = self.budget,
+                .budget_reserved_capacity = self.budget_reserved_capacity,
+                .slots = .{
+                    .items = new_buf[0..slot_len],
+                    .capacity = cap,
+                },
+                .free_head = self.free_head,
+                .live = self.live,
+            };
+            result.assertFullInvariants();
+            return result;
+        }
+
         pub fn len(self: *const Self) usize {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             return self.live;
         }
 
         pub fn insert(self: *Self, value: T) Error!Handle {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             const before_live = self.live;
             if (self.free_head) |head| {
                 const idx: usize = head;
@@ -123,20 +212,20 @@ pub fn SlotMap(comptime T: type) type {
                     .generation = slot.generation,
                 };
                 assert(handle.isValid());
-                self.assertInvariants();
+                self.assertFullInvariants();
                 return handle;
             }
 
             const index = self.slots.items.len;
             if (index >= std.math.maxInt(u32)) return error.Overflow;
             const needed_capacity = std.math.add(usize, index, 1) catch return error.Overflow;
-            try self.ensureBudgetCapacity(needed_capacity);
-            self.slots.append(self.allocator, .{
+            try self.ensureSlotGrowth(needed_capacity);
+            self.slots.appendAssumeCapacity(.{
                 .generation = 1,
                 .occupied = true,
                 .next_free = invalid_index,
                 .value = value,
-            }) catch return error.OutOfMemory;
+            });
             self.live += 1;
             assert(self.live == before_live + 1);
             assert(index < std.math.maxInt(u32));
@@ -145,12 +234,12 @@ pub fn SlotMap(comptime T: type) type {
                 .generation = 1,
             };
             assert(handle.isValid());
-            self.assertInvariants();
+            self.assertFullInvariants();
             return handle;
         }
 
         pub fn get(self: *Self, h: Handle) ?*T {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             if (!h.isValid()) return null;
             const idx: usize = h.index;
             if (idx >= self.slots.items.len) return null;
@@ -161,7 +250,7 @@ pub fn SlotMap(comptime T: type) type {
         }
 
         pub fn getConst(self: *const Self, h: Handle) ?*const T {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             if (!h.isValid()) return null;
             const idx: usize = h.index;
             if (idx >= self.slots.items.len) return null;
@@ -171,8 +260,31 @@ pub fn SlotMap(comptime T: type) type {
             return &slot.value;
         }
 
+        /// Resets the slot map to empty without releasing backing memory or
+        /// budget reservation. All existing handles become stale (generations
+        /// are bumped). Capacity and budget remain unchanged.
+        pub fn clear(self: *Self) void {
+            self.assertStructuralInvariants();
+            var free_prev: ?u32 = null;
+            for (self.slots.items, 0..) |*slot, i| {
+                if (slot.occupied) {
+                    slot.generation +%= 1;
+                    if (slot.generation == 0) slot.generation = 1;
+                }
+                slot.occupied = false;
+                slot.next_free = free_prev orelse invalid_index;
+                slot.value = undefined;
+                assert(i <= std.math.maxInt(u32));
+                free_prev = @intCast(i);
+            }
+            self.free_head = free_prev;
+            self.live = 0;
+            assert(self.live == 0);
+            self.assertFullInvariants();
+        }
+
         pub fn remove(self: *Self, h: Handle) Error!T {
-            self.assertInvariants();
+            self.assertStructuralInvariants();
             if (!h.isValid()) return error.NotFound;
             const idx: usize = h.index;
             if (idx >= self.slots.items.len) return error.NotFound;
@@ -190,14 +302,59 @@ pub fn SlotMap(comptime T: type) type {
             self.free_head = @intCast(idx);
             self.live -= 1;
             assert(self.live == before_live - 1);
-            self.assertInvariants();
+            self.assertFullInvariants();
             return out;
         }
 
-        fn assertInvariants(self: *const Self) void {
+        pub const IterEntry = struct {
+            handle: Handle,
+            value_ptr: *T,
+        };
+
+        pub const Iterator = struct {
+            slots: []Slot,
+            index: usize = 0,
+
+            pub fn next(self: *Iterator) ?IterEntry {
+                while (self.index < self.slots.len) {
+                    const i = self.index;
+                    self.index += 1;
+                    if (self.slots[i].occupied) {
+                        assert(i <= std.math.maxInt(u32));
+                        return .{
+                            .handle = .{ .index = @intCast(i), .generation = self.slots[i].generation },
+                            .value_ptr = &self.slots[i].value,
+                        };
+                    }
+                }
+                return null;
+            }
+        };
+
+        /// Returns an iterator over all live entries as (Handle, *T) pairs.
+        ///
+        /// The iterator borrows the current slot slice. Any structural mutation
+        /// (`insert`, `remove`, `clear`, or any operation that may grow slots)
+        /// invalidates the iterator and all `value_ptr` pointers it has yielded.
+        /// Restart iteration after any structural change.
+        pub fn iterator(self: *Self) Iterator {
+            self.assertStructuralInvariants();
+            return .{ .slots = self.slots.items };
+        }
+
+        /// O(1) structural checks: live count bounded, free_head in range.
+        fn assertStructuralInvariants(self: *const Self) void {
             const slot_count = self.slots.items.len;
             assert(self.live <= slot_count);
             if (self.free_head) |head| assert(head < slot_count);
+        }
+
+        /// O(n) full validation: walks all slots and the free list to prove
+        /// live count, occupied/free consistency, and free-list integrity.
+        /// Called only after mutations (insert, remove) and at init/deinit.
+        fn assertFullInvariants(self: *const Self) void {
+            self.assertStructuralInvariants();
+            const slot_count = self.slots.items.len;
 
             var live_count: usize = 0;
             var unoccupied_count: usize = 0;
@@ -302,4 +459,104 @@ test "slot map invalid sentinel handle is rejected" {
     const invalid = handle_mod.Handle.invalid();
     try std.testing.expect(sm.get(invalid) == null);
     try std.testing.expectError(error.NotFound, sm.remove(invalid));
+}
+
+test "slot map clear invalidates all handles and allows reuse" {
+    // Goal: confirm clear resets length and stales all handles while preserving capacity.
+    // Method: insert values, clear, verify old handles are stale, then insert again.
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    defer sm.deinit();
+
+    const a = try sm.insert(1);
+    const b = try sm.insert(2);
+    try std.testing.expectEqual(@as(usize, 2), sm.len());
+
+    sm.clear();
+    try std.testing.expectEqual(@as(usize, 0), sm.len());
+    try std.testing.expect(sm.get(a) == null);
+    try std.testing.expect(sm.get(b) == null);
+
+    const c = try sm.insert(3);
+    try std.testing.expectEqual(@as(usize, 1), sm.len());
+    try std.testing.expectEqual(@as(u32, 3), sm.get(c).?.*);
+}
+
+test "slot map iterator yields all live entries" {
+    // Goal: verify iterator visits all live entries and skips freed slots.
+    // Method: insert three values, remove middle, iterate and sum remaining.
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    defer sm.deinit();
+
+    _ = try sm.insert(10);
+    const b = try sm.insert(20);
+    _ = try sm.insert(30);
+    _ = try sm.remove(b);
+
+    var it = sm.iterator();
+    var sum: u32 = 0;
+    var count: usize = 0;
+    while (it.next()) |entry| {
+        sum += entry.value_ptr.*;
+        try std.testing.expect(sm.get(entry.handle) != null);
+        count += 1;
+    }
+    try std.testing.expectEqual(@as(usize, 2), count);
+    try std.testing.expectEqual(@as(u32, 40), sum);
+}
+
+test "slot map budget tracks actual capacity" {
+    // Goal: verify budget accounting matches actual slot capacity.
+    // Method: create with budget, insert values, verify budget used, deinit, verify released.
+    const slot_size = @sizeOf(SlotMap(u32).Slot);
+    var budget = try memory.budget.Budget.init(slot_size * 16);
+
+    {
+        var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = &budget });
+        defer sm.deinit();
+
+        _ = try sm.insert(1);
+        _ = try sm.insert(2);
+        _ = try sm.insert(3);
+
+        const expected_bytes = sm.slots.capacity * slot_size;
+        try std.testing.expectEqual(@as(u64, expected_bytes), budget.used());
+    }
+    try std.testing.expectEqual(@as(u64, 0), budget.used());
+}
+
+test "slot map clone produces independent copy" {
+    // Goal: verify clone creates a separate copy with intact free list.
+    // Method: clone after insert+remove, verify both work independently.
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    defer sm.deinit();
+
+    const a = try sm.insert(10);
+    _ = try sm.insert(20);
+    _ = try sm.remove(a);
+
+    var c = try sm.clone();
+    defer c.deinit();
+    try std.testing.expectEqual(@as(usize, 1), c.len());
+
+    // Clone's free list should work independently.
+    const d = try c.insert(30);
+    try std.testing.expectEqual(@as(u32, 30), c.get(d).?.*);
+    try std.testing.expectEqual(@as(usize, 2), c.len());
+    try std.testing.expectEqual(@as(usize, 1), sm.len());
+}
+
+test "slot map clone after clear preserves reusable free-list state" {
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    defer sm.deinit();
+
+    _ = try sm.insert(10);
+    _ = try sm.insert(20);
+    sm.clear();
+
+    var clone = try sm.clone();
+    defer clone.deinit();
+
+    try std.testing.expectEqual(@as(usize, 0), clone.len());
+    const handle = try clone.insert(30);
+    try std.testing.expectEqual(@as(u32, 30), clone.get(handle).?.*);
 }

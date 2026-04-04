@@ -7,10 +7,10 @@
 //! `eql(a: K, b: K) bool`; both are validated at comptime. Missing declarations
 //! fall back to wyhash and `std.meta.eql` respectively.
 //!
-//! The default hash path uses `std.mem.asBytes(&key)`, which includes struct
-//! padding bytes. Composite key types with padding must provide a custom
-//! `Ctx.hash` to avoid padding-dependent hash instability. Primitive key types
-//! (`u32`, `u64`, etc.) have no padding and work correctly with the default.
+//! The default hash path uses `std.mem.asBytes(&key)`. Composite key types with
+//! padding in their in-memory representation must provide a custom `Ctx.hash`
+//! to avoid padding-dependent hash instability. Primitive key types (`u32`,
+//! `u64`, etc.) have no padding and work correctly with the default.
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
@@ -37,27 +37,61 @@ const SlotState = enum(u8) {
 /// with correct arity. Called comptime at the top of `FlatHashMap` to give a
 /// clear error message instead of a cryptic missing-field type error.
 fn validateCtx(comptime K: type, comptime Ctx: type) void {
-    // If Ctx declares `hash`, it must be a two-parameter function (key, seed).
+    if (!@hasDecl(Ctx, "hash") and hasDefaultHashPaddingRisk(K)) {
+        @compileError(
+            "FlatHashMap default hashing cannot safely hash key type `" ++
+                @typeName(K) ++
+                "` because its raw byte representation contains padding; provide Ctx.hash",
+        );
+    }
+    // If Ctx declares `hash`, it must be fn(key: K, seed: u64) u64.
     if (@hasDecl(Ctx, "hash")) {
         const hash_info = @typeInfo(@TypeOf(Ctx.hash));
         if (hash_info != .@"fn") @compileError("Ctx.hash must be a function");
-        const params = hash_info.@"fn".params;
-        if (params.len != 2) @compileError(
+        const hfn = hash_info.@"fn";
+        if (hfn.params.len != 2) @compileError(
             "Ctx.hash must have signature `fn(key: K, seed: u64) u64` (two parameters)",
         );
+        const hp0 = hfn.params[0].type orelse @compileError("Ctx.hash parameter 0 must have a concrete type");
+        if (hp0 != K) @compileError("Ctx.hash first parameter must be key type K");
+        const hp1 = hfn.params[1].type orelse @compileError("Ctx.hash parameter 1 must have a concrete type");
+        if (hp1 != u64) @compileError("Ctx.hash second parameter must be u64");
+        const hret = hfn.return_type orelse @compileError("Ctx.hash must have a concrete return type");
+        if (hret != u64) @compileError("Ctx.hash must return u64");
     }
-    // If Ctx declares `eql`, it must be a two-parameter function (a, b).
+    // If Ctx declares `eql`, it must be fn(a: K, b: K) bool.
     if (@hasDecl(Ctx, "eql")) {
         const eql_info = @typeInfo(@TypeOf(Ctx.eql));
         if (eql_info != .@"fn") @compileError("Ctx.eql must be a function");
-        const params = eql_info.@"fn".params;
-        if (params.len != 2) @compileError(
+        const efn = eql_info.@"fn";
+        if (efn.params.len != 2) @compileError(
             "Ctx.eql must have signature `fn(a: K, b: K) bool` (two parameters)",
         );
-        // Both parameters must accept the key type.
-        const param0 = params[0].type orelse @compileError("Ctx.eql parameter 0 must have a concrete type");
-        if (param0 != K) @compileError("Ctx.eql first parameter must be key type K");
+        const ep0 = efn.params[0].type orelse @compileError("Ctx.eql parameter 0 must have a concrete type");
+        if (ep0 != K) @compileError("Ctx.eql first parameter must be key type K");
+        const ep1 = efn.params[1].type orelse @compileError("Ctx.eql parameter 1 must have a concrete type");
+        if (ep1 != K) @compileError("Ctx.eql second parameter must be key type K");
+        const eret = efn.return_type orelse @compileError("Ctx.eql must have a concrete return type");
+        if (eret != bool) @compileError("Ctx.eql must return bool");
     }
+}
+
+fn hasDefaultHashPaddingRisk(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .@"struct" => |info| blk: {
+            if (info.layout == .@"packed") break :blk false;
+
+            var runtime_fields_size: usize = 0;
+            inline for (info.fields) |field| {
+                if (field.is_comptime) continue;
+                if (hasDefaultHashPaddingRisk(field.type)) break :blk true;
+                runtime_fields_size += @sizeOf(field.type);
+            }
+            break :blk runtime_fields_size != @sizeOf(T);
+        },
+        .array => |info| hasDefaultHashPaddingRisk(info.child),
+        else => false,
+    };
 }
 
 pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type {
@@ -69,6 +103,8 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         pub const Value = V;
         pub const Context = Ctx;
         pub const Config = struct {
+            /// Requested initial slot count. Clamped to a minimum of 8 and
+            /// rounded up to the next power of two.
             initial_capacity: usize = 8,
             seed: u64 = 0,
             max_load_percent: u8 = 70,
@@ -163,6 +199,53 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             self.* = undefined;
         }
 
+        /// Creates an independent copy with its own backing memory.
+        pub fn clone(self: *const Self) Error!Self {
+            self.assertInvariants();
+            const cap = self.entries.len;
+            const bytes = tableBytes(cap) catch return error.Overflow;
+
+            if (self.budget) |budget| {
+                budget.tryReserve(bytes) catch |err| switch (err) {
+                    error.NoSpaceLeft => return error.NoSpaceLeft,
+                    error.InvalidConfig => return error.InvalidConfig,
+                    error.Overflow => return error.Overflow,
+                };
+            }
+
+            const new_entries = self.allocator.alloc(Entry, cap) catch {
+                if (self.budget) |budget| budget.release(bytes);
+                return error.OutOfMemory;
+            };
+            errdefer {
+                self.allocator.free(new_entries);
+                if (self.budget) |budget| budget.release(bytes);
+            }
+            const new_states = self.allocator.alloc(SlotState, cap) catch return error.OutOfMemory;
+            errdefer self.allocator.free(new_states);
+
+            // Copy all states and all entries unconditionally. Copying
+            // tombstone/empty entries avoids leaving uninitialized memory in
+            // new_entries (buffer bleed, TigerStyle 5.6) and is simpler than
+            // per-element branching.
+            @memcpy(new_states, self.states);
+            @memcpy(new_entries, self.entries);
+
+            var result: Self = .{
+                .allocator = self.allocator,
+                .budget = self.budget,
+                .budget_reserved_bytes = bytes,
+                .entries = new_entries,
+                .states = new_states,
+                .count = self.count,
+                .tombstones = self.tombstones,
+                .seed = self.seed,
+                .max_load_percent = self.max_load_percent,
+            };
+            result.assertInvariants();
+            return result;
+        }
+
         pub fn len(self: *const Self) usize {
             self.assertInvariants();
             return self.count;
@@ -173,9 +256,18 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             return self.entries.len;
         }
 
+        /// Resets the map to empty without releasing backing memory or budget.
+        /// Capacity and budget remain unchanged.
+        pub fn clear(self: *Self) void {
+            self.assertInvariants();
+            @memset(self.states, .empty);
+            self.count = 0;
+            self.tombstones = 0;
+            self.assertInvariants();
+        }
+
         pub fn get(self: *Self, key: K) ?*V {
             self.assertInvariants();
-            if (self.entries.len == 0) return null;
             const h = hashKey(key, self.seed);
             const slot = self.findSlot(key, h);
             if (!slot.found) return null;
@@ -195,15 +287,16 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         pub fn put(self: *Self, key: K, value: V) Error!void {
             self.assertInvariants();
             const before_count = self.count;
-            try self.ensureInsertCapacity();
             const h = hashKey(key, self.seed);
-            const slot = self.findSlot(key, h);
-            if (slot.found) {
-                self.entries[slot.index].value = value;
+            if (self.findExistingSlot(key, h)) |index| {
+                self.entries[index].value = value;
                 assert(self.count == before_count);
                 self.assertInvariants();
                 return;
             }
+            try self.ensureInsertCapacity();
+            const slot = self.findSlot(key, h);
+            assert(!slot.found);
             self.insertAt(slot.index, key, value, h);
             assert(self.count == before_count + 1);
             self.assertInvariants();
@@ -212,10 +305,11 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         pub fn putNoClobber(self: *Self, key: K, value: V) (error{AlreadyExists} || Error)!void {
             self.assertInvariants();
             const before_count = self.count;
-            try self.ensureInsertCapacity();
             const h = hashKey(key, self.seed);
+            if (self.findExistingSlot(key, h) != null) return error.AlreadyExists;
+            try self.ensureInsertCapacity();
             const slot = self.findSlot(key, h);
-            if (slot.found) return error.AlreadyExists;
+            assert(!slot.found);
             self.insertAt(slot.index, key, value, h);
             assert(self.count == before_count + 1);
             self.assertInvariants();
@@ -297,7 +391,15 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
                 }
                 return error.OutOfMemory;
             };
-            errdefer self.allocator.free(new_entries);
+            errdefer {
+                self.allocator.free(new_entries);
+                if (self.budget) |budget| {
+                    if (new_bytes > old_budget_bytes) {
+                        budget.release(new_bytes - old_budget_bytes);
+                        self.budget_reserved_bytes = old_budget_bytes;
+                    }
+                }
+            }
             const new_states = self.allocator.alloc(SlotState, cap) catch return error.OutOfMemory;
             assert(new_states.len == new_entries.len);
             @memset(new_states, .empty);
@@ -331,6 +433,27 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             index: usize,
             found: bool,
         };
+
+        fn findExistingSlot(self: *const Self, key: K, h: u64) ?usize {
+            assert(self.entries.len == self.states.len);
+            assert(self.entries.len > 0);
+            assert(std.math.isPowerOfTwo(self.entries.len));
+            const mask = self.entries.len - 1;
+            var idx: usize = (@as(usize, @truncate(h)) & mask);
+            var probes: usize = 0;
+            while (probes < self.entries.len) : (probes += 1) {
+                switch (self.states[idx]) {
+                    .empty => return null,
+                    .tombstone => {},
+                    .occupied => {
+                        const entry = self.entries[idx];
+                        if (entry.hash == h and eqlKey(entry.key, key)) return idx;
+                    },
+                }
+                idx = (idx + 1) & mask;
+            }
+            return null;
+        }
 
         fn findSlot(self: *const Self, key: K, h: u64) SlotSearch {
             assert(self.entries.len == self.states.len);
@@ -429,6 +552,10 @@ pub fn FlatHashSet(comptime K: type, comptime Ctx: type) type {
             return .{ .map = try Map.init(allocator, cfg) };
         }
 
+        pub fn clone(self: *const Self) Error!Self {
+            return .{ .map = try self.map.clone() };
+        }
+
         pub fn deinit(self: *Self) void {
             self.map.deinit();
             self.* = undefined;
@@ -448,6 +575,10 @@ pub fn FlatHashSet(comptime K: type, comptime Ctx: type) type {
 
         pub fn remove(self: *Self, key: K) (error{NotFound} || Error)!void {
             _ = try self.map.remove(key);
+        }
+
+        pub fn clear(self: *Self) void {
+            self.map.clear();
         }
     };
 }
@@ -543,4 +674,164 @@ test "flat hash set insert contains remove" {
     try set.remove(9);
     try std.testing.expect(!set.contains(9));
     try std.testing.expectError(error.NotFound, set.remove(9));
+}
+
+test "flat hash map clear resets count and allows reuse" {
+    // Goal: confirm clear resets logical state while preserving capacity and budget.
+    // Method: insert values, clear, verify empty, then reinsert.
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{});
+    defer map.deinit();
+
+    try map.put(1, 10);
+    try map.put(2, 20);
+    try std.testing.expectEqual(@as(usize, 2), map.len());
+    const cap_before = map.capacity();
+
+    map.clear();
+    try std.testing.expectEqual(@as(usize, 0), map.len());
+    try std.testing.expectEqual(cap_before, map.capacity());
+    try std.testing.expect(map.get(1) == null);
+
+    try map.put(3, 30);
+    try std.testing.expectEqual(@as(usize, 1), map.len());
+    try std.testing.expectEqual(@as(u32, 30), map.get(3).?.*);
+}
+
+test "flat hash map with custom Ctx hash and eql" {
+    // Goal: exercise the custom Ctx code path with explicit hash and eql.
+    // Method: use a context that hashes only the low byte and compares mod 256.
+    const ModCtx = struct {
+        pub fn hash(key: u32, seed: u64) u64 {
+            _ = seed;
+            return @as(u64, key & 0xFF);
+        }
+        pub fn eql(a: u32, b: u32) bool {
+            return (a & 0xFF) == (b & 0xFF);
+        }
+    };
+    var map = try FlatHashMap(u32, u32, ModCtx).init(std.testing.allocator, .{});
+    defer map.deinit();
+
+    try map.put(1, 10);
+    try map.put(2, 20);
+    try std.testing.expectEqual(@as(u32, 10), map.get(1).?.*);
+    try std.testing.expectEqual(@as(u32, 20), map.get(2).?.*);
+
+    // 257 & 0xFF == 1, so this should overwrite key 1.
+    try map.put(257, 99);
+    try std.testing.expectEqual(@as(usize, 2), map.len());
+    try std.testing.expectEqual(@as(u32, 99), map.get(1).?.*);
+}
+
+test "flat hash map clone preserves tombstones and live entries" {
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{});
+    defer map.deinit();
+
+    try map.putNoClobber(1, 10);
+    try map.putNoClobber(2, 20);
+    _ = try map.remove(1);
+    try map.putNoClobber(3, 30);
+
+    var clone = try map.clone();
+    defer clone.deinit();
+
+    try std.testing.expectEqual(map.len(), clone.len());
+    try std.testing.expectEqual(map.tombstones, clone.tombstones);
+    try std.testing.expect(clone.getConst(1) == null);
+    try std.testing.expectEqual(@as(u32, 20), clone.getConst(2).?.*);
+    try std.testing.expectEqual(@as(u32, 30), clone.getConst(3).?.*);
+}
+
+test "flat hash map overwrite does not allocate before proving insertion is needed" {
+    const Ctx = struct {};
+    const Map = FlatHashMap(u32, u32, Ctx);
+    const init_capacity = 8;
+    const init_bytes = init_capacity * @sizeOf(Map.Entry) + init_capacity * @sizeOf(SlotState);
+    var budget = try memory.budget.Budget.init(init_bytes);
+
+    var map = try Map.init(std.testing.allocator, .{
+        .initial_capacity = init_capacity,
+        .budget = &budget,
+    });
+    defer map.deinit();
+
+    var key: u32 = 0;
+    while (key < 5) : (key += 1) {
+        try map.putNoClobber(key, key * 10);
+    }
+    const cap_before = map.capacity();
+    const budget_before = budget.used();
+
+    try map.put(2, 999);
+
+    try std.testing.expectEqual(cap_before, map.capacity());
+    try std.testing.expectEqual(budget_before, budget.used());
+    try std.testing.expectEqual(@as(usize, 5), map.len());
+    try std.testing.expectEqual(@as(u32, 999), map.getConst(2).?.*);
+}
+
+test "flat hash map duplicate rejection beats growth failure" {
+    const Ctx = struct {};
+    const Map = FlatHashMap(u32, u32, Ctx);
+    const init_capacity = 8;
+    const init_bytes = init_capacity * @sizeOf(Map.Entry) + init_capacity * @sizeOf(SlotState);
+    var budget = try memory.budget.Budget.init(init_bytes);
+
+    var map = try Map.init(std.testing.allocator, .{
+        .initial_capacity = init_capacity,
+        .budget = &budget,
+    });
+    defer map.deinit();
+
+    var key: u32 = 0;
+    while (key < 5) : (key += 1) {
+        try map.putNoClobber(key, key * 10);
+    }
+    const cap_before = map.capacity();
+    const budget_before = budget.used();
+
+    try std.testing.expectError(error.AlreadyExists, map.putNoClobber(4, 444));
+    try std.testing.expectEqual(cap_before, map.capacity());
+    try std.testing.expectEqual(budget_before, budget.used());
+    try std.testing.expectEqual(@as(u32, 40), map.getConst(4).?.*);
+}
+
+test "flat hash map custom hash supports padded composite keys" {
+    const Key = struct {
+        tag: u8,
+        value: u32,
+    };
+    const PaddedCtx = struct {
+        pub fn hash(key: Key, seed: u64) u64 {
+            var hasher = static_hash.wyhash.Wyhash64.init(seed);
+            hasher.update(std.mem.asBytes(&key.tag));
+            hasher.update(std.mem.asBytes(&key.value));
+            return hasher.final();
+        }
+
+        pub fn eql(a: Key, b: Key) bool {
+            return a.tag == b.tag and a.value == b.value;
+        }
+    };
+    const Map = FlatHashMap(Key, u32, PaddedCtx);
+
+    var first: Key = undefined;
+    @memset(std.mem.asBytes(&first), 0x00);
+    first.tag = 7;
+    first.value = 42;
+
+    var second: Key = undefined;
+    @memset(std.mem.asBytes(&second), 0xFF);
+    second.tag = 7;
+    second.value = 42;
+
+    try std.testing.expect(std.meta.eql(first, second));
+
+    var map = try Map.init(std.testing.allocator, .{});
+    defer map.deinit();
+
+    try map.put(first, 99);
+    try std.testing.expectEqual(@as(u32, 99), map.getConst(second).?.*);
 }

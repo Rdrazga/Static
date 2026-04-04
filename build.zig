@@ -96,7 +96,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
             .{ .name = "static_memory", .module = static_memory_mod },
             .{ .name = "static_hash", .module = static_hash_mod },
         },
@@ -367,6 +366,14 @@ fn addBenchStep(
             .src = "packages/static_spatial/benchmarks/bvh_query_baselines.zig",
             .import_name = "static_spatial",
             .import_mod = mods.static_spatial,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "flat_hash_map_lookup_insert_baselines",
+            .src = "packages/static_collections/benchmarks/flat_hash_map_lookup_insert_baselines.zig",
+            .import_name = "static_collections",
+            .import_mod = mods.static_collections,
             .extra_import_name = "static_testing",
             .extra_import_mod = mods.static_testing,
         },

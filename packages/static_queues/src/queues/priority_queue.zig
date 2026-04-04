@@ -67,6 +67,7 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
         pub const len_semantics: contracts.LenSemantics = .exact;
         pub const PushError = error{WouldBlock};
         pub const PopError = error{WouldBlock};
+        pub const invalid_index = Heap.invalid_index;
         pub const Config = struct {
             capacity: usize,
             budget: ?*memory.budget.Budget = null,
@@ -110,6 +111,9 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
             return self.heap.isFull();
         }
 
+        /// Clears the queue while retaining storage.
+        /// When the context tracks indices through `setIndex`, all live entries
+        /// are invalidated with `invalid_index`.
         pub fn clear(self: *Self) void {
             self.heap.clear();
         }
@@ -127,12 +131,16 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
             return self.heap.popMin() orelse error.WouldBlock;
         }
 
+        /// Replaces the element at `index`. Any mutation may move other
+        /// elements, so tracked indices must come from `Context.setIndex`.
         pub fn update(self: *Self, index: usize, new_value: T) void {
             requireTrackedContext();
             self.heap.updateAt(index, new_value);
         }
 
         /// Removes and returns the element currently stored at `index`.
+        /// The returned value has already been invalidated through
+        /// `Context.setIndex(..., invalid_index)` when index tracking is active.
         pub fn remove(self: *Self, index: usize) T {
             requireTrackedContext();
             return self.heap.removeAt(index);
