@@ -78,6 +78,7 @@ pub const Executor = struct {
             error.OutOfMemory => return error.OutOfMemory,
             error.NoSpaceLeft => unreachable,
             error.NotFound => unreachable,
+            error.Overflow => unreachable,
         };
         errdefer {
             var owned_pool = job_pool;
@@ -134,7 +135,7 @@ pub const Executor = struct {
                 self.mutex.unlock();
                 return error.NoSpaceLeft;
             },
-            error.InvalidConfig, error.OutOfMemory, error.NotFound => unreachable,
+            error.InvalidConfig, error.OutOfMemory, error.NotFound, error.Overflow => unreachable,
         };
         const slot_index = id.index;
         std.debug.assert(slot_index < self.slots.len);

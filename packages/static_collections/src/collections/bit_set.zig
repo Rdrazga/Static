@@ -9,11 +9,15 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const memory = @import("static_memory");
 const assert = std.debug.assert;
 
 pub const Error = error{
     OutOfMemory,
     InvalidInput,
+    NoSpaceLeft,
+    InvalidConfig,
+    Overflow,
 };
 
 // ---------------------------------------------------------------------------
@@ -63,11 +67,13 @@ const BitOps = struct {
 
 pub const BitSet = struct {
     allocator: std.mem.Allocator,
+    budget: ?*memory.budget.Budget,
     words: []usize,
     bit_count: usize,
 
     pub const Config = struct {
         bit_count: usize,
+        budget: ?*memory.budget.Budget = null,
     };
 
     pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!BitSet {
@@ -75,11 +81,25 @@ pub const BitSet = struct {
         const sum = std.math.add(usize, cfg.bit_count, wordBits() - 1) catch return error.InvalidInput;
         const word_count = sum / wordBits();
         assert(word_count > 0);
-        const words = try allocator.alloc(usize, word_count);
+
+        const alloc_bytes = std.math.mul(usize, word_count, @sizeOf(usize)) catch return error.Overflow;
+        if (cfg.budget) |budget| {
+            budget.tryReserve(alloc_bytes) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+        }
+
+        const words = allocator.alloc(usize, word_count) catch {
+            if (cfg.budget) |budget| budget.release(alloc_bytes);
+            return error.OutOfMemory;
+        };
         assert(words.len == word_count);
         @memset(words, 0);
         var self: BitSet = .{
             .allocator = allocator,
+            .budget = cfg.budget,
             .words = words,
             .bit_count = cfg.bit_count,
         };
@@ -89,6 +109,10 @@ pub const BitSet = struct {
 
     pub fn deinit(self: *BitSet) void {
         self.assertInvariants();
+        if (self.budget) |budget| {
+            const alloc_bytes = self.words.len * @sizeOf(usize);
+            budget.release(alloc_bytes);
+        }
         self.allocator.free(self.words);
         self.* = undefined;
     }
@@ -113,12 +137,12 @@ pub const BitSet = struct {
         }
     }
 
-    pub fn isSet(self: *const BitSet, index: usize) bool {
+    pub fn isSet(self: *const BitSet, index: usize) Error!bool {
         self.assertInvariants();
         if (index < self.bit_count) {
             return BitOps.isSet(self.words, index, self.bit_count);
         }
-        return false;
+        return error.InvalidInput;
     }
 
     fn assertInvariants(self: *const BitSet) void {
@@ -162,12 +186,12 @@ pub fn FixedBitSet(comptime N: usize) type {
             }
         }
 
-        pub fn isSet(self: *const Self, index: usize) bool {
+        pub fn isSet(self: *const Self, index: usize) Error!bool {
             self.assertInvariants();
             if (index < N) {
                 return BitOps.isSet(&self.words, index, N);
             }
-            return false;
+            return error.InvalidInput;
         }
 
         /// Verify structural invariants: word count matches the bit capacity, and all
@@ -210,9 +234,9 @@ test "bit set operations" {
     var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16 });
     defer b.deinit();
     try b.set(3);
-    try std.testing.expect(b.isSet(3));
+    try std.testing.expect(try b.isSet(3));
     try b.clear(3);
-    try std.testing.expect(!b.isSet(3));
+    try std.testing.expect(!try b.isSet(3));
 }
 
 test "bit set rejects zero bit_count" {
@@ -228,8 +252,8 @@ test "bit set out-of-bounds set and clear return InvalidInput" {
     defer b.deinit();
     try std.testing.expectError(error.InvalidInput, b.set(8));
     try std.testing.expectError(error.InvalidInput, b.clear(8));
-    // Out-of-bounds isSet must return false, not panic.
-    try std.testing.expect(!b.isSet(8));
+    // Out-of-bounds isSet must return InvalidInput, matching set/clear.
+    try std.testing.expectError(error.InvalidInput, b.isSet(8));
 }
 
 test "bit set crosses word boundary" {
@@ -239,9 +263,9 @@ test "bit set crosses word boundary" {
     var b = try BitSet.init(std.testing.allocator, .{ .bit_count = bits });
     defer b.deinit();
     try b.set(bits - 1);
-    try std.testing.expect(b.isSet(bits - 1));
+    try std.testing.expect(try b.isSet(bits - 1));
     try b.clear(bits - 1);
-    try std.testing.expect(!b.isSet(bits - 1));
+    try std.testing.expect(!try b.isSet(bits - 1));
 }
 
 test "FixedBitSet basic set/clear/isSet" {
@@ -250,19 +274,19 @@ test "FixedBitSet basic set/clear/isSet" {
     var fb = FixedBitSet(32){};
     try fb.set(0);
     try fb.set(31);
-    try std.testing.expect(fb.isSet(0));
-    try std.testing.expect(fb.isSet(31));
+    try std.testing.expect(try fb.isSet(0));
+    try std.testing.expect(try fb.isSet(31));
     try fb.clear(0);
-    try std.testing.expect(!fb.isSet(0));
-    try std.testing.expect(fb.isSet(31));
+    try std.testing.expect(!try fb.isSet(0));
+    try std.testing.expect(try fb.isSet(31));
 }
 
-test "FixedBitSet out-of-bounds returns InvalidInput or false" {
+test "FixedBitSet out-of-bounds returns InvalidInput" {
     // Goal: ensure fixed-size bounds checks mirror dynamic BitSet behavior.
     // Method: probe index==N with set and isSet and assert safe failure.
     var fb = FixedBitSet(8){};
     try std.testing.expectError(error.InvalidInput, fb.set(8));
-    try std.testing.expect(!fb.isSet(8));
+    try std.testing.expectError(error.InvalidInput, fb.isSet(8));
 }
 
 test "bit set does not mutate adjacent boundary bits" {
@@ -273,7 +297,7 @@ test "bit set does not mutate adjacent boundary bits" {
     defer b.deinit();
 
     try b.set(edge);
-    try std.testing.expect(!b.isSet(edge - 1));
-    try std.testing.expect(b.isSet(edge));
-    try std.testing.expect(!b.isSet(edge + 1));
+    try std.testing.expect(!try b.isSet(edge - 1));
+    try std.testing.expect(try b.isSet(edge));
+    try std.testing.expect(!try b.isSet(edge + 1));
 }

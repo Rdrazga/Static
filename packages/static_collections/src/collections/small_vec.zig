@@ -3,6 +3,11 @@
 //! Key type: `SmallVec(T, N)`. For small N the common case requires no allocation.
 //! When the inline buffer is exceeded the data is moved to a heap-backed `Vec(T)`.
 //!
+//! Spill is permanent: once heap-allocated, the SmallVec remains heap-backed
+//! regardless of subsequent element count. Callers who need to reclaim the heap
+//! allocation must `deinit` and reconstruct. Use `ensureCapacity` during setup
+//! to pre-allocate if the expected size is known to exceed inline capacity.
+//!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
 const vec_mod = @import("vec.zig");
@@ -60,6 +65,30 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             return self.inline_items[0..self.inline_len];
         }
 
+        /// Pre-allocates spill capacity so that subsequent appends up to `n`
+        /// total elements do not allocate. If `n <= InlineN`, this is a no-op.
+        pub fn ensureCapacity(self: *Self, n: usize) Error!void {
+            self.assertInvariants();
+            if (n <= InlineN) return;
+            if (self.spill) |*spill| {
+                try spill.ensureCapacity(n);
+                self.assertInvariants();
+                return;
+            }
+            // Trigger spill with sufficient capacity.
+            assert(n <= std.math.maxInt(u32));
+            var spill = try vec_mod.Vec(T).init(self.allocator, .{
+                .initial_capacity = @intCast(n),
+                .budget = self.budget,
+            });
+            errdefer spill.deinit();
+            for (self.inline_items[0..self.inline_len]) |item| {
+                try spill.append(item);
+            }
+            self.spill = spill;
+            self.assertInvariants();
+        }
+
         pub fn append(self: *Self, value: T) Error!void {
             self.assertInvariants();
             if (self.spill) |*spill| {
@@ -90,9 +119,14 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
                 .budget = self.budget,
             });
             errdefer spill.deinit();
-            for (self.inline_items[0..self.inline_len]) |item| {
-                try spill.append(item);
-            }
+            // Bulk-copy inline items to avoid per-item invariant checks.
+            // Capacity was pre-reserved above, so this cannot fail.
+            assert(spill.capacity() >= self.inline_len + 1);
+            const dst = spill.storage.items.ptr;
+            @memcpy(dst[0..self.inline_len], self.inline_items[0..self.inline_len]);
+            spill.storage.items.len = self.inline_len;
+            // Append the new value through the normal path for the single
+            // element that triggered spill.
             try spill.append(value);
             self.spill = spill;
             assert(self.spill != null);

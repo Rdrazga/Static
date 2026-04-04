@@ -7,8 +7,14 @@
 //! `eql(a: K, b: K) bool`; both are validated at comptime. Missing declarations
 //! fall back to wyhash and `std.meta.eql` respectively.
 //!
+//! The default hash path uses `std.mem.asBytes(&key)`, which includes struct
+//! padding bytes. Composite key types with padding must provide a custom
+//! `Ctx.hash` to avoid padding-dependent hash instability. Primitive key types
+//! (`u32`, `u64`, etc.) have no padding and work correctly with the default.
+//!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const memory = @import("static_memory");
 const static_hash = @import("static_hash");
 const assert = std.debug.assert;
 
@@ -18,6 +24,7 @@ pub const Error = error{
     NotFound,
     InvalidConfig,
     Overflow,
+    NoSpaceLeft,
 };
 
 const SlotState = enum(u8) {
@@ -65,6 +72,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             initial_capacity: usize = 8,
             seed: u64 = 0,
             max_load_percent: u8 = 70,
+            budget: ?*memory.budget.Budget = null,
         };
 
         const Entry = struct {
@@ -74,6 +82,8 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         };
 
         allocator: std.mem.Allocator,
+        budget: ?*memory.budget.Budget,
+        budget_reserved_bytes: usize = 0,
         entries: []Entry,
         states: []SlotState,
         count: usize = 0,
@@ -81,22 +91,59 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         seed: u64,
         max_load_percent: u8,
 
+        fn tableBytes(cap: usize) error{Overflow}!usize {
+            const entry_bytes = std.math.mul(usize, cap, @sizeOf(Entry)) catch return error.Overflow;
+            const state_bytes = std.math.mul(usize, cap, @sizeOf(SlotState)) catch return error.Overflow;
+            return std.math.add(usize, entry_bytes, state_bytes) catch return error.Overflow;
+        }
+
+        fn reserveBudgetForCapacity(self: *Self, new_cap: usize) Error!void {
+            if (self.budget == null) return;
+            const budget = self.budget.?;
+            const new_bytes = tableBytes(new_cap) catch return error.Overflow;
+            if (new_bytes <= self.budget_reserved_bytes) return;
+            const delta = new_bytes - self.budget_reserved_bytes;
+            budget.tryReserve(delta) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+            self.budget_reserved_bytes = new_bytes;
+        }
+
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
             if (cfg.max_load_percent == 0 or cfg.max_load_percent > 95) return error.InvalidConfig;
 
             const cap = try nextPow2(@max(cfg.initial_capacity, 8));
             assert(cap >= 8);
             assert(std.math.isPowerOfTwo(cap));
-            const entries = allocator.alloc(Entry, cap) catch return error.OutOfMemory;
-            errdefer allocator.free(entries);
+
+            const init_bytes = tableBytes(cap) catch return error.Overflow;
+            if (cfg.budget) |budget| {
+                budget.tryReserve(init_bytes) catch |err| switch (err) {
+                    error.NoSpaceLeft => return error.NoSpaceLeft,
+                    error.InvalidConfig => return error.InvalidConfig,
+                    error.Overflow => return error.Overflow,
+                };
+            }
+
+            const entries = allocator.alloc(Entry, cap) catch {
+                if (cfg.budget) |budget| budget.release(init_bytes);
+                return error.OutOfMemory;
+            };
+            errdefer {
+                allocator.free(entries);
+                if (cfg.budget) |budget| budget.release(init_bytes);
+            }
 
             const states = allocator.alloc(SlotState, cap) catch return error.OutOfMemory;
-            errdefer allocator.free(states);
             assert(states.len == entries.len);
             @memset(states, .empty);
 
             var self: Self = .{
                 .allocator = allocator,
+                .budget = cfg.budget,
+                .budget_reserved_bytes = init_bytes,
                 .entries = entries,
                 .states = states,
                 .seed = cfg.seed,
@@ -108,6 +155,9 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
 
         pub fn deinit(self: *Self) void {
             self.assertInvariants();
+            if (self.budget) |budget| {
+                budget.release(self.budget_reserved_bytes);
+            }
             self.allocator.free(self.entries);
             self.allocator.free(self.states);
             self.* = undefined;
@@ -221,7 +271,32 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         fn rehash(self: *Self, new_capacity: usize) Error!void {
             const cap = try nextPow2(new_capacity);
             assert(std.math.isPowerOfTwo(cap));
-            const new_entries = self.allocator.alloc(Entry, cap) catch return error.OutOfMemory;
+
+            // Reserve budget for the new capacity before allocating.
+            const new_bytes = tableBytes(cap) catch return error.Overflow;
+            const old_budget_bytes = self.budget_reserved_bytes;
+            if (self.budget) |budget| {
+                if (new_bytes > old_budget_bytes) {
+                    const delta = new_bytes - old_budget_bytes;
+                    budget.tryReserve(delta) catch |err| switch (err) {
+                        error.NoSpaceLeft => return error.NoSpaceLeft,
+                        error.InvalidConfig => return error.InvalidConfig,
+                        error.Overflow => return error.Overflow,
+                    };
+                    self.budget_reserved_bytes = new_bytes;
+                }
+            }
+
+            const new_entries = self.allocator.alloc(Entry, cap) catch {
+                // Roll back budget on alloc failure.
+                if (self.budget) |budget| {
+                    if (new_bytes > old_budget_bytes) {
+                        budget.release(new_bytes - old_budget_bytes);
+                        self.budget_reserved_bytes = old_budget_bytes;
+                    }
+                }
+                return error.OutOfMemory;
+            };
             errdefer self.allocator.free(new_entries);
             const new_states = self.allocator.alloc(SlotState, cap) catch return error.OutOfMemory;
             assert(new_states.len == new_entries.len);
@@ -321,15 +396,12 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         }
 
         fn nextPow2(n: usize) Error!usize {
-            // Guard: zero input is valid and maps to the minimum capacity of 1.
-            // Values passed here come from init (>= 8) or rehash (cap * 2), so n == 0
-            // is unexpected; we handle it defensively rather than asserting, because
-            // ceilPowerOfTwo(usize, 0) is undefined behavior in some Zig versions.
+            // Precondition: all callers guarantee n > 0 (init enforces >= 8,
+            // rehash passes cap * 2). Assert the contract rather than degrading
+            // silently with a fallback that would hide a broken caller.
             assert(n > 0);
-            if (n == 0) return 1;
             if (n == 1) return 1;
             const result = std.math.ceilPowerOfTwo(usize, n) catch return error.Overflow;
-            // Postcondition: result must be a power of two and at least n.
             assert(std.math.isPowerOfTwo(result));
             assert(result >= n);
             return result;

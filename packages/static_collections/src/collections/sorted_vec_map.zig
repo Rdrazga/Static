@@ -6,11 +6,15 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const memory = @import("static_memory");
 const assert = std.debug.assert;
 
 pub const Error = error{
     OutOfMemory,
     NotFound,
+    NoSpaceLeft,
+    InvalidConfig,
+    Overflow,
 };
 
 pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type {
@@ -21,15 +25,51 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         pub const Key = K;
         pub const Value = V;
         pub const Compare = Cmp;
-        pub const Config = struct { initial_capacity: u32 = 0 };
+        pub const Config = struct {
+            initial_capacity: u32 = 0,
+            budget: ?*memory.budget.Budget = null,
+        };
 
         allocator: std.mem.Allocator,
+        budget: ?*memory.budget.Budget,
+        budget_reserved_capacity: usize = 0,
         entries: std.ArrayListUnmanaged(Entry) = .{},
 
+        fn entryBytesForCapacity(cap: usize) error{Overflow}!usize {
+            return std.math.mul(usize, cap, @sizeOf(Entry));
+        }
+
+        fn ensureBudgetCapacity(self: *Self, needed: usize) Error!void {
+            if (self.budget == null) return;
+            if (needed <= self.budget_reserved_capacity) return;
+            const budget = self.budget.?;
+            const new_bytes = entryBytesForCapacity(needed) catch return error.Overflow;
+            const old_bytes = entryBytesForCapacity(self.budget_reserved_capacity) catch return error.Overflow;
+            assert(new_bytes >= old_bytes);
+            const delta = new_bytes - old_bytes;
+            budget.tryReserve(delta) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+            self.budget_reserved_capacity = needed;
+        }
+
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
-            var self: Self = .{ .allocator = allocator };
+            var self: Self = .{
+                .allocator = allocator,
+                .budget = cfg.budget,
+            };
             if (cfg.initial_capacity > 0) {
-                try self.entries.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity);
+                try self.ensureBudgetCapacity(cfg.initial_capacity);
+                self.entries.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity) catch {
+                    if (self.budget) |budget| {
+                        const bytes = entryBytesForCapacity(cfg.initial_capacity) catch unreachable;
+                        budget.release(bytes);
+                        self.budget_reserved_capacity = 0;
+                    }
+                    return error.OutOfMemory;
+                };
             }
             self.assertInvariants();
             return self;
@@ -37,6 +77,10 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
 
         pub fn deinit(self: *Self) void {
             self.assertInvariants();
+            if (self.budget) |budget| {
+                const bytes = entryBytesForCapacity(self.budget_reserved_capacity) catch unreachable;
+                budget.release(bytes);
+            }
             self.entries.deinit(self.allocator);
             self.* = undefined;
         }
@@ -71,41 +115,33 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
                 return;
             }
 
-            // Reserve space before mutating; capacity is guaranteed after this call.
-            try self.entries.ensureUnusedCapacity(self.allocator, 1);
+            // Reserve budget and backing capacity before mutating.
+            const needed_capacity = std.math.add(usize, self.entries.items.len, 1) catch return error.Overflow;
+            try self.ensureBudgetCapacity(needed_capacity);
+            self.entries.ensureUnusedCapacity(self.allocator, 1) catch return error.OutOfMemory;
 
             const old_len = self.entries.items.len;
 
-            // Append-then-shift insertion pattern:
+            // Direct shift-then-write insertion:
             //
-            // 1. Append the new entry at the end. This is a placeholder whose
-            //    only purpose is to extend `items.len` by one so that the slice
-            //    arithmetic below stays in-bounds. The value written here is
-            //    irrelevant when `search.index < old_len` because the memmove
-            //    will overwrite it.
+            // 1. Extend the slice length by one (capacity is already reserved).
+            // 2. memmove elements in [search.index, old_len) one position right,
+            //    opening a gap at search.index. Source and destination overlap,
+            //    so memmove (not memcpy) is required.
+            // 3. Write the new entry into the gap.
             //
-            // 2. memmove elements in [search.index, old_len) one position to
-            //    the right, opening a gap at `search.index`. The source and
-            //    destination ranges overlap by design, so memmove (not memcpy)
-            //    is required.
-            //
-            // 3. Write the correct entry into the now-vacant `search.index`
-            //    slot. This restores the value that the memmove clobbered when
-            //    it copied `entries[search.index]` rightward.
-            //
-            // When `search.index == old_len` the new entry belongs at the tail
-            // and the appended placeholder is already in the right position, so
-            // steps 2 and 3 are skipped.
-            self.entries.appendAssumeCapacity(.{ .key = key, .value = value });
-            assert(self.entries.items.len == old_len + 1);
+            // When search.index == old_len the entry belongs at the tail and
+            // the memmove is a no-op (zero-length source).
+            self.entries.items.len = old_len + 1;
+            assert(self.entries.items.len <= self.entries.capacity);
 
             if (search.index < old_len) {
                 @memmove(
                     self.entries.items[search.index + 1 .. old_len + 1],
                     self.entries.items[search.index..old_len],
                 );
-                self.entries.items[search.index] = .{ .key = key, .value = value };
             }
+            self.entries.items[search.index] = .{ .key = key, .value = value };
             self.assertInvariants();
         }
 

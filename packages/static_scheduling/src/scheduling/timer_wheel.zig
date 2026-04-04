@@ -74,6 +74,7 @@ pub fn TimerWheel(comptime T: type) type {
                 error.OutOfMemory => return error.OutOfMemory,
                 error.NoSpaceLeft => unreachable,
                 error.NotFound => unreachable,
+                error.Overflow => unreachable,
             };
             errdefer {
                 var owned_pool = index_pool;
@@ -105,7 +106,7 @@ pub fn TimerWheel(comptime T: type) type {
         pub fn schedule(self: *Self, entry: T, delay_ticks: u64) TimerError!TimerId {
             const id = self.index_pool.allocate() catch |err| switch (err) {
                 error.NoSpaceLeft => return error.NoSpaceLeft,
-                error.InvalidConfig, error.OutOfMemory, error.NotFound => unreachable,
+                error.InvalidConfig, error.OutOfMemory, error.NotFound, error.Overflow => unreachable,
             };
             const slot_index = id.index;
             errdefer self.releaseSlot(id);

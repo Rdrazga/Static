@@ -7,9 +7,17 @@
 //!
 //! `Ctx` is a comptime comparator context type providing:
 //! - `fn lessThan(ctx: Ctx, a: T, b: T) bool`
-//! - optionally `fn setIndex(ctx: Ctx, item: *T, index: usize) void`
+//! - `fn setIndex(ctx: Ctx, item: *T, index: usize) void` — required for
+//!   correct use of `updateAt` and `removeAt`. Without it, callers have no
+//!   way to track live indices after mutations that move elements.
+//!
+//! Heap indices are invalidated by any mutation (`push`, `popMin`, `updateAt`,
+//! `removeAt`). Callers must use `Ctx.setIndex` to maintain a live index for
+//! each element, or find elements by linear scan before each indexed operation.
 //!
 //! When `Ctx == void`, `T` must implement `fn lessThan(a: T, b: T) bool`.
+//! The void-context path does not support `updateAt` or `removeAt` with
+//! tracked indices.
 
 const std = @import("std");
 const builtin = @import("builtin");

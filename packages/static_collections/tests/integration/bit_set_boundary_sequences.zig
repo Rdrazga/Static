@@ -29,23 +29,23 @@ test "bit_set keeps word-boundary visibility and trailing bits clear" {
     try bits.set(word_bits);
     try bits.set(bit_count - 1);
 
-    try std.testing.expect(bits.isSet(0));
-    try std.testing.expect(bits.isSet(word_bits - 1));
-    try std.testing.expect(bits.isSet(word_bits));
-    try std.testing.expect(bits.isSet(bit_count - 1));
+    try std.testing.expect(try bits.isSet(0));
+    try std.testing.expect(try bits.isSet(word_bits - 1));
+    try std.testing.expect(try bits.isSet(word_bits));
+    try std.testing.expect(try bits.isSet(bit_count - 1));
     try expectTrailingBitsClear(bits.words, bits.bit_count);
 
     try bits.clear(word_bits - 1);
     try bits.clear(bit_count - 1);
-    try std.testing.expect(bits.isSet(0));
-    try std.testing.expect(!bits.isSet(word_bits - 1));
-    try std.testing.expect(bits.isSet(word_bits));
-    try std.testing.expect(!bits.isSet(bit_count - 1));
+    try std.testing.expect(try bits.isSet(0));
+    try std.testing.expect(!try bits.isSet(word_bits - 1));
+    try std.testing.expect(try bits.isSet(word_bits));
+    try std.testing.expect(!try bits.isSet(bit_count - 1));
     try expectTrailingBitsClear(bits.words, bits.bit_count);
 
     try std.testing.expectError(error.InvalidInput, bits.set(bit_count));
     try std.testing.expectError(error.InvalidInput, bits.clear(bit_count));
-    try std.testing.expect(!bits.isSet(bit_count));
+    try std.testing.expectError(error.InvalidInput, bits.isSet(bit_count));
 }
 
 test "FixedBitSet keeps boundary bits visible and rejects out-of-bounds access" {
@@ -57,18 +57,18 @@ test "FixedBitSet keeps boundary bits visible and rejects out-of-bounds access" 
     try bits.set(word_bits - 1);
     try bits.set(word_bits);
 
-    try std.testing.expect(bits.isSet(0));
-    try std.testing.expect(bits.isSet(word_bits - 1));
-    try std.testing.expect(bits.isSet(word_bits));
+    try std.testing.expect(try bits.isSet(0));
+    try std.testing.expect(try bits.isSet(word_bits - 1));
+    try std.testing.expect(try bits.isSet(word_bits));
     try expectTrailingBitsClear(bits.words[0..], Fixed.bit_count);
 
     try bits.clear(word_bits - 1);
-    try std.testing.expect(bits.isSet(0));
-    try std.testing.expect(!bits.isSet(word_bits - 1));
-    try std.testing.expect(bits.isSet(word_bits));
+    try std.testing.expect(try bits.isSet(0));
+    try std.testing.expect(!try bits.isSet(word_bits - 1));
+    try std.testing.expect(try bits.isSet(word_bits));
     try expectTrailingBitsClear(bits.words[0..], Fixed.bit_count);
 
     try std.testing.expectError(error.InvalidInput, bits.set(word_bits + 1));
     try std.testing.expectError(error.InvalidInput, bits.clear(word_bits + 1));
-    try std.testing.expect(!bits.isSet(word_bits + 1));
+    try std.testing.expectError(error.InvalidInput, bits.isSet(word_bits + 1));
 }

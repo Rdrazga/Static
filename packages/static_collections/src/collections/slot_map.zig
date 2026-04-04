@@ -4,8 +4,14 @@
 //! reallocation. Generation counters in handles detect use-after-free of a slot.
 //! Free slots are tracked in an embedded free list within the slot array.
 //!
+//! Generation counters use wrapping arithmetic (`+%`). After 2^32 - 1 remove
+//! and reinsert cycles on the same slot, the generation wraps and a very old
+//! stale handle could falsely validate. This is a known limitation of 32-bit
+//! generational handles and is sufficient for virtually all practical workloads.
+//!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const memory = @import("static_memory");
 const handle_mod = @import("handle.zig");
 const assert = std.debug.assert;
 
@@ -13,6 +19,8 @@ pub const Error = error{
     OutOfMemory,
     NotFound,
     Overflow,
+    NoSpaceLeft,
+    InvalidConfig,
 };
 
 pub fn SlotMap(comptime T: type) type {
@@ -23,6 +31,7 @@ pub fn SlotMap(comptime T: type) type {
         pub const Handle = handle_mod.Handle;
         pub const Config = struct {
             initial_capacity: u32 = 0,
+            budget: ?*memory.budget.Budget = null,
         };
 
         const invalid_index = std.math.maxInt(u32);
@@ -34,14 +43,47 @@ pub fn SlotMap(comptime T: type) type {
         };
 
         allocator: std.mem.Allocator,
+        budget: ?*memory.budget.Budget,
+        budget_reserved_capacity: usize = 0,
         slots: std.ArrayListUnmanaged(Slot) = .{},
         free_head: ?u32 = null,
         live: usize = 0,
 
+        fn slotBytesForCapacity(cap: usize) error{Overflow}!usize {
+            return std.math.mul(usize, cap, @sizeOf(Slot));
+        }
+
+        fn ensureBudgetCapacity(self: *Self, needed: usize) Error!void {
+            if (self.budget == null) return;
+            if (needed <= self.budget_reserved_capacity) return;
+            const budget = self.budget.?;
+            const new_bytes = slotBytesForCapacity(needed) catch return error.Overflow;
+            const old_bytes = slotBytesForCapacity(self.budget_reserved_capacity) catch return error.Overflow;
+            assert(new_bytes >= old_bytes);
+            const delta = new_bytes - old_bytes;
+            budget.tryReserve(delta) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+            self.budget_reserved_capacity = needed;
+        }
+
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
-            var self: Self = .{ .allocator = allocator };
+            var self: Self = .{
+                .allocator = allocator,
+                .budget = cfg.budget,
+            };
             if (cfg.initial_capacity > 0) {
-                try self.slots.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity);
+                try self.ensureBudgetCapacity(cfg.initial_capacity);
+                self.slots.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity) catch {
+                    if (self.budget) |budget| {
+                        const bytes = slotBytesForCapacity(cfg.initial_capacity) catch unreachable;
+                        budget.release(bytes);
+                        self.budget_reserved_capacity = 0;
+                    }
+                    return error.OutOfMemory;
+                };
             }
             self.assertInvariants();
             return self;
@@ -49,6 +91,10 @@ pub fn SlotMap(comptime T: type) type {
 
         pub fn deinit(self: *Self) void {
             self.assertInvariants();
+            if (self.budget) |budget| {
+                const bytes = slotBytesForCapacity(self.budget_reserved_capacity) catch unreachable;
+                budget.release(bytes);
+            }
             self.slots.deinit(self.allocator);
             self.* = undefined;
         }
@@ -83,6 +129,8 @@ pub fn SlotMap(comptime T: type) type {
 
             const index = self.slots.items.len;
             if (index >= std.math.maxInt(u32)) return error.Overflow;
+            const needed_capacity = std.math.add(usize, index, 1) catch return error.Overflow;
+            try self.ensureBudgetCapacity(needed_capacity);
             self.slots.append(self.allocator, .{
                 .generation = 1,
                 .occupied = true,

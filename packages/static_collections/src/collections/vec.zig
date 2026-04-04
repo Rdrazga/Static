@@ -58,17 +58,17 @@ pub fn Vec(comptime T: type) type {
             self.* = undefined;
         }
 
-        pub fn len(self: Self) usize {
+        pub fn len(self: *const Self) usize {
             self.assertInvariants();
             return self.storage.items.len;
         }
 
-        pub fn capacity(self: Self) usize {
+        pub fn capacity(self: *const Self) usize {
             self.assertInvariants();
             return self.storage.capacity;
         }
 
-        pub fn items(self: Self) []T {
+        pub fn items(self: *const Self) []T {
             self.assertInvariants();
             return self.storage.items;
         }
@@ -139,6 +139,15 @@ pub fn Vec(comptime T: type) type {
             return out;
         }
 
+        /// Resets the logical length to zero without releasing backing memory
+        /// or budget reservation. Capacity and budget remain unchanged.
+        pub fn clear(self: *Self) void {
+            self.assertInvariants();
+            self.storage.clearRetainingCapacity();
+            assert(self.storage.items.len == 0);
+            self.assertInvariants();
+        }
+
         fn growCapacityCandidate(old_capacity: usize, required_capacity: usize) error{Overflow}!usize {
             assert(required_capacity > old_capacity);
             if (old_capacity == 0) return required_capacity;
@@ -187,7 +196,7 @@ pub fn Vec(comptime T: type) type {
             return capacity_count * @sizeOf(T);
         }
 
-        fn assertInvariants(self: Self) void {
+        fn assertInvariants(self: *const Self) void {
             assert(self.storage.items.len <= self.storage.capacity);
             if (self.budget != null) {
                 assert(self.budget_reserved_capacity == self.storage.capacity);
@@ -274,6 +283,31 @@ test "vec ensureCapacity is monotonic" {
     const grown = v.capacity();
     try v.ensureCapacity(4);
     try std.testing.expect(v.capacity() >= grown);
+}
+
+test "vec clear resets length but preserves capacity and budget" {
+    // Goal: confirm clear resets logical length without releasing capacity or budget.
+    // Method: append values, clear, then assert length is zero while capacity and budget are unchanged.
+    var budget = try memory.budget.Budget.init(64);
+    var v = try Vec(u8).init(std.testing.allocator, .{ .budget = &budget });
+    defer v.deinit();
+
+    try v.append(1);
+    try v.append(2);
+    try v.append(3);
+    const cap_before = v.capacity();
+    const budget_before = budget.used();
+    try std.testing.expect(cap_before > 0);
+
+    v.clear();
+    try std.testing.expectEqual(@as(usize, 0), v.len());
+    try std.testing.expectEqual(cap_before, v.capacity());
+    try std.testing.expectEqual(budget_before, budget.used());
+
+    // Confirm the vec is reusable after clear.
+    try v.append(4);
+    try std.testing.expectEqual(@as(usize, 1), v.len());
+    try std.testing.expectEqual(@as(u8, 4), v.items()[0]);
 }
 
 test "vec ensureCapacity detects element-size overflow" {

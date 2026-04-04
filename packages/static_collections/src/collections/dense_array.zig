@@ -1,9 +1,11 @@
-//! Dense array: a packed, gap-free array that provides stable `Handle` identifiers.
+//! Dense array: a packed, gap-free array with O(1) swap-remove deletion.
 //!
 //! Key type: `DenseArray(T)`. Items are stored in contiguous memory. Removals
 //! swap-remove (filling the gap with the last element), keeping storage dense.
-//! Handles encode a generation counter so stale references to removed items can
-//! be detected at runtime.
+//! Indices returned by `append` are positional and are invalidated when
+//! `swapRemove` moves the last element into a vacated slot. Callers that need
+//! stable external references or generation-based stale-reference detection
+//! should use `SlotMap` or compose `IndexPool` with their own storage.
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
@@ -51,6 +53,15 @@ pub fn DenseArray(comptime T: type) type {
             return self.data.items();
         }
 
+        /// Resets the logical length to zero without releasing backing memory.
+        /// All previously returned indices become invalid after clear.
+        pub fn clear(self: *Self) void {
+            self.assertInvariants();
+            self.data.clear();
+            assert(self.data.len() == 0);
+            self.assertInvariants();
+        }
+
         pub fn append(self: *Self, value: T) Error!usize {
             self.assertInvariants();
             const index = self.data.len();
@@ -76,6 +87,11 @@ pub fn DenseArray(comptime T: type) type {
 
         /// Removes the element at `index` by swapping it with the last element.
         /// O(1). Does not preserve ordering. Returns the removed value.
+        ///
+        /// After this call, the index that previously referred to the last
+        /// element now points to different data (the moved element occupies
+        /// the vacated slot). Callers that maintain external index-to-entity
+        /// mappings must update them after every swap-remove.
         pub fn swapRemove(self: *Self, index: usize) Error!T {
             self.assertInvariants();
             const current_len = self.data.len();
@@ -165,4 +181,22 @@ test "dense array swapRemove from empty returns NotFound" {
     var da = try DenseArray(u32).init(std.testing.allocator, .{});
     defer da.deinit();
     try std.testing.expectError(error.NotFound, da.swapRemove(0));
+}
+
+test "dense array clear resets length and allows reuse" {
+    // Goal: confirm clear resets logical length without releasing capacity.
+    // Method: append values, clear, assert empty, then append again and verify.
+    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    defer da.deinit();
+
+    _ = try da.append(10);
+    _ = try da.append(20);
+    try std.testing.expectEqual(@as(usize, 2), da.len());
+
+    da.clear();
+    try std.testing.expectEqual(@as(usize, 0), da.len());
+
+    const idx = try da.append(30);
+    try std.testing.expectEqual(@as(usize, 0), idx);
+    try std.testing.expectEqual(@as(u32, 30), da.get(0).?.*);
 }

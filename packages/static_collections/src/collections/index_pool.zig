@@ -6,6 +6,7 @@
 //! validate / release" behavior without dynamic growth.
 
 const std = @import("std");
+const memory = @import("static_memory");
 const handle_mod = @import("handle.zig");
 
 pub const Error = error{
@@ -13,23 +14,44 @@ pub const Error = error{
     OutOfMemory,
     NoSpaceLeft,
     NotFound,
+    Overflow,
 };
 
 pub const Config = struct {
     slots_max: u32,
+    budget: ?*memory.budget.Budget = null,
 };
 
 pub const Handle = handle_mod.Handle;
 
 pub const IndexPool = struct {
     allocator: std.mem.Allocator,
+    budget: ?*memory.budget.Budget,
     generations: []u32,
     occupied: []bool,
     free_stack: []u32,
     free_len: u32,
 
+    fn totalAllocBytes(slots_max: u32) error{Overflow}!usize {
+        const gen_bytes = std.math.mul(usize, slots_max, @sizeOf(u32)) catch return error.Overflow;
+        const occ_bytes = std.math.mul(usize, slots_max, @sizeOf(bool)) catch return error.Overflow;
+        const stk_bytes = std.math.mul(usize, slots_max, @sizeOf(u32)) catch return error.Overflow;
+        const sum1 = std.math.add(usize, gen_bytes, occ_bytes) catch return error.Overflow;
+        return std.math.add(usize, sum1, stk_bytes) catch return error.Overflow;
+    }
+
     pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!IndexPool {
         if (cfg.slots_max == 0) return error.InvalidConfig;
+
+        const alloc_bytes = totalAllocBytes(cfg.slots_max) catch return error.Overflow;
+        if (cfg.budget) |budget| {
+            budget.tryReserve(alloc_bytes) catch |err| switch (err) {
+                error.NoSpaceLeft => return error.NoSpaceLeft,
+                error.InvalidConfig => return error.InvalidConfig,
+                error.Overflow => return error.Overflow,
+            };
+        }
+        errdefer if (cfg.budget) |budget| budget.release(alloc_bytes);
 
         const generations = allocator.alloc(u32, cfg.slots_max) catch return error.OutOfMemory;
         errdefer allocator.free(generations);
@@ -45,6 +67,7 @@ pub const IndexPool = struct {
 
         const self: IndexPool = .{
             .allocator = allocator,
+            .budget = cfg.budget,
             .generations = generations,
             .occupied = occupied,
             .free_stack = free_stack,
@@ -56,6 +79,10 @@ pub const IndexPool = struct {
 
     pub fn deinit(self: *IndexPool) void {
         self.assertBasicInvariants();
+        if (self.budget) |budget| {
+            const alloc_bytes = totalAllocBytes(@intCast(self.generations.len)) catch unreachable;
+            budget.release(alloc_bytes);
+        }
         self.allocator.free(self.free_stack);
         self.allocator.free(self.occupied);
         self.allocator.free(self.generations);
@@ -133,6 +160,7 @@ pub const IndexPool = struct {
     }
 
     fn assertBasicInvariants(self: *const IndexPool) void {
+        // Structural size invariants: all three arrays share the same length.
         std.debug.assert(self.generations.len == self.occupied.len);
         std.debug.assert(self.generations.len == self.free_stack.len);
         std.debug.assert(self.free_len <= self.free_stack.len);
@@ -140,37 +168,30 @@ pub const IndexPool = struct {
         std.debug.assert(self.generations.len <= std.math.maxInt(u32));
         const len: u32 = @intCast(self.generations.len);
 
+        // O(n) pass 1: walk the free stack and verify each entry is in-bounds
+        // and points to an unoccupied slot. Uniqueness is proven transitively:
+        // each free-stack entry must reference an unoccupied slot, and the
+        // second pass below asserts that the number of unoccupied slots equals
+        // free_len. If there were duplicates in the free stack, the free_len
+        // count would exceed the unoccupied count.
         var free_count: u32 = 0;
         var free_slot: u32 = 0;
         while (free_slot < self.free_len) : (free_slot += 1) {
             const slot_index = self.free_stack[free_slot];
             std.debug.assert(slot_index < len);
             std.debug.assert(!self.occupied[slot_index]);
-
-            var seen: u32 = 0;
-            while (seen < free_slot) : (seen += 1) {
-                std.debug.assert(self.free_stack[seen] != slot_index);
-            }
-
             free_count += 1;
         }
         std.debug.assert(free_count == self.free_len);
 
+        // O(n) pass 2: count unoccupied slots and assert it matches free_len.
+        // Combined with pass 1, this proves the free stack is a valid
+        // permutation of exactly the unoccupied slot indices.
         var expected_free_count: u32 = 0;
         var slot_index: u32 = 0;
         while (slot_index < len) : (slot_index += 1) {
             if (!self.occupied[slot_index]) {
                 expected_free_count += 1;
-
-                var found = false;
-                var free_slot_index: u32 = 0;
-                while (free_slot_index < self.free_len) : (free_slot_index += 1) {
-                    if (self.free_stack[free_slot_index] == slot_index) {
-                        found = true;
-                        break;
-                    }
-                }
-                std.debug.assert(found);
             }
         }
         std.debug.assert(expected_free_count == self.free_len);

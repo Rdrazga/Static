@@ -150,6 +150,7 @@ pub const Runtime = struct {
             error.OutOfMemory => return error.OutOfMemory,
             error.NoSpaceLeft => unreachable,
             error.NotFound => unreachable,
+            error.Overflow => unreachable,
         };
         errdefer {
             var owned_pool = handle_pool;
@@ -623,7 +624,7 @@ pub const Runtime = struct {
         if (self.handle_pool.freeCount() == 0) self.recycleClosedHandle();
         const handle = self.handle_pool.allocate() catch |err| switch (err) {
             error.NoSpaceLeft => return error.NoSpaceLeft,
-            error.InvalidConfig, error.OutOfMemory, error.NotFound => unreachable,
+            error.InvalidConfig, error.OutOfMemory, error.NotFound, error.Overflow => unreachable,
         };
         const slot_index = handle.index;
         std.debug.assert(slot_index < self.handles.len);

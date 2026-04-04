@@ -36,14 +36,13 @@ test "sparse set insert, contains, items, and remove keep dense membership stabl
     try std.testing.expectError(error.InvalidInput, set.insert(16));
     try std.testing.expectError(error.InvalidInput, set.insert(99));
 
-    const removed = set.remove(7);
-    try std.testing.expect(removed);
+    try set.remove(7);
     try std.testing.expectEqual(@as(usize, 2), set.len());
     try std.testing.expect(!set.contains(7));
     try std.testing.expect(set.contains(3));
     try std.testing.expect(set.contains(11));
     try expectItems(&set, &.{ 3, 11 });
 
-    try std.testing.expect(!set.remove(7));
-    try std.testing.expect(!set.remove(15));
+    try std.testing.expectError(error.InvalidInput, set.remove(7));
+    try std.testing.expectError(error.InvalidInput, set.remove(15));
 }
