@@ -75,6 +75,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             self.entries.ensureTotalCapacityPrecise(self.allocator, candidate) catch {
                 if (self.budget) |budget| {
                     if (self.budget_reserved_capacity > old_budget) {
+                        // Safety: both capacities were validated on the forward path.
                         const rollback = (entryBytesForCapacity(self.budget_reserved_capacity) catch unreachable) -
                             (entryBytesForCapacity(old_budget) catch unreachable);
                         budget.release(rollback);
@@ -95,6 +96,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
                 try self.ensureBudgetCapacity(cfg.initial_capacity);
                 self.entries.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity) catch {
                     if (self.budget) |budget| {
+                        // Safety: initial_capacity is u32; product fits usize.
                         const bytes = entryBytesForCapacity(cfg.initial_capacity) catch unreachable;
                         budget.release(bytes);
                         self.budget_reserved_capacity = 0;
@@ -113,6 +115,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             self.entries.shrinkAndFree(self.allocator, self.entries.items.len);
             const new_capacity = self.entries.capacity;
             if (self.budget != null and new_capacity < old_capacity) {
+                // Safety: both capacities were live allocations; product fits usize.
                 const released = (entryBytesForCapacity(old_capacity) catch unreachable) -
                     (entryBytesForCapacity(new_capacity) catch unreachable);
                 self.budget.?.release(released);
@@ -145,6 +148,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
 
             const new_buf = self.allocator.alloc(Entry, cap) catch {
                 if (self.budget) |budget| {
+                    // Safety: cap was the source capacity; product fits usize.
                     const bytes = entryBytesForCapacity(cap) catch unreachable;
                     budget.release(bytes);
                 }
@@ -168,6 +172,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         pub fn deinit(self: *Self) void {
             self.assertFullInvariants();
             if (self.budget) |budget| {
+                // Safety: budget_reserved_capacity was validated at reservation time.
                 const bytes = entryBytesForCapacity(self.budget_reserved_capacity) catch unreachable;
                 budget.release(bytes);
             }

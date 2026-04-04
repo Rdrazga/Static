@@ -92,11 +92,12 @@ const Context = struct {
             self.vec.deinit();
         }
 
-        self.budget = static_memory.budget.Budget.init(BudgetLimit) catch unreachable;
+        self.budget = static_memory.budget.Budget.init(BudgetLimit) catch
+            |err| std.debug.panic("resetState: Budget.init failed: {s}", .{@errorName(err)});
         self.vec = Vec.init(std.testing.allocator, .{
             .initial_capacity = InitialCapacity,
             .budget = &self.budget,
-        }) catch unreachable;
+        }) catch |err| std.debug.panic("resetState: Vec.init failed: {s}", .{@errorName(err)});
         self.vec_initialized = true;
         self.values = .{ 0, 0, 0 };
         self.len = 0;

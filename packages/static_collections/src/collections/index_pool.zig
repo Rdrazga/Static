@@ -80,6 +80,7 @@ pub const IndexPool = struct {
     pub fn deinit(self: *IndexPool) void {
         self.assertFullInvariants();
         if (self.budget) |budget| {
+            // Safety: generations.len was validated at init; totalAllocBytes cannot overflow for the same input.
             const alloc_bytes = totalAllocBytes(@intCast(self.generations.len)) catch unreachable;
             budget.release(alloc_bytes);
         }

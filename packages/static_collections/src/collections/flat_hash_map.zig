@@ -409,6 +409,10 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             const old_len = old_entries.len;
             const old_count = self.count;
 
+            // SAFETY: no fallible operations between self-mutation and old-table free.
+            // The errdefer above references new_entries which becomes self.entries here.
+            // Adding any `try` or error-returning call in this block would cause
+            // use-after-free via the errdefer. Keep this section infallible.
             self.entries = new_entries;
             self.states = new_states;
             self.count = 0;

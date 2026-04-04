@@ -89,6 +89,7 @@ pub fn SlotMap(comptime T: type) type {
             self.slots.ensureTotalCapacityPrecise(self.allocator, candidate) catch {
                 if (self.budget) |budget| {
                     if (self.budget_reserved_capacity > old_budget) {
+                        // Safety: both capacities were validated on the forward path.
                         const rollback = (slotBytesForCapacity(self.budget_reserved_capacity) catch unreachable) -
                             (slotBytesForCapacity(old_budget) catch unreachable);
                         budget.release(rollback);
@@ -109,6 +110,7 @@ pub fn SlotMap(comptime T: type) type {
                 try self.ensureBudgetCapacity(cfg.initial_capacity);
                 self.slots.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity) catch {
                     if (self.budget) |budget| {
+                        // Safety: initial_capacity is u32; product fits usize.
                         const bytes = slotBytesForCapacity(cfg.initial_capacity) catch unreachable;
                         budget.release(bytes);
                         self.budget_reserved_capacity = 0;
@@ -123,6 +125,7 @@ pub fn SlotMap(comptime T: type) type {
         pub fn deinit(self: *Self) void {
             self.assertFullInvariants();
             if (self.budget) |budget| {
+                // Safety: budget_reserved_capacity was validated at reservation time.
                 const bytes = slotBytesForCapacity(self.budget_reserved_capacity) catch unreachable;
                 budget.release(bytes);
             }

@@ -89,7 +89,8 @@ const Context = struct {
         if (self.map_initialized) {
             self.map.deinit();
         }
-        self.map = SlotMap.init(std.testing.allocator, .{}) catch unreachable;
+        self.map = SlotMap.init(std.testing.allocator, .{}) catch
+            |err| std.debug.panic("resetState: SlotMap.init failed: {s}", .{@errorName(err)});
         self.map_initialized = true;
         self.reference.reset();
         std.debug.assert(self.map.len() == 0);

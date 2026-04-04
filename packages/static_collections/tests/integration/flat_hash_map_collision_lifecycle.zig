@@ -43,6 +43,8 @@ test "flat hash map collision cluster stays stable across removal and rehash" {
     const capacity_before_growth = map.capacity();
     var next_key: u32 = 5;
     while (map.capacity() == capacity_before_growth) : (next_key += 1) {
+        // Safety: growth must occur well before this bound.
+        std.debug.assert(next_key < 1000);
         try map.putNoClobber(next_key, next_key * 10);
     }
     const inserted_max = next_key - 1;

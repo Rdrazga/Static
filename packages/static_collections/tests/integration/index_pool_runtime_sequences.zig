@@ -131,7 +131,8 @@ const Context = struct {
             self.pool.deinit();
         }
 
-        self.pool = IndexPool.init(std.testing.allocator, .{ .slots_max = Capacity }) catch unreachable;
+        self.pool = IndexPool.init(std.testing.allocator, .{ .slots_max = Capacity }) catch
+            |err| std.debug.panic("resetState: IndexPool.init failed: {s}", .{@errorName(err)});
         self.pool_initialized = true;
         self.first_handle = null;
         self.second_handle = null;

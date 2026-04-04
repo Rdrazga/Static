@@ -196,6 +196,7 @@ pub const SparseSet = struct {
 
         self.dense.ensureTotalCapacityPrecise(self.allocator, candidate) catch {
             if (self.budget) |budget| {
+                // Safety: old_capacity was a live allocation; products fit usize.
                 const old_dense_bytes = std.math.mul(usize, old_capacity, @sizeOf(u32)) catch unreachable;
                 const old_total = std.math.add(usize, sparse_bytes, old_dense_bytes) catch unreachable;
                 if (self.budget_reserved_bytes > old_total) {
