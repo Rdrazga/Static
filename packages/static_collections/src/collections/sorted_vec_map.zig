@@ -156,6 +156,11 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             };
             @memcpy(new_buf[0..len_val], self.entries.items);
 
+            // Manual ArrayListUnmanaged construction: std.ArrayListUnmanaged
+            // does not expose a clone or init-from-buffer API, so we must set
+            // .items and .capacity directly. This couples to the stdlib type's
+            // internal layout — revisit if the layout changes.
+            assert(len_val <= cap);
             var result: Self = .{
                 .allocator = self.allocator,
                 .budget = self.budget,

@@ -123,9 +123,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
                 .budget = self.budget,
             });
             errdefer spill.deinit();
-            for (self.inline_items[0..self.inline_len]) |item| {
-                try spill.append(item);
-            }
+            spill.appendSliceAssumeCapacity(self.inline_items[0..self.inline_len]);
             self.spill = spill;
             self.inline_len = 0;
             self.assertInvariants();
@@ -161,14 +159,10 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
                 .budget = self.budget,
             });
             errdefer spill.deinit();
-            // Bulk-copy inline items to avoid per-item invariant checks.
-            // Capacity was pre-reserved above, so this cannot fail.
+            // Bulk-copy inline items through Vec's public API, then append
+            // the new value that triggered the spill.
             assert(spill.capacity() >= self.inline_len + 1);
-            const dst = spill.storage.items.ptr;
-            @memcpy(dst[0..self.inline_len], self.inline_items[0..self.inline_len]);
-            spill.storage.items.len = self.inline_len;
-            // Append the new value through the normal path for the single
-            // element that triggered spill.
+            spill.appendSliceAssumeCapacity(self.inline_items[0..self.inline_len]);
             try spill.append(value);
             self.spill = spill;
             self.inline_len = 0;

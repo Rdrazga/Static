@@ -176,6 +176,10 @@ pub fn SlotMap(comptime T: type) type {
                 }
             }
 
+            // Manual ArrayListUnmanaged construction: std.ArrayListUnmanaged
+            // does not expose a clone or init-from-buffer API, so we must set
+            // .items and .capacity directly. This couples to the stdlib type's
+            // internal layout — revisit if the layout changes.
             var result: Self = .{
                 .allocator = self.allocator,
                 .budget = self.budget,

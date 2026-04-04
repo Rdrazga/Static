@@ -90,6 +90,21 @@ pub fn Vec(comptime T: type) type {
             self.assertInvariants();
         }
 
+        /// Bulk-append a slice of items without allocating. The caller must have
+        /// already reserved sufficient capacity via `ensureCapacity`. This keeps
+        /// all storage field access inside Vec, avoiding direct coupling to
+        /// ArrayListUnmanaged internals from external callers.
+        pub fn appendSliceAssumeCapacity(self: *Self, src: []const T) void {
+            self.assertInvariants();
+            const before_len = self.storage.items.len;
+            assert(self.storage.capacity >= before_len + src.len);
+            const dst = self.storage.items.ptr;
+            @memcpy(dst[before_len..][0..src.len], src);
+            self.storage.items.len = before_len + src.len;
+            assert(self.storage.items.len == before_len + src.len);
+            self.assertInvariants();
+        }
+
         /// Ensures at least `n` elements of capacity. Uses geometric growth
         /// (via `ensureTotalCapacity`) for amortized O(1) appends.
         ///
