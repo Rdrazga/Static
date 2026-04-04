@@ -53,6 +53,16 @@ pub fn DenseArray(comptime T: type) type {
             return self.data.items();
         }
 
+        pub fn itemsConst(self: *const Self) []const T {
+            self.assertInvariants();
+            return self.data.items();
+        }
+
+        pub fn capacity(self: *const Self) usize {
+            self.assertInvariants();
+            return self.data.capacity();
+        }
+
         /// Resets the logical length to zero without releasing backing memory.
         /// All previously returned indices become invalid after clear.
         pub fn clear(self: *Self) void {
@@ -199,4 +209,36 @@ test "dense array clear resets length and allows reuse" {
     const idx = try da.append(30);
     try std.testing.expectEqual(@as(usize, 0), idx);
     try std.testing.expectEqual(@as(u32, 30), da.get(0).?.*);
+}
+
+test "dense array itemsConst provides read-only dense slice" {
+    // Goal: confirm itemsConst returns a const view matching append order.
+    // Method: append values, read via itemsConst, then verify length and content.
+    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    defer da.deinit();
+
+    _ = try da.append(10);
+    _ = try da.append(20);
+    _ = try da.append(30);
+
+    const slice = da.itemsConst();
+    try std.testing.expectEqual(@as(usize, 3), slice.len);
+    try std.testing.expectEqual(@as(u32, 10), slice[0]);
+    try std.testing.expectEqual(@as(u32, 20), slice[1]);
+    try std.testing.expectEqual(@as(u32, 30), slice[2]);
+}
+
+test "dense array capacity reports backing storage size" {
+    // Goal: confirm capacity is at least as large as len and grows with appends.
+    // Method: check capacity after init and after appends.
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .initial_capacity = 8 });
+    defer da.deinit();
+
+    try std.testing.expect(da.capacity() >= 8);
+    try std.testing.expectEqual(@as(usize, 0), da.len());
+
+    _ = try da.append(1);
+    _ = try da.append(2);
+    try std.testing.expect(da.capacity() >= 2);
+    try std.testing.expect(da.capacity() >= da.len());
 }
