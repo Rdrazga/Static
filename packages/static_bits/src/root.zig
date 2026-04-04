@@ -41,8 +41,18 @@ test "public API exports are wired consistently" {
 
     var writer = cursor.ByteWriter.init(&bytes);
     try varint.writeUleb128(&writer, 0x34);
+    try std.testing.expectEqualSlices(u8, bytes[0..writer.position()], writer.writtenSlice());
     const extracted = try bitfield.extractBits(u8, bytes[0], 2, 3);
     try std.testing.expectEqual(@as(u8, 0b101), extracted);
     const extracted_ct = bitfield.extractBitsCt(u8, bytes[0], 2, 3);
     try std.testing.expectEqual(extracted, extracted_ct);
+
+    var peek_bytes = [_]u8{ 0xAB, 0xCD };
+    var peek_reader = cursor.ByteReader.init(&peek_bytes);
+    try std.testing.expectEqual(@as(u8, 0xAB), try peek_reader.peekByte());
+    try std.testing.expectEqual(@as(u16, 0xCDAB), try peek_reader.peekInt(u16, .little));
+    try std.testing.expectEqual(@as(usize, 0), peek_reader.position());
+
+    try endian.storeInt(&peek_bytes, @as(u16, 0x1234), .big);
+    try std.testing.expectEqual(@as(u16, 0x1234), try endian.loadInt(u16, &peek_bytes, .big));
 }

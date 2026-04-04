@@ -310,6 +310,13 @@ test "pack2 and unpack2 use compile-time width contracts" {
     try std.testing.expectEqual(@as(u16, 0x12), unpacked.high);
 }
 
+test "pack2 and unpack2 report overlapping fields as invalid range" {
+    try std.testing.expectError(error.InvalidRange, pack2(u8, 0, 5, 0, 5));
+    try std.testing.expectError(error.InvalidRange, unpack2(u8, 0, 5, 5));
+    try std.testing.expectError(error.InvalidRange, pack2(u16, 0, 12, 0, 8));
+    try std.testing.expectError(error.InvalidRange, unpack2(u16, 0, 12, 8));
+}
+
 test "comptime bitfield wrappers match runtime wrappers" {
     const base: u16 = 0b1010_0000_1111_0000;
     const runtime_inserted = try insertBits(u16, base, 0b0101, 8, 4);

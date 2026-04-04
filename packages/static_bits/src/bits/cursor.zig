@@ -249,15 +249,38 @@ fn writeRawBitsFixedWidth(buf: []u8, bit_start: usize, raw: u128, comptime bit_c
 }
 
 fn clearBitRange(buf: []u8, bit_start: usize, bit_count: usize) void {
-    var remaining = bit_count;
-    var cursor_bit = bit_start;
-    while (remaining > 0) {
-        const chunk_bits = @min(remaining, std.math.maxInt(u8));
-        const chunk_bits_u8: u8 = @intCast(chunk_bits);
-        writeRawBitsRuntime(buf, cursor_bit, 0, chunk_bits_u8);
-        remaining -= chunk_bits;
-        cursor_bit += chunk_bits;
+    if (bit_count == 0) return;
+
+    const bit_end = bit_start + bit_count;
+    std.debug.assert(bit_end >= bit_start);
+    std.debug.assert(bit_end <= buf.len * 8);
+
+    // Clear leading partial-byte bits one at a time (at most 7).
+    var current = bit_start;
+    while (current < bit_end and current % 8 != 0) {
+        const byte_idx = current / 8;
+        const bit_offset: u3 = @intCast(current % 8);
+        buf[byte_idx] &= ~(@as(u8, 1) << bit_offset);
+        current += 1;
     }
+
+    // Clear whole interior bytes with memset.
+    const full_byte_start = current / 8;
+    const full_bytes = (bit_end - current) / 8;
+    if (full_bytes > 0) {
+        @memset(buf[full_byte_start .. full_byte_start + full_bytes], 0);
+        current += full_bytes * 8;
+    }
+
+    // Clear trailing partial-byte bits one at a time (at most 7).
+    while (current < bit_end) {
+        const byte_idx = current / 8;
+        const bit_offset: u3 = @intCast(current % 8);
+        buf[byte_idx] &= ~(@as(u8, 1) << bit_offset);
+        current += 1;
+    }
+
+    std.debug.assert(current == bit_end);
 }
 
 fn assertBytePositionInBounds(pos: usize, len: usize) void {
@@ -340,6 +363,21 @@ pub const ByteReader = struct {
     pub fn peek(self: *const ByteReader, n: usize) ReaderError![]const u8 {
         const end = try readerEnd(self.pos, n, self.buf.len);
         return self.buf[self.pos..end];
+    }
+
+    /// Returns the next byte without advancing the cursor.
+    pub fn peekByte(self: *const ByteReader) ReaderError!u8 {
+        return (try self.peek(1))[0];
+    }
+
+    /// Returns the next integer without advancing the cursor.
+    pub fn peekInt(self: *const ByteReader, comptime T: type, comptime order: Endian) ReaderError!T {
+        comptime assertNonZeroIntType(T, "ByteReader.peekInt");
+        assertBytePositionInBounds(self.pos, self.buf.len);
+        return endian.readInt(self.buf, self.pos, T, order) catch |err| switch (err) {
+            error.EndOfStream => return error.EndOfStream,
+            error.Overflow => return error.Overflow,
+        };
     }
 
     /// Reads the next `n` bytes and advances the cursor by `n`.
@@ -443,6 +481,12 @@ pub const ByteWriter = struct {
     pub fn remaining(self: *const ByteWriter) usize {
         assertBytePositionInBounds(self.pos, self.buf.len);
         return self.buf.len - self.pos;
+    }
+
+    /// Returns the portion of the buffer that has been written so far.
+    pub fn writtenSlice(self: *const ByteWriter) []const u8 {
+        assertBytePositionInBounds(self.pos, self.buf.len);
+        return self.buf[0..self.pos];
     }
 
     /// Writes `bytes` and advances the cursor by `bytes.len`.

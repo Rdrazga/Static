@@ -143,6 +143,11 @@ pub fn loadInt(comptime T: type, bytes: []const u8, comptime endian: Endian) Rea
     return readInt(bytes, 0, T, endian);
 }
 
+/// Stores an integer at the beginning of `bytes` using the given byte order.
+pub fn storeInt(bytes: []u8, value: anytype, comptime endian: Endian) WriteError!void {
+    return writeInt(bytes, 0, value, endian);
+}
+
 /// Reads `T` from a fixed-size byte array at compile-time-validated `offset`.
 ///
 /// This variant is intended for fixed binary layouts where both the array size
@@ -228,6 +233,32 @@ test "read/write endian helpers report arithmetic overflow" {
 test "loadInt forwards readInt errors" {
     const short = [_]u8{0x01};
     try std.testing.expectError(error.EndOfStream, loadInt(u16, &short, .little));
+}
+
+test "storeInt is equivalent to writeInt at offset 0" {
+    var buf = [_]u8{ 0x00, 0x00, 0x00, 0x00 };
+    try storeInt(&buf, @as(u32, 0x11223344), .little);
+    try std.testing.expectEqualSlices(u8, &.{ 0x44, 0x33, 0x22, 0x11 }, &buf);
+    try storeInt(&buf, @as(u16, 0xABCD), .big);
+    try std.testing.expectEqualSlices(u8, &.{ 0xAB, 0xCD, 0x22, 0x11 }, &buf);
+    try std.testing.expectError(error.NoSpaceLeft, storeInt(buf[0..1], @as(u32, 1), .little));
+}
+
+test "read/write endian helpers handle signed integers" {
+    var buf = [_]u8{ 0xFE, 0xFF };
+    try std.testing.expectEqual(@as(i16, -2), try readInt(&buf, 0, i16, .little));
+    try std.testing.expectEqual(@as(i16, -2), try loadInt(i16, &buf, .little));
+
+    try writeInt(&buf, 0, @as(i16, -128), .big);
+    try std.testing.expectEqual(@as(i16, -128), try readInt(&buf, 0, i16, .big));
+
+    try storeInt(&buf, @as(i16, 0x0102), .little);
+    try std.testing.expectEqual(@as(i16, 0x0102), try loadInt(i16, &buf, .little));
+
+    var fixed = [_]u8{ 0xFF, 0x80 };
+    try std.testing.expectEqual(@as(i16, -128), readIntAt(i16, &fixed, 0, .big));
+    writeIntAt(&fixed, 0, @as(i16, 0x0102), .little);
+    try std.testing.expectEqual(@as(i16, 0x0102), readIntAt(i16, &fixed, 0, .little));
 }
 
 test "fixed-array endian helpers enforce compile-time offsets" {

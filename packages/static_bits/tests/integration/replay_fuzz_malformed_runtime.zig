@@ -50,6 +50,13 @@ const bit_reader_violation = [_]checker.Violation{
     },
 };
 
+const bit_writer_violation = [_]checker.Violation{
+    .{
+        .code = "static_bits.bit_writer_runtime",
+        .message = "bit-writer runtime roundtrip or model agreement regressed",
+    },
+};
+
 const retained_truncated_violation = [_]checker.Violation{
     .{
         .code = "static_bits.retained_truncated_uleb",
@@ -342,6 +349,13 @@ const BitReadCase = struct {
     bit_count: u8,
 };
 
+const BitWriteCase = struct {
+    bytes: [8]u8,
+    len: usize,
+    bit_count: u8,
+    value: u16,
+};
+
 const RetainedMalformedCase = struct {
     bytes: [max_varint_bytes]u8 = [_]u8{0} ** max_varint_bytes,
     len: usize,
@@ -428,6 +442,17 @@ fn evaluateInvariantCase(seed_value: u64) Evaluation {
     event_count += 1;
     digest = foldDigest(digest, bit_reader_check.digest);
     if (bit_reader_check.violations) |violations| {
+        return .{
+            .violations = violations,
+            .checkpoint_digest = checker.CheckpointDigest.init(digest),
+            .event_count = event_count,
+        };
+    }
+
+    const bit_writer_check = validateBitWriterCase(seed_value ^ 0xA11CE_0006);
+    event_count += 1;
+    digest = foldDigest(digest, bit_writer_check.digest);
+    if (bit_writer_check.violations) |violations| {
         return .{
             .violations = violations,
             .checkpoint_digest = checker.CheckpointDigest.init(digest),
@@ -840,6 +865,83 @@ fn validateBitReaderCase(seed_value: u64) CaseCheck {
     };
 }
 
+fn validateBitWriterCase(seed_value: u64) CaseCheck {
+    const case_data = buildBitWriteCase(seed_value);
+    const digest = (@as(u64, case_data.bit_count) << 32) ^
+        (@as(u64, case_data.value) << 48) ^
+        seed_value;
+
+    if (case_data.len == 0 or case_data.bit_count == 0) {
+        return .{ .digest = digest ^ 0x99 };
+    }
+
+    // Write value at bit position 0 into a buffer pre-filled with a known pattern.
+    var write_buf: [8]u8 = undefined;
+    @memcpy(write_buf[0..case_data.len], case_data.bytes[0..case_data.len]);
+    const original = write_buf;
+
+    var writer = static_bits.cursor.BitWriter.init(write_buf[0..case_data.len]);
+
+    writer.writeBits(case_data.value, case_data.bit_count) catch {
+        return .{
+            .digest = digest,
+            .violations = &bit_writer_violation,
+        };
+    };
+
+    if (writer.positionBits() != case_data.bit_count) {
+        return .{
+            .digest = digest ^ writer.positionBits(),
+            .violations = &bit_writer_violation,
+        };
+    }
+
+    // Read back via BitReader and verify roundtrip.
+    var reader = static_bits.cursor.BitReader.init(write_buf[0..case_data.len]);
+    const readback = reader.readBits(u16, case_data.bit_count) catch {
+        return .{
+            .digest = digest,
+            .violations = &bit_writer_violation,
+        };
+    };
+
+    if (readback != case_data.value) {
+        return .{
+            .digest = digest ^ readback ^ case_data.value,
+            .violations = &bit_writer_violation,
+        };
+    }
+
+    // Verify against bit-level reference model.
+    const model_value = readBitsModel(write_buf[0..case_data.len], 0, case_data.bit_count);
+    if (model_value != case_data.value) {
+        return .{
+            .digest = digest ^ model_value,
+            .violations = &bit_writer_violation,
+        };
+    }
+
+    // Verify bits outside the written range are unchanged.
+    const total_bits = case_data.len * 8;
+    var bit_idx: usize = case_data.bit_count;
+    while (bit_idx < total_bits) : (bit_idx += 1) {
+        const byte_idx = bit_idx / 8;
+        const bit_offset: u3 = @intCast(bit_idx % 8);
+        const original_bit = (original[byte_idx] >> bit_offset) & 1;
+        const written_bit = (write_buf[byte_idx] >> bit_offset) & 1;
+        if (original_bit != written_bit) {
+            return .{
+                .digest = digest ^ bit_idx,
+                .violations = &bit_writer_violation,
+            };
+        }
+    }
+
+    return .{
+        .digest = digest ^ case_data.value,
+    };
+}
+
 fn buildUlebBytes(seed_value: u64) GeneratedBytes {
     var generated = GeneratedBytes{ .len = 0 };
     var prng = std.Random.DefaultPrng.init(seed_value ^ 0x55E7_0001);
@@ -985,6 +1087,33 @@ fn buildBitReadCase(seed_value: u64) BitReadCase {
         .len = @as(usize, @intCast(random.int(u32) % (bytes.len + 1))),
         .bit_pos = @as(usize, @intCast(random.int(u32) % ((bytes.len * 8) + 5))),
         .bit_count = @as(u8, @intCast(random.int(u32) % 17)),
+    };
+}
+
+fn buildBitWriteCase(seed_value: u64) BitWriteCase {
+    var prng = std.Random.DefaultPrng.init(seed_value ^ 0xB17_0006);
+    const random = prng.random();
+
+    var bytes: [8]u8 = undefined;
+    for (&bytes) |*byte| {
+        byte.* = @truncate(random.int(u32));
+    }
+
+    const len: usize = @as(usize, @intCast(random.int(u32) % 8)) + 1;
+    const total_bits = len * 8;
+    const max_bit_count = @min(@as(usize, 16), total_bits);
+    const bit_count: u8 = @as(u8, @intCast(random.int(u32) % max_bit_count)) + 1;
+    const mask: u16 = if (bit_count >= 16)
+        std.math.maxInt(u16)
+    else
+        (@as(u16, 1) << @as(u4, @intCast(bit_count))) - 1;
+    const value: u16 = @truncate(random.int(u32) & @as(u32, mask));
+
+    return .{
+        .bytes = bytes,
+        .len = len,
+        .bit_count = bit_count,
+        .value = value,
     };
 }
 
