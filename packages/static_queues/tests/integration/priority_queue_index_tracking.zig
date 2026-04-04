@@ -1,0 +1,74 @@
+const std = @import("std");
+const static_queues = @import("static_queues");
+
+test "priority queue tracks indexed mutations across update and remove" {
+    const Item = struct {
+        id: u32,
+        priority: u32,
+        index: usize = 0,
+    };
+    const Ctx = struct {
+        indices: *[4]?usize,
+
+        pub fn lessThan(_: @This(), a: Item, b: Item) bool {
+            return a.priority < b.priority;
+        }
+
+        pub fn setIndex(self: @This(), item: *Item, index: usize) void {
+            self.indices[item.id] = index;
+            item.index = index;
+        }
+    };
+
+    var tracked_indices: [4]?usize = .{ null, null, null, null };
+    var pq = try static_queues.priority_queue.PriorityQueue(Item, Ctx).init(
+        std.testing.allocator,
+        .{ .capacity = 4 },
+        .{ .indices = &tracked_indices },
+    );
+    defer pq.deinit();
+
+    try pq.tryPush(.{ .id = 1, .priority = 20 });
+    try pq.tryPush(.{ .id = 2, .priority = 10 });
+    try pq.tryPush(.{ .id = 3, .priority = 30 });
+
+    const root_before = pq.peek().?;
+    try std.testing.expectEqual(@as(u32, 2), root_before.id);
+    try std.testing.expectEqual(@as(usize, 0), root_before.index);
+    try std.testing.expectEqual(@as(usize, 0), tracked_indices[2].?);
+
+    const update_index = tracked_indices[3].?;
+    pq.update(update_index, .{ .id = 3, .priority = 5, .index = update_index });
+
+    const root_after_update = pq.peek().?;
+    try std.testing.expectEqual(@as(u32, 3), root_after_update.id);
+    try std.testing.expectEqual(@as(usize, 0), root_after_update.index);
+    try std.testing.expectEqual(root_after_update.index, tracked_indices[3].?);
+
+    const remove_index = tracked_indices[2].?;
+    const removed = pq.remove(remove_index);
+    tracked_indices[2] = null;
+    try std.testing.expectEqual(@as(u32, 2), removed.id);
+    try std.testing.expectEqual(remove_index, removed.index);
+
+    const next_after_remove = pq.peek().?;
+    try std.testing.expectEqual(next_after_remove.index, tracked_indices[@as(usize, next_after_remove.id)].?);
+    const popped_after_remove = try pq.tryPop();
+    try std.testing.expectEqual(next_after_remove.id, popped_after_remove.id);
+    try std.testing.expectEqual(next_after_remove.priority, popped_after_remove.priority);
+    try std.testing.expectEqual(next_after_remove.index, popped_after_remove.index);
+    tracked_indices[@as(usize, popped_after_remove.id)] = null;
+
+    const final_peek = pq.peek().?;
+    try std.testing.expectEqual(final_peek.index, tracked_indices[@as(usize, final_peek.id)].?);
+    const final_popped = try pq.tryPop();
+    try std.testing.expectEqual(final_peek.id, final_popped.id);
+    try std.testing.expectEqual(final_peek.priority, final_popped.priority);
+    try std.testing.expectEqual(final_peek.index, final_popped.index);
+    tracked_indices[@as(usize, final_popped.id)] = null;
+
+    try std.testing.expect(pq.peek() == null);
+    try std.testing.expectEqual(@as(?usize, null), tracked_indices[1]);
+    try std.testing.expectEqual(@as(?usize, null), tracked_indices[2]);
+    try std.testing.expectEqual(@as(?usize, null), tracked_indices[3]);
+}

@@ -1,0 +1,15 @@
+.{
+    .name = .static,
+    .version = "0.0.0",
+    .fingerprint = 0x80c02825bc60d317, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .dependencies = .{},
+    .paths = .{
+        "README.md",
+        "build.zig",
+        "build.zig.zon",
+        "docs",
+        "packages",
+        "tools",
+    },
+}

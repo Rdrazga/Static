@@ -1,0 +1,21 @@
+.{
+    .name = .static_queues,
+    .version = "0.0.0",
+    .fingerprint = 0x44cf2a9507cf6c04, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .dependencies = .{
+        .static_core = .{ .path = "../static_core" },
+        .static_memory = .{ .path = "../static_memory" },
+        .static_collections = .{ .path = "../static_collections" },
+        .static_sync = .{ .path = "../static_sync" },
+        .static_testing = .{ .path = "../static_testing" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "benchmarks",
+        "tests",
+    },
+}

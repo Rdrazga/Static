@@ -1,0 +1,16 @@
+.{
+    .name = .static_bits,
+    .version = "0.0.0",
+    .fingerprint = 0xee9cd5fa36eb50d3, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .dependencies = .{
+        .static_core = .{ .path = "../static_core" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "tests",
+    },
+}

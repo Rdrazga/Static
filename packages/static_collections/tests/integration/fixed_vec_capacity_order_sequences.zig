@@ -1,0 +1,41 @@
+const std = @import("std");
+const static_collections = @import("static_collections");
+
+const FixedVec = static_collections.fixed_vec.FixedVec(u8, 3);
+
+fn expectItemsEqual(vec: *FixedVec, expected: []const u8) !void {
+    const items_const = vec.itemsConst();
+    try std.testing.expectEqual(expected.len, items_const.len);
+    try std.testing.expectEqualSlices(u8, expected, items_const);
+
+    const items = vec.items();
+    try std.testing.expectEqual(expected.len, items.len);
+    try std.testing.expectEqualSlices(u8, expected, items);
+}
+
+test "fixed vec capacity, append order, and clear reuse stay bounded" {
+    var vec = FixedVec{};
+
+    try std.testing.expectEqual(@as(usize, 3), vec.capacity());
+    try std.testing.expectEqual(@as(usize, 0), vec.len());
+    try expectItemsEqual(&vec, &.{});
+
+    try vec.append(10);
+    try vec.append(20);
+    try vec.append(30);
+
+    try std.testing.expectEqual(@as(usize, 3), vec.len());
+    try expectItemsEqual(&vec, &.{ 10, 20, 30 });
+    try std.testing.expectError(error.NoSpaceLeft, vec.append(40));
+    try std.testing.expectEqual(@as(usize, 3), vec.len());
+    try expectItemsEqual(&vec, &.{ 10, 20, 30 });
+
+    vec.clear();
+    try std.testing.expectEqual(@as(usize, 0), vec.len());
+    try expectItemsEqual(&vec, &.{});
+
+    try vec.append(7);
+    try vec.append(8);
+    try std.testing.expectEqual(@as(usize, 2), vec.len());
+    try expectItemsEqual(&vec, &.{ 7, 8 });
+}

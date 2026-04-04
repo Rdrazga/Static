@@ -1,0 +1,82 @@
+Critically and thoroughly go through and analyze/review the static_bits package for
+- Best practicies, (in general, in Zig, and against [@agents.md](file:///C:/Users/ryan/Desktop/Forbin%20Solutions/Library%20Dev/static/agents.md) )
+   - Best Testing practices
+   - Proper Assertions
+   - if applicable, defers, error defers, comptime and inline use, meta/builtin programming use
+- Error handling semantics and coverage
+- Test coverage and quality tests based on best testing practices
+- Comment coverage, explanation coverage, and set up for self-documneting documnetation generation, comment quality, comment semantics.
+- Any bugs, errors, or anti-patterns
+- Any performance footguns or implementation issues that affect performance
+- Proper example coverage
+- And a review if it should/could have a benchmark and what it should benchmark against.
+
+---
+
+Do this by:
+- In docs/sketches, create a review file for static_bits
+- Create in the docs/plans a checklist for all items in the package (Individual files, examples, and tasks for reviewing each)
+- Go through the first file, add findings
+- Repeat for all files/folders within the package
+- Check off tasks in checklist as you go
+- Perform a final cross-file and cross-package review for higher level items with findings.
+Once complete, move the task plan from active to complete.
+
+---
+
+Flags for review:
+[x] Need for the "Mutex" wrapper, given existing std implementation
+(Similar reviews for all items in STD)
+
+[] Cross-package semantics
+
+[x] Need for "static_core" (looks mostly un-used and need to check use on caller-level)
+
+[] Per-package full use examples, benchmarks, VOPRs/Simulation testing, "Dev Tests" (not specifically unit tests)
+
+[] static_string (and similar packages) against real technical specs/requirements.
+
+[] sync vs queue vs io vs scheduling review and proper item placement + no reimplementations.
+
+Flags for future packages:
+- crypto (and reviews for rng)
+
+---
+Other packages to review:
+High Suspicion (Likely Redundant)
+static_collections/
+File	Zig std Equivalent
+vec.zig	std.ArrayList, std.ArrayListUnmanaged
+bit_set.zig	std.bit_set.IntegerBitSet, std.bit_set.DynamicBitSet
+min_heap.zig	std.PriorityQueue
+static_hash/
+File	Zig std Equivalent
+crc32.zig	std.hash.Crc32
+fnv1a.zig	std.hash.Fnv1a_32, std.hash.Fnv1a_64
+siphash.zig	std.hash.SipHash64
+wyhash.zig	std.hash.Wyhash
+static_memory/
+File	Zig std Equivalent
+arena.zig	std.heap.ArenaAllocator
+pool.zig	std.heap.MemoryPool
+static_rng/
+File	Zig std Equivalent
+pcg32.zig	std.Random.Pcg
+splitmix64.zig	std.Random.SplitMix64
+xoroshiro128plus.zig	std.Random.Xoshiro256, std.Random.Xoroshiro128
+static_sync/
+File	Zig std Equivalent
+mutex.zig	std.Thread.Mutex
+rwlock.zig	std.Thread.RwLock
+condvar.zig	std.Thread.Condition
+semaphore.zig	std.Thread.Semaphore
+static_string/
+File	Zig std Equivalent
+utf8.zig	std.unicode
+ascii.zig	std.ascii
+Medium Suspicion (May Have Added Value)
+Package	File	Notes
+static_bits	varint.zig	LEB128 in std, but protobuf-style varints may differ
+static_collections	slot_map.zig	Generational indices - likely unique
+static_collections	flat_hash_map.zig	Robin Hood vs std's implementation?
+static_math	vec*.zig files	Custom game-math vs @Vector?

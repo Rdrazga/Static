@@ -1,0 +1,19 @@
+.{
+    .name = .static_memory,
+    .version = "0.0.0",
+    .fingerprint = 0x61681c36b02daa1a, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .dependencies = .{
+        .static_core = .{ .path = "../static_core" },
+        .static_sync = .{ .path = "../static_sync" },
+        .static_testing = .{ .path = "../static_testing" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "benchmarks",
+        "tests",
+    },
+}

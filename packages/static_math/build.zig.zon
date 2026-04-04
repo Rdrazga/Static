@@ -1,0 +1,14 @@
+.{
+    .name = .static_math,
+    .version = "0.0.0",
+    .fingerprint = 0x32895df8f55d766b,
+    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "examples",
+        "tests",
+    },
+}
