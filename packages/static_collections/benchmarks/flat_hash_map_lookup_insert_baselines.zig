@@ -123,6 +123,7 @@ fn initMap(allocator: std.mem.Allocator) !FlatHashMap {
     return FlatHashMap.init(allocator, .{
         .initial_capacity = reserved_capacity,
         .seed = seeded_hash,
+        .budget = null,
     });
 }
 

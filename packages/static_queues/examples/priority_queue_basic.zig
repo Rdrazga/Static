@@ -4,7 +4,7 @@ const q = @import("static_queues");
 pub fn main() !void {
     var pq = try q.priority_queue.PriorityQueueDefault(u32).init(
         std.heap.page_allocator,
-        .{ .capacity = 4 },
+        .{ .capacity = 4, .budget = null },
         .{},
     );
     defer pq.deinit();

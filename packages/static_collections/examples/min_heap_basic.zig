@@ -11,7 +11,7 @@ const Cmp = struct {
 pub fn main() !void {
     var heap = try collections.min_heap.MinHeap(u32, Cmp).init(
         std.heap.page_allocator,
-        .{ .capacity = 16 },
+        .{ .capacity = 16, .budget = null },
         .{},
     );
     defer heap.deinit();
