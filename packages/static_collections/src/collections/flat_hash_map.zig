@@ -76,6 +76,9 @@ fn validateCtx(comptime K: type, comptime Ctx: type) void {
     }
 }
 
+/// Comptime-only recursion bounded by the finite type graph. Each recursive
+/// call descends one level in the type tree; Zig types form a DAG with no
+/// cycles, so termination is guaranteed. TigerStyle 3.1 exception.
 fn hasDefaultHashPaddingRisk(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .@"struct" => |info| blk: {

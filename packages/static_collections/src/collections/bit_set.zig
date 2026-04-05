@@ -12,6 +12,10 @@ const std = @import("std");
 const memory = @import("static_memory");
 const assert = std.debug.assert;
 
+comptime {
+    assert(@bitSizeOf(usize) >= 32);
+}
+
 pub const Error = error{
     OutOfMemory,
     InvalidInput,
@@ -20,9 +24,7 @@ pub const Error = error{
     Overflow,
 };
 
-// ---------------------------------------------------------------------------
-// Shared word-level operations
-// ---------------------------------------------------------------------------
+// --- Shared word-level operations. ---
 
 /// Core bit operations on a word slice.
 ///
@@ -66,29 +68,34 @@ const BitOps = struct {
         for (words) |w| {
             total += @popCount(w);
         }
+        assert(total <= words.len * wordBits());
         return total;
     }
 
     /// `dst |= other`
     fn setUnion(dst: []usize, other: []const usize) void {
+        assert(dst.len > 0);
         assert(dst.len == other.len);
         for (dst, other) |*d, o| d.* |= o;
     }
 
     /// `dst &= other`
     fn setIntersection(dst: []usize, other: []const usize) void {
+        assert(dst.len > 0);
         assert(dst.len == other.len);
         for (dst, other) |*d, o| d.* &= o;
     }
 
     /// `dst &= ~other`
     fn setDifference(dst: []usize, other: []const usize) void {
+        assert(dst.len > 0);
         assert(dst.len == other.len);
         for (dst, other) |*d, o| d.* &= ~o;
     }
 
     /// `dst ^= other`
     fn symmetricDifference(dst: []usize, other: []const usize) void {
+        assert(dst.len > 0);
         assert(dst.len == other.len);
         for (dst, other) |*d, o| d.* ^= o;
     }
@@ -101,6 +108,7 @@ const BitOps = struct {
     }
 
     fn eql(a: []const usize, b: []const usize) bool {
+        assert(a.len > 0);
         assert(a.len == b.len);
         for (a, b) |wa, wb| {
             if (wa != wb) return false;
@@ -141,9 +149,7 @@ const BitOps = struct {
     }
 };
 
-// ---------------------------------------------------------------------------
-// BitSet — heap-allocated, runtime capacity
-// ---------------------------------------------------------------------------
+// --- BitSet: heap-allocated, runtime capacity. ---
 
 pub const BitSet = struct {
     allocator: std.mem.Allocator,
@@ -310,9 +316,7 @@ pub const BitSet = struct {
     }
 };
 
-// ---------------------------------------------------------------------------
-// FixedBitSet — stack-allocated, comptime capacity
-// ---------------------------------------------------------------------------
+// --- FixedBitSet: stack-allocated, comptime capacity. ---
 
 pub fn FixedBitSet(comptime N: usize) type {
     return struct {
@@ -407,21 +411,18 @@ pub fn FixedBitSet(comptime N: usize) type {
     };
 }
 
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
+// --- Shared helpers. ---
 
 fn wordBits() usize {
     return @bitSizeOf(usize);
 }
 
 fn wordsForBits(bits: usize) usize {
+    assert(bits > 0);
     return (bits + wordBits() - 1) / wordBits();
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+// --- Tests. ---
 
 test "bit set operations" {
     // Goal: verify the basic set/clear lifecycle on a single bit.

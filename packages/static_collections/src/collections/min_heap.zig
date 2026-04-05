@@ -270,12 +270,14 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn syncIndex(self: *Self, index: usize) void {
+            std.debug.assert(index < self.items.len);
             if (comptime Ctx != void and std.meta.hasFn(Ctx, "setIndex")) {
                 self.ctx.setIndex(&self.items[index], index);
             }
         }
 
         fn invalidateIndex(self: *Self, index: usize) void {
+            std.debug.assert(index < self.items.len);
             if (comptime Ctx != void and std.meta.hasFn(Ctx, "setIndex")) {
                 self.ctx.setIndex(&self.items[index], invalid_index);
             }
@@ -295,8 +297,6 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn assertHeapInvariant(self: *const Self) void {
-            if (comptime builtin.mode == .ReleaseFast or builtin.mode == .ReleaseSmall) return;
-
             self.assertStorageInvariant();
             var child_index: usize = 1;
             while (child_index < self.len_value) : (child_index += 1) {

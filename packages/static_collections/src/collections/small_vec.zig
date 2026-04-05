@@ -19,7 +19,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
     // Comptime ZST guard: zero-size types have no storage to inline and trip
     // alignment assumptions in the inline array. Use a regular Vec for ZSTs.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
+        assert(@sizeOf(T) > 0);
     }
 
     return struct {
@@ -177,7 +177,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
                 // Once spilled, the heap-backed Vec becomes the only authoritative
                 // storage and the inline prefix is retired.
                 assert(self.inline_len == 0);
-                assert(spill.len() == spill.itemsConst().len);
+                assert(spill.len() > 0 or spill.capacity() > 0);
             }
         }
     };

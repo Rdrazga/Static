@@ -70,6 +70,7 @@ pub fn FixedVec(comptime T: type, comptime N: usize) type {
                 .len_value = self.len_value,
             };
             @memcpy(result.items_storage[0..self.len_value], self.items_storage[0..self.len_value]);
+            assert(result.len_value == self.len_value);
             return result;
         }
 

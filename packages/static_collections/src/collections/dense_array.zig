@@ -17,6 +17,10 @@ pub fn DenseArray(comptime T: type) type {
     return struct {
         const Self = @This();
 
+        comptime {
+            assert(@sizeOf(T) > 0);
+        }
+
         pub const Element = T;
         pub const Error = vec.Error || error{NotFound};
         pub const Config = struct {
@@ -99,15 +103,17 @@ pub fn DenseArray(comptime T: type) type {
         pub fn get(self: *Self, index: usize) ?*T {
             self.assertInvariants();
             if (index >= self.data.len()) return null;
-            assert(index < self.data.len());
-            return &self.data.items()[index];
+            const result = &self.data.items()[index];
+            assert(@intFromPtr(result) != 0);
+            return result;
         }
 
         pub fn getConst(self: *const Self, index: usize) ?*const T {
             self.assertInvariants();
             if (index >= self.data.len()) return null;
-            assert(index < self.data.len());
-            return &self.data.itemsConst()[index];
+            const result = &self.data.itemsConst()[index];
+            assert(@intFromPtr(result) != 0);
+            return result;
         }
 
         /// Removes the element at `index` by swapping it with the last element.

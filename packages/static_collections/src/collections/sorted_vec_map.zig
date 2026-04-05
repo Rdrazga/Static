@@ -282,7 +282,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             var hi: usize = self.entries.items.len;
             // Capacity invariant: binary search range is always within allocated bounds.
             assert(hi <= self.entries.capacity);
-            const max_steps: usize = self.entries.items.len + 1;
+            const max_steps: usize = if (self.entries.items.len == 0) 1 else @as(usize, std.math.log2(self.entries.items.len)) + 2;
             var steps: usize = 0;
             while (lo < hi and steps < max_steps) : (steps += 1) {
                 const mid = lo + (hi - lo) / 2;
@@ -310,6 +310,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         /// O(1) structural check: entry count within capacity.
         fn assertStructuralInvariants(self: *const Self) void {
             assert(self.entries.items.len <= self.entries.capacity);
+            assert(self.entries.capacity <= std.math.maxInt(u32));
         }
 
         /// O(n) full validation: verifies strict sorted order of all entries.

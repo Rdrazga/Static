@@ -73,6 +73,7 @@ pub fn SlotMap(comptime T: type) type {
         /// geometric growth. Budget tracks the actual allocated capacity (not
         /// logical length) so that budget accounting matches real memory usage.
         fn ensureSlotGrowth(self: *Self, required: usize) Error!void {
+            assert(required > 0);
             if (required <= self.slots.capacity) return;
 
             const old_capacity = self.slots.capacity;

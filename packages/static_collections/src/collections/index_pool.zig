@@ -114,6 +114,7 @@ pub const IndexPool = struct {
         @memcpy(new_occupied, self.occupied);
 
         const new_free_stack = self.allocator.alloc(u32, slots_max) catch return error.OutOfMemory;
+        errdefer self.allocator.free(new_free_stack);
         @memcpy(new_free_stack, self.free_stack);
 
         var result: IndexPool = .{
@@ -186,6 +187,7 @@ pub const IndexPool = struct {
     }
 
     pub fn contains(self: *const IndexPool, handle: Handle) bool {
+        self.assertStructuralInvariants();
         _ = self.validate(handle) catch return false;
         return true;
     }
