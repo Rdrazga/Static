@@ -46,7 +46,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
 
         pub const Config = struct {
             capacity: usize,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
         pub const PushError = error{NoSpaceLeft};
         pub const invalid_index = std.math.maxInt(usize);
@@ -254,6 +254,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             var i: usize = start;
             var steps: usize = 0;
             while (steps < self.len_value) : (steps += 1) {
+                std.debug.assert(i <= std.math.maxInt(usize) / 2);
                 const left = i * 2 + 1;
                 const right = left + 1;
                 if (left >= self.len_value) break;
@@ -342,7 +343,7 @@ const TestCmp = struct {
 test "MinHeap push and popMin maintain min order" {
     // Goal: verify heap ordering on nominal push/pop workloads.
     // Method: insert unsorted values and confirm ascending pop sequence.
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 8 }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 8, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(5);
@@ -365,7 +366,7 @@ test "MinHeap push and popMin maintain min order" {
 test "MinHeap push into full heap returns NoSpaceLeft" {
     // Goal: enforce capacity bound under valid operating conditions.
     // Method: fill the heap and assert one additional push fails.
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 2 }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 2, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(1);
@@ -382,14 +383,14 @@ test "MinHeap capacity 0 returns InvalidConfig" {
     // Method: initialize with capacity=0 and assert InvalidConfig.
     try std.testing.expectError(
         Error.InvalidConfig,
-        MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 0 }, .{}),
+        MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 0, .budget = null }, .{}),
     );
 }
 
 test "MinHeap peekMin returns minimum without removing" {
     // Goal: verify peek observes minimum without mutating heap length.
     // Method: check empty peek, then push values and validate len stability.
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try std.testing.expectEqual(@as(?u32, null), heap.peekMin());
@@ -437,7 +438,7 @@ test "MinHeap updateAt and removeAt keep tracked indices aligned" {
         }
     };
 
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(.{ .id = 1, .priority = 20 });
@@ -486,7 +487,7 @@ test "MinHeap stress: random inserts maintain heap invariant" {
     // Invariant: pops must return values in non-decreasing order.
     // Verified from two code paths: assert (process-fatal) + expect (test framework).
     const capacity: usize = 64;
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = capacity }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = capacity, .budget = null }, .{});
     defer heap.deinit();
 
     var prng = std.Random.DefaultPrng.init(0xabcd_1234_5678_ef00);
@@ -521,7 +522,7 @@ test "MinHeap supports type-defined comparator when Ctx is void" {
         }
     };
 
-    var heap = try MinHeap(Entry, void).init(std.testing.allocator, .{ .capacity = 4 }, {});
+    var heap = try MinHeap(Entry, void).init(std.testing.allocator, .{ .capacity = 4, .budget = null }, {});
     defer heap.deinit();
 
     try heap.push(.{ .value = 9 });
@@ -550,7 +551,7 @@ test "MinHeap clear invalidates tracked indices with the sentinel" {
     };
     const Heap = MinHeap(Item, Ctx);
 
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(.{ .id = 1, .priority = 20 });
@@ -586,7 +587,7 @@ test "MinHeap clone keeps storage independent and copies context by value" {
     const Heap = MinHeap(Item, Ctx);
 
     var clear_events: u32 = 0;
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{ .clear_events = &clear_events });
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{ .clear_events = &clear_events });
     defer heap.deinit();
     try heap.push(.{ .priority = 20 });
     try heap.push(.{ .priority = 10 });
@@ -619,7 +620,7 @@ test "MinHeap popMin and removeAt invalidate removed tracked indices" {
     };
     const Heap = MinHeap(Item, Ctx);
 
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(.{ .id = 1, .priority = 30 });

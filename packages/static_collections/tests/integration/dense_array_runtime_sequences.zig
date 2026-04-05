@@ -12,7 +12,7 @@ fn expectItemAt(array: *DenseArray, index: usize, expected: u32) !void {
 }
 
 test "dense array append returns stable indices and exposes values through get APIs" {
-    var array = try DenseArray.init(std.testing.allocator, .{});
+    var array = try DenseArray.init(std.testing.allocator, .{ .budget = null });
     defer array.deinit();
 
     const first = try array.append(10);
@@ -31,7 +31,7 @@ test "dense array append returns stable indices and exposes values through get A
 }
 
 test "dense array swapRemove preserves density and rejects invalid indices" {
-    var array = try DenseArray.init(std.testing.allocator, .{});
+    var array = try DenseArray.init(std.testing.allocator, .{ .budget = null });
     defer array.deinit();
 
     _ = try array.append(10);
@@ -61,7 +61,7 @@ test "dense array swapRemove preserves density and rejects invalid indices" {
 test "dense array itemsConst reflects dense contents after churn" {
     // Goal: prove itemsConst tracks append and swapRemove faithfully.
     // Method: append, remove middle, then verify const slice matches survivors.
-    var array = try DenseArray.init(std.testing.allocator, .{});
+    var array = try DenseArray.init(std.testing.allocator, .{ .budget = null });
     defer array.deinit();
 
     _ = try array.append(1);
@@ -86,7 +86,7 @@ test "dense array capacity and clear lifecycle" {
     // Goal: prove capacity survives clear and supports reuse without reallocation.
     // Method: append to grow, record capacity, clear, assert capacity unchanged,
     // then re-append within the same capacity.
-    var array = try DenseArray.init(std.testing.allocator, .{ .initial_capacity = 4 });
+    var array = try DenseArray.init(std.testing.allocator, .{ .initial_capacity = 4, .budget = null });
     defer array.deinit();
 
     try std.testing.expect(array.capacity() >= 4);

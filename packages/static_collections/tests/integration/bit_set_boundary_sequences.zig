@@ -24,7 +24,7 @@ fn expectTrailingBitsClear(words: []const usize, bit_count: usize) !void {
 test "bit_set keeps word-boundary visibility and trailing bits clear" {
     const word_bits = @bitSizeOf(usize);
     const bit_count = word_bits + 2;
-    var bits = try BitSet.init(std.testing.allocator, .{ .bit_count = bit_count });
+    var bits = try BitSet.init(std.testing.allocator, .{ .bit_count = bit_count, .budget = null });
     defer bits.deinit();
 
     try bits.set(0);

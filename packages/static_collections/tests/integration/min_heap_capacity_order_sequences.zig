@@ -40,7 +40,7 @@ fn assertTrackedIndices(heap: *const Heap) !void {
 }
 
 test "min_heap capacity, NoSpaceLeft, and updateAt keep min order stable" {
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     std.debug.assert(heap.capacity() == 4);

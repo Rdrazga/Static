@@ -134,7 +134,7 @@ const Context = struct {
             self.pool.deinit();
         }
 
-        self.pool = IndexPool.init(std.testing.allocator, .{ .slots_max = Capacity }) catch
+        self.pool = IndexPool.init(std.testing.allocator, .{ .slots_max = Capacity, .budget = null }) catch
             |err| std.debug.panic("resetState: IndexPool.init failed: {s}", .{@errorName(err)});
         self.pool_initialized = true;
         self.first_handle = null;
@@ -363,9 +363,17 @@ const Context = struct {
         std.debug.assert(self.live_count == 0);
         std.debug.assert(self.expected_free_count == Capacity);
         std.debug.assert(self.pool.freeCount() == Capacity);
-        if (!self.saw_invalid_rejection or !self.saw_live_probe or !self.saw_exhaustion or !self.saw_stale_rejection or !self.saw_generation_bump or !self.saw_reused_probe or !self.saw_free_probe_first or !self.saw_free_probe_second or !self.saw_free_probe_reused) {
-            return checker.CheckResult.fail(&violations, null);
-        }
+        // Each behavioral coverage flag must have been triggered at least once.
+        // Split into individual assertions to identify which flag was missed.
+        std.debug.assert(self.saw_invalid_rejection);
+        std.debug.assert(self.saw_live_probe);
+        std.debug.assert(self.saw_exhaustion);
+        std.debug.assert(self.saw_stale_rejection);
+        std.debug.assert(self.saw_generation_bump);
+        std.debug.assert(self.saw_reused_probe);
+        std.debug.assert(self.saw_free_probe_first);
+        std.debug.assert(self.saw_free_probe_second);
+        std.debug.assert(self.saw_free_probe_reused);
         return checker.CheckResult.pass(null);
     }
 };
@@ -407,7 +415,7 @@ test "index pool model covers invalidation reuse and exhaustion" {
 }
 
 test "index pool reuses the most recently released slot first" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2 });
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2, .budget = null });
     defer pool.deinit();
 
     const first = try pool.allocate();

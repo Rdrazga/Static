@@ -19,7 +19,7 @@ pub const Error = error{
 
 pub const Config = struct {
     slots_max: u32,
-    budget: ?*memory.budget.Budget = null,
+    budget: ?*memory.budget.Budget,
 };
 
 pub const Handle = handle_mod.Handle;
@@ -317,7 +317,7 @@ pub const IndexPool = struct {
 };
 
 test "index pool allocates, validates, and rejects stale handles" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2 });
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2, .budget = null });
     defer pool.deinit();
 
     const first = try pool.allocate();
@@ -334,7 +334,7 @@ test "index pool allocates, validates, and rejects stale handles" {
 }
 
 test "index pool reports capacity exhaustion explicitly" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 1 });
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 1, .budget = null });
     defer pool.deinit();
 
     _ = try pool.allocate();
@@ -343,7 +343,7 @@ test "index pool reports capacity exhaustion explicitly" {
 }
 
 test "index pool handleForIndex only exposes live handles" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2 });
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2, .budget = null });
     defer pool.deinit();
 
     try std.testing.expect(pool.handleForIndex(0) == null);
@@ -356,7 +356,7 @@ test "index pool handleForIndex only exposes live handles" {
 test "index pool clear invalidates handles and restores full capacity" {
     // Goal: confirm clear resets all slots and stales existing handles.
     // Method: allocate handles, clear, verify stale, then reallocate.
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3 });
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3, .budget = null });
     defer pool.deinit();
 
     const h1 = try pool.allocate();
@@ -374,7 +374,7 @@ test "index pool clear invalidates handles and restores full capacity" {
 }
 
 test "index pool duplicate free stack entries are detectable" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3 });
+    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3, .budget = null });
     defer pool.deinit();
 
     pool.free_stack[0] = 0;

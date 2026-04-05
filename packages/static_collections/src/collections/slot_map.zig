@@ -31,7 +31,7 @@ pub fn SlotMap(comptime T: type) type {
         pub const Handle = handle_mod.Handle;
         pub const Config = struct {
             initial_capacity: u32 = 0,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         const invalid_index = std.math.maxInt(u32);
@@ -270,7 +270,9 @@ pub fn SlotMap(comptime T: type) type {
 
         /// Resets the slot map to empty without releasing backing memory or
         /// budget reservation. All existing handles become stale (generations
-        /// are bumped). Capacity and budget remain unchanged.
+        /// are bumped). The free list is rebuilt in forward order so that
+        /// free_head points to the highest index — subsequent inserts reuse
+        /// slots in descending index order (LIFO).
         pub fn clear(self: *Self) void {
             self.assertStructuralInvariants();
             var free_prev: ?u32 = null;
@@ -402,7 +404,7 @@ pub fn SlotMap(comptime T: type) type {
 test "slot map generation checks reject stale handles" {
     // Goal: stale handles must fail after remove due to generation mismatch.
     // Method: insert-get-remove and assert old handle lookup returns null.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const h = try sm.insert(7);
@@ -416,7 +418,7 @@ test "slot map generation checks reject stale handles" {
 test "slot map slot is reused and old handle is stale after reuse" {
     // Goal: confirm free-list slot reuse bumps generation for safety.
     // Method: remove a handle, insert again, and compare index/generation.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const h1 = try sm.insert(10);
@@ -432,7 +434,7 @@ test "slot map slot is reused and old handle is stale after reuse" {
 test "slot map remove on stale handle returns NotFound" {
     // Goal: remove must reject stale generation values.
     // Method: remove once, then remove same handle again and expect NotFound.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const h = try sm.insert(99);
@@ -443,7 +445,7 @@ test "slot map remove on stale handle returns NotFound" {
 test "slot map multiple inserts and removes" {
     // Goal: validate live-count tracking through mixed insert/remove operations.
     // Method: insert three values, remove middle, and assert survivors are intact.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const a = try sm.insert(1);
@@ -461,7 +463,7 @@ test "slot map multiple inserts and removes" {
 test "slot map invalid sentinel handle is rejected" {
     // Goal: reject invalid handle sentinel across read and remove paths.
     // Method: query and remove Handle.invalid() and assert safe failure.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const invalid = handle_mod.Handle.invalid();
@@ -472,7 +474,7 @@ test "slot map invalid sentinel handle is rejected" {
 test "slot map clear invalidates all handles and allows reuse" {
     // Goal: confirm clear resets length and stales all handles while preserving capacity.
     // Method: insert values, clear, verify old handles are stale, then insert again.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const a = try sm.insert(1);
@@ -492,7 +494,7 @@ test "slot map clear invalidates all handles and allows reuse" {
 test "slot map iterator yields all live entries" {
     // Goal: verify iterator visits all live entries and skips freed slots.
     // Method: insert three values, remove middle, iterate and sum remaining.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     _ = try sm.insert(10);
@@ -535,7 +537,7 @@ test "slot map budget tracks actual capacity" {
 test "slot map clone produces independent copy" {
     // Goal: verify clone creates a separate copy with intact free list.
     // Method: clone after insert+remove, verify both work independently.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const a = try sm.insert(10);
@@ -554,7 +556,7 @@ test "slot map clone produces independent copy" {
 }
 
 test "slot map clone after clear preserves reusable free-list state" {
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{});
+    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     _ = try sm.insert(10);

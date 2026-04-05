@@ -111,7 +111,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             initial_capacity: usize = 8,
             seed: u64 = 0,
             max_load_percent: u8 = 70,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         const Entry = struct {
@@ -594,7 +594,7 @@ test "flat hash map basic put/get/remove" {
     // Goal: verify basic CRUD behavior and missing-key semantics.
     // Method: insert, retrieve, remove, and assert NotFound on repeated removal.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{});
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
@@ -611,11 +611,11 @@ test "flat hash map rejects invalid load factor configuration" {
     const Ctx = struct {};
     try std.testing.expectError(
         error.InvalidConfig,
-        FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .max_load_percent = 0 }),
+        FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .max_load_percent = 0, .budget = null }),
     );
     try std.testing.expectError(
         error.InvalidConfig,
-        FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .max_load_percent = 96 }),
+        FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .max_load_percent = 96, .budget = null }),
     );
 }
 
@@ -623,7 +623,7 @@ test "flat hash map put updates existing key without changing len" {
     // Goal: ensure put overwrites value for an existing key.
     // Method: write same key twice and assert cardinality remains one.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{});
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(7, 10);
@@ -637,7 +637,7 @@ test "flat hash map reuses tombstone slots after remove" {
     // Goal: verify removed slots are reusable for future insertions.
     // Method: remove one key, insert another, then validate reachable values.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .initial_capacity = 8 });
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
@@ -654,7 +654,7 @@ test "flat hash map rehash preserves all entries" {
     // Goal: verify growth preserves key/value associations.
     // Method: insert enough keys to force resize and then read them all back.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .initial_capacity = 8 });
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer map.deinit();
 
     var i: u32 = 0;
@@ -673,7 +673,7 @@ test "flat hash set insert contains remove" {
     // Goal: ensure set wrapper forwards map semantics correctly.
     // Method: insert one key, check containment, remove, then assert absence.
     const Ctx = struct {};
-    var set = try FlatHashSet(u32, Ctx).init(std.testing.allocator, .{});
+    var set = try FlatHashSet(u32, Ctx).init(std.testing.allocator, .{ .budget = null });
     defer set.deinit();
 
     try set.insert(9);
@@ -687,7 +687,7 @@ test "flat hash map clear resets count and allows reuse" {
     // Goal: confirm clear resets logical state while preserving capacity and budget.
     // Method: insert values, clear, verify empty, then reinsert.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{});
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
@@ -717,7 +717,7 @@ test "flat hash map with custom Ctx hash and eql" {
             return (a & 0xFF) == (b & 0xFF);
         }
     };
-    var map = try FlatHashMap(u32, u32, ModCtx).init(std.testing.allocator, .{});
+    var map = try FlatHashMap(u32, u32, ModCtx).init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
@@ -733,7 +733,7 @@ test "flat hash map with custom Ctx hash and eql" {
 
 test "flat hash map clone preserves tombstones and live entries" {
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{});
+    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.putNoClobber(1, 10);
@@ -836,7 +836,7 @@ test "flat hash map custom hash supports padded composite keys" {
 
     try std.testing.expect(std.meta.eql(first, second));
 
-    var map = try Map.init(std.testing.allocator, .{});
+    var map = try Map.init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(first, 99);

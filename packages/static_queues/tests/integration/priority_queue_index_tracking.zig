@@ -27,7 +27,7 @@ test "priority queue tracks indexed mutations across update and remove" {
     var tracked_indices: [4]?usize = .{ null, null, null, null };
     var pq = try static_queues.priority_queue.PriorityQueue(Item, Ctx).init(
         std.testing.allocator,
-        .{ .capacity = 4 },
+        .{ .capacity = 4, .budget = null },
         .{ .indices = &tracked_indices },
     );
     defer pq.deinit();
@@ -103,7 +103,7 @@ test "priority queue clear invalidates tracked indices with the sentinel" {
     var tracked_indices: [4]?usize = .{ null, null, null, null };
     var pq = try Queue.init(
         std.testing.allocator,
-        .{ .capacity = 4 },
+        .{ .capacity = 4, .budget = null },
         .{ .indices = &tracked_indices },
     );
     defer pq.deinit();

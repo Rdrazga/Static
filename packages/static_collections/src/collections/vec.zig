@@ -28,7 +28,7 @@ pub fn Vec(comptime T: type) type {
         pub const Element = T;
         pub const Config = struct {
             initial_capacity: u32 = 0,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         allocator: std.mem.Allocator,
@@ -304,7 +304,7 @@ test "vec append and budget behavior" {
 test "vec pop returns last element or null when empty" {
     // Goal: validate LIFO pop semantics and empty-vector behavior.
     // Method: pop from empty, then append/pop two values back to empty.
-    var v = try Vec(u32).init(std.testing.allocator, .{});
+    var v = try Vec(u32).init(std.testing.allocator, .{ .budget = null });
     defer v.deinit();
 
     try std.testing.expect(v.pop() == null);
@@ -319,7 +319,7 @@ test "vec pop returns last element or null when empty" {
 test "vec ensureCapacity with initial_capacity" {
     // Goal: honor initial_capacity at construction time.
     // Method: create with initial capacity and assert len starts at zero.
-    var v = try Vec(u8).init(std.testing.allocator, .{ .initial_capacity = 8 });
+    var v = try Vec(u8).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer v.deinit();
     try std.testing.expect(v.capacity() >= 8);
     try std.testing.expectEqual(@as(usize, 0), v.len());
@@ -358,7 +358,7 @@ test "vec budget tracks logical reserved capacity" {
 test "vec ensureCapacity is monotonic" {
     // Goal: ensure explicit capacity requests never shrink backing storage.
     // Method: grow then request smaller capacity and verify non-decreasing cap.
-    var v = try Vec(u8).init(std.testing.allocator, .{});
+    var v = try Vec(u8).init(std.testing.allocator, .{ .budget = null });
     defer v.deinit();
 
     try v.ensureCapacity(8);
@@ -395,7 +395,7 @@ test "vec clear resets length but preserves capacity and budget" {
 test "vec ensureCapacity detects element-size overflow" {
     // Goal: return Overflow rather than panicking or allocating on multiplication overflow.
     // Method: ask for a capacity which overflows `count * @sizeOf(T)` for `u16`.
-    var v = try Vec(u16).init(std.testing.allocator, .{});
+    var v = try Vec(u16).init(std.testing.allocator, .{ .budget = null });
     defer v.deinit();
 
     const max_count = std.math.maxInt(usize) / @sizeOf(u16);
@@ -405,7 +405,7 @@ test "vec ensureCapacity detects element-size overflow" {
 test "vec clone produces independent copy" {
     // Goal: verify clone creates a separate copy; mutations are independent.
     // Method: clone, mutate clone, verify original unchanged.
-    var v = try Vec(u32).init(std.testing.allocator, .{});
+    var v = try Vec(u32).init(std.testing.allocator, .{ .budget = null });
     defer v.deinit();
     try v.append(10);
     try v.append(20);
@@ -421,7 +421,7 @@ test "vec clone produces independent copy" {
 }
 
 test "vec const item access is read-only" {
-    var v = try Vec(u32).init(std.testing.allocator, .{});
+    var v = try Vec(u32).init(std.testing.allocator, .{ .budget = null });
     defer v.deinit();
     try v.append(10);
 

@@ -145,7 +145,7 @@ pub const Runtime = struct {
         errdefer allocator.free(handles);
         @memset(handles, .{});
 
-        const handle_pool = collections.index_pool.IndexPool.init(allocator, .{ .slots_max = cfg.handles_max }) catch |err| switch (err) {
+        const handle_pool = collections.index_pool.IndexPool.init(allocator, .{ .slots_max = cfg.handles_max, .budget = null }) catch |err| switch (err) {
             error.InvalidConfig => return error.InvalidConfig,
             error.OutOfMemory => return error.OutOfMemory,
             error.NoSpaceLeft => unreachable,

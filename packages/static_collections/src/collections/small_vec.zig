@@ -30,7 +30,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
 
         pub const Error = vec_mod.Error;
         pub const Config = struct {
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         allocator: std.mem.Allocator,
@@ -186,7 +186,7 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
 test "small vec spills after inline capacity" {
     // Goal: verify growth transitions from inline storage to spill vector.
     // Method: append past inline capacity and validate resulting length.
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
     try s.append(1);
     try s.append(2);
@@ -197,7 +197,7 @@ test "small vec spills after inline capacity" {
 test "small vec preserves order across spill transition" {
     // Goal: preserve insertion order while migrating inline data to spill.
     // Method: append inline then spilled values and verify contiguous sequence.
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
     try s.append(5);
     try s.append(6);
@@ -213,7 +213,7 @@ test "small vec preserves order across spill transition" {
 test "small vec inline capacity zero spills immediately" {
     // Goal: handle InlineN=0 without special-case call-site behavior.
     // Method: append one value and assert storage length and content.
-    var s = SmallVec(u8, 0).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 0).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
     try s.append(9);
     try std.testing.expectEqual(@as(usize, 1), s.len());
@@ -223,7 +223,7 @@ test "small vec inline capacity zero spills immediately" {
 test "small vec pop returns last element from inline and spill" {
     // Goal: validate LIFO pop semantics across inline and spill storage.
     // Method: pop inline items, then pop after spill transition.
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
 
     try std.testing.expect(s.pop() == null);
@@ -242,7 +242,7 @@ test "small vec pop returns last element from inline and spill" {
 }
 
 test "small vec spilled storage can drain back to empty" {
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
 
     try s.append(1);
@@ -257,7 +257,7 @@ test "small vec spilled storage can drain back to empty" {
 }
 
 test "small vec spilled storage may shrink below inline capacity without respilling inline" {
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
 
     try s.append(1);
@@ -276,7 +276,7 @@ test "small vec spilled storage may shrink below inline capacity without respill
 }
 
 test "small vec ensureCapacity returns Overflow for oversized public requests" {
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{});
+    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
     defer s.deinit();
 
     try std.testing.expectError(error.Overflow, s.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));

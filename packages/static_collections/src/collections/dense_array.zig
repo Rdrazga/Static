@@ -25,7 +25,7 @@ pub fn DenseArray(comptime T: type) type {
         pub const Error = vec.Error || error{NotFound};
         pub const Config = struct {
             initial_capacity: u32 = 0,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         data: vec.Vec(T),
@@ -83,7 +83,8 @@ pub fn DenseArray(comptime T: type) type {
             self.assertInvariants();
         }
 
-        /// Creates an independent copy with its own backing memory.
+        /// Creates an independent copy with its own backing memory so that
+        /// mutations to the clone do not affect the original or vice versa.
         pub fn clone(self: *const Self) Error!Self {
             self.assertInvariants();
             var result: Self = .{ .data = try self.data.clone() };
@@ -153,7 +154,7 @@ pub fn DenseArray(comptime T: type) type {
 test "dense array append and get" {
     // Goal: verify stable indexing and retrieval after ordered appends.
     // Method: append three values and validate returned indices plus reads.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     const idx0 = try da.append(10);
@@ -171,7 +172,7 @@ test "dense array append and get" {
 test "dense array swapRemove maintains density" {
     // Goal: ensure swapRemove keeps storage dense without preserving order.
     // Method: remove a middle item and confirm last element back-fills the gap.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(10);
@@ -187,7 +188,7 @@ test "dense array swapRemove maintains density" {
 test "dense array swapRemove last element" {
     // Goal: ensure removing the tail element decrements length correctly.
     // Method: insert one value, remove index 0, and validate empty state.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(42);
@@ -199,7 +200,7 @@ test "dense array swapRemove last element" {
 test "dense array swapRemove out-of-bounds returns NotFound" {
     // Goal: reject invalid removals outside current dense range.
     // Method: attempt remove at len and assert NotFound.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(1);
@@ -209,7 +210,7 @@ test "dense array swapRemove out-of-bounds returns NotFound" {
 test "dense array swapRemove from empty returns NotFound" {
     // Goal: enforce invalid-data handling on empty container removal.
     // Method: remove index 0 from an empty array and assert NotFound.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
     try std.testing.expectError(error.NotFound, da.swapRemove(0));
 }
@@ -217,7 +218,7 @@ test "dense array swapRemove from empty returns NotFound" {
 test "dense array clear resets length and allows reuse" {
     // Goal: confirm clear resets logical length without releasing capacity.
     // Method: append values, clear, assert empty, then append again and verify.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(10);
@@ -235,7 +236,7 @@ test "dense array clear resets length and allows reuse" {
 test "dense array itemsConst provides read-only dense slice" {
     // Goal: confirm itemsConst returns a const view matching append order.
     // Method: append values, read via itemsConst, then verify length and content.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{});
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(10);
@@ -252,7 +253,7 @@ test "dense array itemsConst provides read-only dense slice" {
 test "dense array capacity reports backing storage size" {
     // Goal: confirm capacity is at least as large as len and grows with appends.
     // Method: check capacity after init and after appends.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .initial_capacity = 8 });
+    var da = try DenseArray(u32).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer da.deinit();
 
     try std.testing.expect(da.capacity() >= 8);

@@ -15,7 +15,7 @@ fn expectItemsEqual(vec: *SmallVec, expected: []const u8) !void {
 }
 
 test "small vec stays ordered across inline and spill storage" {
-    var vec = SmallVec.init(std.testing.allocator, .{});
+    var vec = SmallVec.init(std.testing.allocator, .{ .budget = null });
     defer vec.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), vec.len());
@@ -31,7 +31,7 @@ test "small vec stays ordered across inline and spill storage" {
 
 test "small vec spills immediately when inline capacity is zero" {
     const InlineZero = static_collections.small_vec.SmallVec(u8, 0);
-    var vec = InlineZero.init(std.testing.allocator, .{});
+    var vec = InlineZero.init(std.testing.allocator, .{ .budget = null });
     defer vec.deinit();
 
     try vec.append(7);
@@ -58,7 +58,7 @@ test "small vec budgeted spill returns NoSpaceLeft after spill" {
 }
 
 test "small vec spilled storage can drain back to empty and clone independently" {
-    var vec = SmallVec.init(std.testing.allocator, .{});
+    var vec = SmallVec.init(std.testing.allocator, .{ .budget = null });
     defer vec.deinit();
 
     try vec.append(10);

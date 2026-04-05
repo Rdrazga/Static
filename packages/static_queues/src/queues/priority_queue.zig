@@ -70,7 +70,7 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
         pub const invalid_index = Heap.invalid_index;
         pub const Config = struct {
             capacity: usize,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         heap: Heap,
@@ -163,7 +163,7 @@ test "priority queue basic semantics" {
             return a < b;
         }
     };
-    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = 5 }, .{});
+    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = 5, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(5);
@@ -196,7 +196,7 @@ test "priority queue decrease-key via update" {
             item.index = index;
         }
     };
-    var pq = try PriorityQueue(Item, Ctx).init(std.testing.allocator, .{ .capacity = 5 }, .{});
+    var pq = try PriorityQueue(Item, Ctx).init(std.testing.allocator, .{ .capacity = 5, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(.{ .id = 1, .val = 10 });
@@ -236,7 +236,7 @@ test "priority queue remove preserves queue order" {
             item.index = index;
         }
     };
-    var pq = try PriorityQueue(Item, Ctx).init(std.testing.allocator, .{ .capacity = 5 }, .{});
+    var pq = try PriorityQueue(Item, Ctx).init(std.testing.allocator, .{ .capacity = 5, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(.{ .id = 1, .val = 10 });
@@ -265,7 +265,7 @@ test "priority queue peek and introspection methods reflect queue state" {
             return a < b;
         }
     };
-    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = 3 }, .{});
+    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = 3, .budget = null }, .{});
     defer pq.deinit();
 
     try std.testing.expectEqual(@as(usize, 3), pq.capacity());
@@ -290,7 +290,7 @@ test "priority queue peek and introspection methods reflect queue state" {
 }
 
 test "priority queue default context supports integer types" {
-    var pq = try PriorityQueueDefault(u32).init(std.testing.allocator, .{ .capacity = 4 }, .{});
+    var pq = try PriorityQueueDefault(u32).init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(10);
@@ -311,7 +311,7 @@ test "priority queue randomized ordering is monotonic under stress" {
     const sample_count: usize = 128;
     const Ctx = DefaultPriorityContext(u32);
 
-    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = sample_count }, .{});
+    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = sample_count, .budget = null }, .{});
     defer pq.deinit();
 
     var samples: [sample_count]u32 = undefined;

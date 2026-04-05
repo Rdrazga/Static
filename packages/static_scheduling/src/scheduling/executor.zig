@@ -73,7 +73,7 @@ pub const Executor = struct {
         const contexts = allocator.alloc(TaskContext, cfg.jobs_max) catch return error.OutOfMemory;
         errdefer allocator.free(contexts);
 
-        const job_pool = collections.index_pool.IndexPool.init(allocator, .{ .slots_max = cfg.jobs_max }) catch |err| switch (err) {
+        const job_pool = collections.index_pool.IndexPool.init(allocator, .{ .slots_max = cfg.jobs_max, .budget = null }) catch |err| switch (err) {
             error.InvalidConfig => return error.InvalidConfig,
             error.OutOfMemory => return error.OutOfMemory,
             error.NoSpaceLeft => unreachable,

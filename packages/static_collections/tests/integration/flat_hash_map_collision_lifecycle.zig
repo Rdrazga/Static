@@ -20,6 +20,7 @@ test "flat hash map collision cluster stays stable across removal and rehash" {
     var map = try FlatHashMap.init(std.testing.allocator, .{
         .initial_capacity = 8,
         .seed = 0xface_cafe,
+        .budget = null,
     });
     defer map.deinit();
 

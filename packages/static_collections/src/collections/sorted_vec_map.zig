@@ -27,7 +27,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         pub const Compare = Cmp;
         pub const Config = struct {
             initial_capacity: u32 = 0,
-            budget: ?*memory.budget.Budget = null,
+            budget: ?*memory.budget.Budget,
         };
 
         allocator: std.mem.Allocator,
@@ -332,7 +332,7 @@ test "sorted vec map keeps deterministic key order" {
     // Goal: verify insertion order is normalized to sorted key order.
     // Method: insert unsorted keys and assert internal order by value mapping.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{});
+    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(10, 1);
     try m.put(5, 2);
@@ -347,7 +347,7 @@ test "sorted vec map put updates existing key" {
     // Goal: ensure put overwrites existing keys without duplication.
     // Method: write same key twice and confirm len stays one.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{});
+    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(3, 100);
     try m.put(3, 200);
@@ -359,7 +359,7 @@ test "sorted vec map remove maintains order" {
     // Goal: remove must preserve sorted order of remaining keys.
     // Method: remove middle key and validate neighbors and missing lookup.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{});
+    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try m.put(2, 20);
@@ -377,7 +377,7 @@ test "sorted vec map remove missing key returns NotFound" {
     // Goal: invalid-data removal must return a precise error.
     // Method: remove a key never inserted and assert NotFound.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{});
+    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try std.testing.expectError(error.NotFound, m.remove(99));
@@ -391,7 +391,7 @@ test "sorted vec map honors custom comparator" {
             return a > b;
         }
     };
-    var m = try SortedVecMap(u32, u32, Desc).init(std.testing.allocator, .{});
+    var m = try SortedVecMap(u32, u32, Desc).init(std.testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try m.put(3, 30);
@@ -406,7 +406,7 @@ test "sorted vec map clear resets length and allows reuse" {
     // Goal: confirm clear empties the map while preserving capacity.
     // Method: insert values, clear, verify empty, then reinsert.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{});
+    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try m.put(2, 20);

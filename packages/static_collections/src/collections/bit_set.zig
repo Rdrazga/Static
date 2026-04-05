@@ -159,7 +159,7 @@ pub const BitSet = struct {
 
     pub const Config = struct {
         bit_count: usize,
-        budget: ?*memory.budget.Budget = null,
+        budget: ?*memory.budget.Budget,
     };
 
     pub fn init(allocator: std.mem.Allocator, config: Config) Error!BitSet {
@@ -242,10 +242,9 @@ pub const BitSet = struct {
                 error.Overflow => return error.Overflow,
             };
         }
-        const new_words = self.allocator.alloc(usize, self.words.len) catch {
-            if (self.budget) |budget| budget.release(alloc_bytes);
+        errdefer if (self.budget) |budget| budget.release(alloc_bytes);
+        const new_words = self.allocator.alloc(usize, self.words.len) catch
             return error.OutOfMemory;
-        };
         @memcpy(new_words, self.words);
         var result: BitSet = .{
             .allocator = self.allocator,
@@ -419,7 +418,7 @@ fn wordBits() usize {
 
 fn wordsForBits(bits: usize) usize {
     assert(bits > 0);
-    return (bits + wordBits() - 1) / wordBits();
+    return @divFloor(bits + wordBits() - 1, wordBits());
 }
 
 // --- Tests. ---
@@ -427,7 +426,7 @@ fn wordsForBits(bits: usize) usize {
 test "bit set operations" {
     // Goal: verify the basic set/clear lifecycle on a single bit.
     // Method: set one bit, assert it becomes visible, then clear it.
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16, .budget = null });
     defer b.deinit();
     try b.set(3);
     try std.testing.expect(try b.isSet(3));
@@ -438,13 +437,13 @@ test "bit set operations" {
 test "bit set rejects zero bit_count" {
     // Goal: reject invalid zero-sized bitsets at construction time.
     // Method: initialize with bit_count=0 and assert InvalidInput.
-    try std.testing.expectError(error.InvalidInput, BitSet.init(std.testing.allocator, .{ .bit_count = 0 }));
+    try std.testing.expectError(error.InvalidInput, BitSet.init(std.testing.allocator, .{ .bit_count = 0, .budget = null }));
 }
 
 test "bit set out-of-bounds set and clear return InvalidInput" {
     // Goal: confirm out-of-range mutations fail without corrupting state.
     // Method: issue invalid set/clear/isSet calls at index==bit_count.
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer b.deinit();
     try std.testing.expectError(error.InvalidInput, b.set(8));
     try std.testing.expectError(error.InvalidInput, b.clear(8));
@@ -456,7 +455,7 @@ test "bit set crosses word boundary" {
     // Goal: verify bit operations remain correct across machine-word edges.
     // Method: target the final bit in the second word and round-trip set/clear.
     const bits = @bitSizeOf(usize) + 1;
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = bits });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = bits, .budget = null });
     defer b.deinit();
     try b.set(bits - 1);
     try std.testing.expect(try b.isSet(bits - 1));
@@ -489,7 +488,7 @@ test "bit set does not mutate adjacent boundary bits" {
     // Goal: validate negative-space behavior near word boundaries.
     // Method: set only one boundary-adjacent bit and assert neighbors stay clear.
     const edge = @bitSizeOf(usize);
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = edge + 2 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = edge + 2, .budget = null });
     defer b.deinit();
 
     try b.set(edge);
@@ -499,7 +498,7 @@ test "bit set does not mutate adjacent boundary bits" {
 }
 
 test "bit set count returns population count" {
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16, .budget = null });
     defer b.deinit();
     try std.testing.expectEqual(@as(usize, 0), b.count());
     try b.set(0);
@@ -509,9 +508,9 @@ test "bit set count returns population count" {
 }
 
 test "bit set union intersection difference" {
-    var a = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var a = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer a.deinit();
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer b.deinit();
 
     try a.set(0);
@@ -520,7 +519,7 @@ test "bit set union intersection difference" {
     try b.set(2);
 
     // Union: {0,1} | {1,2} = {0,1,2}
-    var u = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var u = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer u.deinit();
     try u.set(0);
     try u.set(1);
@@ -528,7 +527,7 @@ test "bit set union intersection difference" {
     try std.testing.expectEqual(@as(usize, 3), u.count());
 
     // Intersection: {0,1} & {1,2} = {1}
-    var inter = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var inter = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer inter.deinit();
     try inter.set(0);
     try inter.set(1);
@@ -537,7 +536,7 @@ test "bit set union intersection difference" {
     try std.testing.expect(try inter.isSet(1));
 
     // Difference: {0,1} \ {1,2} = {0}
-    var diff = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var diff = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer diff.deinit();
     try diff.set(0);
     try diff.set(1);
@@ -547,7 +546,7 @@ test "bit set union intersection difference" {
 }
 
 test "bit set complement preserves trailing-bit invariant" {
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 5 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 5, .budget = null });
     defer b.deinit();
     try b.set(0);
     b.complement();
@@ -559,9 +558,9 @@ test "bit set complement preserves trailing-bit invariant" {
 }
 
 test "bit set eql and subsetOf" {
-    var a = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var a = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer a.deinit();
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer b.deinit();
 
     try a.set(1);
@@ -576,9 +575,9 @@ test "bit set eql and subsetOf" {
 }
 
 test "bit set mismatched bit_count returns InvalidInput" {
-    var a = try BitSet.init(std.testing.allocator, .{ .bit_count = 8 });
+    var a = try BitSet.init(std.testing.allocator, .{ .bit_count = 8, .budget = null });
     defer a.deinit();
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16 });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = 16, .budget = null });
     defer b.deinit();
     try std.testing.expectError(error.InvalidInput, a.setUnion(&b));
     try std.testing.expectError(error.InvalidInput, a.eql(&b));
@@ -605,7 +604,7 @@ test "FixedBitSet set algebra operations" {
 
 test "bit set complement keeps dynamic bitset canonical at word tail" {
     const bits = wordBits() + 3;
-    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = bits });
+    var b = try BitSet.init(std.testing.allocator, .{ .bit_count = bits, .budget = null });
     defer b.deinit();
 
     b.complement();

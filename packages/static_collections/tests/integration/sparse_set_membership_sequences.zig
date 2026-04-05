@@ -17,12 +17,12 @@ fn expectItems(set: *const SparseSet, expected: []const u32) !void {
 test "sparse set rejects invalid universe sizes" {
     try std.testing.expectError(
         error.InvalidConfig,
-        SparseSet.init(std.testing.allocator, .{ .universe_size = 0 }),
+        SparseSet.init(std.testing.allocator, .{ .universe_size = 0, .budget = null }),
     );
 }
 
 test "sparse set insert, contains, items, and remove keep dense membership stable" {
-    var set = try SparseSet.init(std.testing.allocator, .{ .universe_size = 16 });
+    var set = try SparseSet.init(std.testing.allocator, .{ .universe_size = 16, .budget = null });
     defer set.deinit();
 
     try set.insert(3);

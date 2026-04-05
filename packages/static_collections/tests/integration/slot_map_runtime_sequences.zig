@@ -92,7 +92,7 @@ const Context = struct {
         if (self.map_initialized) {
             self.map.deinit();
         }
-        self.map = SlotMap.init(std.testing.allocator, .{}) catch
+        self.map = SlotMap.init(std.testing.allocator, .{ .budget = null }) catch
             |err| std.debug.panic("resetState: SlotMap.init failed: {s}", .{@errorName(err)});
         self.map_initialized = true;
         self.reference.reset();
@@ -208,7 +208,7 @@ test "slot map runtime sequences stay aligned with testing.model" {
 }
 
 test "slot map reuses the most recently removed slot first" {
-    var sm = try SlotMap.init(std.testing.allocator, .{});
+    var sm = try SlotMap.init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const first = try sm.insert(1);
@@ -234,7 +234,7 @@ test "slot map reuses the most recently removed slot first" {
 }
 
 test "slot map iterator yields handle and pointer pairs until the next structural mutation" {
-    var sm = try SlotMap.init(std.testing.allocator, .{});
+    var sm = try SlotMap.init(std.testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const first = try sm.insert(10);

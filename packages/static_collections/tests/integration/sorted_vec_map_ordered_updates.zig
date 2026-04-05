@@ -12,7 +12,7 @@ fn expectEntry(map: *const SortedVecMap, index: usize, expected_key: u32, expect
 }
 
 test "sorted vec map keeps sorted order and overwrites existing keys" {
-    var map = try SortedVecMap.init(std.testing.allocator, .{});
+    var map = try SortedVecMap.init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(10, 100);
@@ -36,7 +36,7 @@ test "sorted vec map keeps sorted order and overwrites existing keys" {
 }
 
 test "sorted vec map remove preserves order and reports missing keys" {
-    var map = try SortedVecMap.init(std.testing.allocator, .{});
+    var map = try SortedVecMap.init(std.testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(2, 20);

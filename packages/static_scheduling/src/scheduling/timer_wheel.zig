@@ -69,7 +69,7 @@ pub fn TimerWheel(comptime T: type) type {
             @memset(bucket_head, invalid_slot);
             @memset(bucket_tail, invalid_slot);
 
-            const index_pool = collections.index_pool.IndexPool.init(allocator, .{ .slots_max = cfg.entries_max }) catch |err| switch (err) {
+            const index_pool = collections.index_pool.IndexPool.init(allocator, .{ .slots_max = cfg.entries_max, .budget = null }) catch |err| switch (err) {
                 error.InvalidConfig => return error.InvalidConfig,
                 error.OutOfMemory => return error.OutOfMemory,
                 error.NoSpaceLeft => unreachable,
