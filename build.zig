@@ -101,6 +101,18 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const static_ecs_mod = b.addModule("static_ecs", .{
+        .root_source_file = b.path("packages/static_ecs/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_memory", .module = static_memory_mod },
+            .{ .name = "static_collections", .module = static_collections_mod },
+            .{ .name = "static_hash", .module = static_hash_mod },
+        },
+    });
+
     const static_serial_mod = b.addModule("static_serial", .{
         .root_source_file = b.path("packages/static_serial/src/root.zig"),
         .target = target,
@@ -269,6 +281,7 @@ pub fn build(b: *std.Build) void {
         .static_memory = static_memory_mod,
         .static_sync = static_sync_mod,
         .static_collections = static_collections_mod,
+        .static_ecs = static_ecs_mod,
         .static_serial = static_serial_mod,
         .static_net = static_net_mod,
         .static_net_native = static_net_native_mod,
@@ -921,6 +934,7 @@ const Modules = struct {
     static_memory: *std.Build.Module,
     static_sync: *std.Build.Module,
     static_collections: *std.Build.Module,
+    static_ecs: *std.Build.Module,
     static_serial: *std.Build.Module,
     static_net: *std.Build.Module,
     static_net_native: *std.Build.Module,
@@ -947,6 +961,7 @@ fn addAllTestsStep(b: *std.Build, mods: Modules) *std.Build.Step {
         .{ .mod = mods.static_memory },
         .{ .mod = mods.static_sync },
         .{ .mod = mods.static_collections },
+        .{ .mod = mods.static_ecs },
         .{ .mod = mods.static_serial },
         .{ .mod = mods.static_net },
         .{ .mod = mods.static_net_native },
@@ -1144,6 +1159,19 @@ fn addAllTestsStep(b: *std.Build, mods: Modules) *std.Build.Step {
     const run_static_memory_integration = b.addRunArtifact(static_memory_integration_exe);
     step.dependOn(&run_static_memory_integration.step);
 
+    const static_ecs_integration_mod = b.createModule(.{
+        .root_source_file = b.path("packages/static_ecs/tests/integration/root.zig"),
+        .target = mods.static_core.resolved_target.?,
+        .optimize = .Debug,
+        .imports = &.{
+            .{ .name = "static_ecs", .module = mods.static_ecs },
+            .{ .name = "static_testing", .module = mods.static_testing },
+        },
+    });
+    const static_ecs_integration_exe = b.addTest(.{ .root_module = static_ecs_integration_mod });
+    const run_static_ecs_integration = b.addRunArtifact(static_ecs_integration_exe);
+    step.dependOn(&run_static_ecs_integration.step);
+
     const static_queues_integration_mod = b.createModule(.{
         .root_source_file = b.path("packages/static_queues/tests/integration/root.zig"),
         .target = mods.static_core.resolved_target.?,
@@ -1282,6 +1310,7 @@ fn addAllChecksStep(b: *std.Build, mods: Modules) *std.Build.Step {
         .{ .mod = mods.static_memory },
         .{ .mod = mods.static_sync },
         .{ .mod = mods.static_collections },
+        .{ .mod = mods.static_ecs },
         .{ .mod = mods.static_serial },
         .{ .mod = mods.static_net },
         .{ .mod = mods.static_net_native },
@@ -1465,6 +1494,18 @@ fn addAllChecksStep(b: *std.Build, mods: Modules) *std.Build.Step {
     });
     const static_memory_integration_exe = b.addTest(.{ .root_module = static_memory_integration_mod });
     step.dependOn(&static_memory_integration_exe.step);
+
+    const static_ecs_integration_mod = b.createModule(.{
+        .root_source_file = b.path("packages/static_ecs/tests/integration/root.zig"),
+        .target = mods.static_core.resolved_target.?,
+        .optimize = .Debug,
+        .imports = &.{
+            .{ .name = "static_ecs", .module = mods.static_ecs },
+            .{ .name = "static_testing", .module = mods.static_testing },
+        },
+    });
+    const static_ecs_integration_exe = b.addTest(.{ .root_module = static_ecs_integration_mod });
+    step.dependOn(&static_ecs_integration_exe.step);
 
     const static_queues_integration_mod = b.createModule(.{
         .root_source_file = b.path("packages/static_queues/tests/integration/root.zig"),

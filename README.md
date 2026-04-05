@@ -150,6 +150,15 @@ Workspace for the `static_*` Zig packages.
   paths, and `BudgetedAllocator` accounting for budget denial vs parent OOM,
   growth/shrink, `takeDeniedLast()`, and overflow/high-water behavior, with
   `Budget.release()` now failing fast on over-release in all builds.
+- `static_ecs` is now in first-slice implementation as a world-local typed ECS
+  core, currently covering explicit `WorldConfig` bounds, ECS-owned `Entity`
+  identity, bounded `EntityPool` allocation, typed component-universe
+  admission, `ArchetypeKey`, bounded `Chunk` layout, ECS-owned
+  `ArchetypeStore` structural mutation, typed query/view chunk-batch hot
+  paths, a first bounded `CommandBuffer`, and typed `World.insert()` /
+  `World.remove()` helpers, with raw value-adding archetype moves now rejected
+  until the caller provides typed initialization data, plus package-owned
+  `testing.model` coverage for mixed command-buffer structural sequences.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,
@@ -175,6 +184,7 @@ Workspace for the `static_*` Zig packages.
 
 - Foundations: `static_core`, `static_bits`, `static_hash`, `static_meta`, `static_rng`, `static_string`
 - Data structures: `static_collections`, `static_memory`, `static_queues`
+- State and ECS: `static_ecs`
 - Systems/runtime: `static_sync`, `static_io`, `static_scheduling`, `static_net`
 - Harness/tooling: `static_profile`, `static_serial`, `static_testing`
 - Math/performance: `static_math`, `static_simd`, `static_spatial`
@@ -194,3 +204,5 @@ Workspace for the `static_*` Zig packages.
 - `packages/static_testing/README.md` and `packages/static_testing/AGENTS.md`
   provide package-scoped usage guidance for the shared deterministic testing
   package itself.
+- `packages/static_ecs/README.md` and `packages/static_ecs/AGENTS.md` provide
+  the package-scoped entry point for the ECS implementation queue.

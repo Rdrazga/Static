@@ -6,6 +6,7 @@ This workspace is organized as a layered set of `static_*` packages rather than 
 
 - **Foundation:** `static_core`, `static_bits`, `static_hash`, `static_meta`, `static_rng`, `static_string`
 - **Storage and collections:** `static_memory`, `static_collections`
+- **State and ECS:** `static_ecs`
 - **Coordination and runtime:** `static_sync`, `static_queues`, `static_scheduling`, `static_io`
 - **Protocol and harness tooling:** `static_serial`, `static_net`, `static_profile`, `static_testing`
 - **Math and spatial:** `static_math`, `static_simd`, `static_spatial`
@@ -77,6 +78,17 @@ Examples:
   comparator-signature validation now firing at type instantiation,
   while the root surface keeps the `memory` alias and cuts the `core` and
   `hash` aliases.
+- `static_ecs` keeps world-local ECS storage, bounded identity allocation,
+  typed component-universe admission, `ArchetypeKey`, bounded chunk layout,
+  ECS-owned archetype relocation, typed query/view ownership, and bounded
+  structural command staging package-local while reusing `static_memory` and
+  `static_collections` for the current world-local core; typed insert/remove
+  helpers now own initialized value-component admission, raw value-adding
+  archetype moves are rejected until the caller provides initialization, the
+  package now uses `static_testing` for bounded command-buffer runtime-sequence
+  review, and deferred runtime-erased queries, import/export, spatial
+  adapters, and scheduler-facing surfaces remain out of the first package
+  boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while
   now using `static_testing` for replay-backed task-graph invariants,
   sequence-sensitive timer-wheel review, shared planning benchmark workflows,
@@ -179,7 +191,8 @@ Primary repository entry points are:
 - `README.md` for the command surface.
 - Package-scoped `README.md` / `AGENTS.md` files when a package needs extra
   operational guidance; `packages/static_io/README.md` and
-  `packages/static_io/AGENTS.md` are the first package-local examples.
+  `packages/static_io/AGENTS.md` plus `packages/static_ecs/README.md` and
+  `packages/static_ecs/AGENTS.md` are current package-local examples.
 - `docs/plans/README.md` for implementation workflow.
 - `docs/reference/zig_coding_rules.md` for the detailed coding contract.
 
