@@ -23,6 +23,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             ComponentInitRequired,
             EntityOutOfRange,
             EntityNotFound,
+            EntitySlotOccupied,
         };
 
         pub const EntityLocation = struct {
@@ -133,6 +134,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
         pub fn init(allocator: std.mem.Allocator, config: world_config_mod.WorldConfig) Error!Self {
             try config.validate();
+            if (Registry.count() > config.components_per_archetype_max) return error.InvalidConfig;
 
             const locations_reserved_bytes = std.math.mul(usize, config.entities_max, @sizeOf(EntityLocation)) catch
                 return error.Overflow;
@@ -260,6 +262,10 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             self.assertInvariants();
             if (!entity.isValid()) return error.EntityOutOfRange;
             if (@as(usize, entity.index) >= self.entity_locations.len) return error.EntityOutOfRange;
+            if (self.locationRaw(entity).?.occupied) {
+                if (self.contains(entity)) return error.AlreadyExists;
+                return error.EntitySlotOccupied;
+            }
             if (self.contains(entity)) return error.AlreadyExists;
 
             const location = try self.appendEntityToArchetype(0, entity);
@@ -284,6 +290,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             self.assertInvariants();
             const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
             const source_archetype = self.archetypeRecordConst(source_location.archetype_index).?;
+            if (target_key.count() > self.config.components_per_archetype_max) return error.InvalidConfig;
             if (keysEqual(&source_archetype.key, &target_key)) {
                 self.assertInvariants();
                 return;
@@ -443,7 +450,8 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             if (self.findArchetypeIndex(key)) |index| return index;
             if (self.archetypes.len() >= self.config.archetypes_max) return error.NoSpaceLeft;
 
-            const record = try ArchetypeRecord.init(self.allocator, key.*, self.config.budget);
+            var record = try ArchetypeRecord.init(self.allocator, key.*, self.config.budget);
+            errdefer record.deinit(self.allocator);
             try self.archetypes.append(record);
             const archetype_index: u32 = @intCast(self.archetypes.len() - 1);
             assert(self.archetypeRecordConst(archetype_index) != null);
@@ -465,12 +473,13 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
             if (self.total_chunks >= self.config.chunks_max) return error.NoSpaceLeft;
 
-            const record = try ChunkRecord.init(
+            var record = try ChunkRecord.init(
                 self.allocator,
                 archetype.key,
                 self.config.chunk_rows_max,
                 self.config.budget,
             );
+            errdefer record.deinit(self.allocator);
             try archetype.chunks.append(record);
             self.total_chunks += 1;
 
@@ -633,6 +642,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             assert(self.archetypes.len() <= self.config.archetypes_max);
             assert(self.total_chunks <= self.config.chunks_max);
             assert(self.active_entities <= self.config.entities_max);
+            assert(Registry.count() <= self.config.components_per_archetype_max);
             const empty_key = Key.empty();
             assert(keysEqual(&self.archetypes.itemsConst()[0].key, &empty_key));
 
@@ -702,6 +712,24 @@ test "archetype store spawns into the empty archetype and tracks locations" {
     try testing.expectEqual(@as(u32, 0), store.archetypeKeyOf(first).?.count());
 }
 
+test "archetype store rejects direct configs that understate the component universe" {
+    const Position = struct { x: f32, y: f32 };
+    const Velocity = struct { x: f32, y: f32 };
+    const Store = ArchetypeStore(.{ Position, Velocity });
+
+    try testing.expectError(error.InvalidConfig, Store.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 1,
+        .chunks_max = 4,
+        .chunk_rows_max = 4,
+        .query_cache_entries_max = 0,
+        .command_buffer_entries_max = 8,
+        .side_index_entries_max = 0,
+        .budget = null,
+    }));
+}
+
 test "archetype store despawn swap-removes rows and updates moved entity locations" {
     const Position = struct { x: f32, y: f32 };
     const Velocity = struct { x: f32, y: f32 };
@@ -742,6 +770,38 @@ test "archetype store despawn swap-removes rows and updates moved entity locatio
     try testing.expectEqual(@as(f32, 31), store.componentPtrConst(third, Position).?.y);
 }
 
+test "archetype store rejects same-index direct spawn aliasing before mutation" {
+    const Position = struct { x: f32, y: f32 };
+    const Store = ArchetypeStore(.{ Position });
+
+    var store = try Store.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 4,
+        .query_cache_entries_max = 0,
+        .command_buffer_entries_max = 8,
+        .side_index_entries_max = 0,
+        .budget = null,
+    });
+    defer store.deinit();
+
+    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
+    const alias: entity_mod.Entity = .{ .index = 0, .generation = 2 };
+
+    try store.spawn(first);
+    try store.insertComponent(first, Position, .{ .x = 11, .y = 13 });
+
+    try testing.expectError(error.EntitySlotOccupied, store.spawn(alias));
+    try testing.expect(store.contains(first));
+    try testing.expect(!store.contains(alias));
+    try testing.expectEqual(@as(u32, 1), store.activeCount());
+    try testing.expectEqual(@as(f32, 11), store.componentPtrConst(first, Position).?.x);
+    try testing.expectEqual(@as(f32, 13), store.componentPtrConst(first, Position).?.y);
+    try testing.expectEqual(@as(u32, 0), store.locationOf(first).?.row_index);
+}
+
 test "archetype store transitions preserve overlapping columns and reclaim empty archetypes" {
     const Position = struct { x: f32, y: f32 };
     const Velocity = struct { x: f32, y: f32 };
@@ -773,6 +833,91 @@ test "archetype store transitions preserve overlapping columns and reclaim empty
     try testing.expectEqual(@as(f32, 3), store.componentPtrConst(entity, Velocity).?.x);
 }
 
+test "archetype store reindexes swapped chunks after draining a non-tail chunk" {
+    const Position = struct { x: f32, y: f32 };
+    const Store = ArchetypeStore(.{ Position });
+
+    var store = try Store.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 2,
+        .query_cache_entries_max = 0,
+        .command_buffer_entries_max = 8,
+        .side_index_entries_max = 0,
+        .budget = null,
+    });
+    defer store.deinit();
+
+    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
+    const second: entity_mod.Entity = .{ .index = 1, .generation = 1 };
+    const third: entity_mod.Entity = .{ .index = 2, .generation = 1 };
+
+    try store.spawn(first);
+    try store.spawn(second);
+    try store.spawn(third);
+    try store.insertComponent(first, Position, .{ .x = 10, .y = 11 });
+    try store.insertComponent(second, Position, .{ .x = 20, .y = 21 });
+    try store.insertComponent(third, Position, .{ .x = 30, .y = 31 });
+
+    try testing.expectEqual(@as(u32, 2), store.chunkCount());
+
+    try store.despawn(first);
+    try store.despawn(second);
+
+    try testing.expect(store.contains(third));
+    try testing.expectEqual(@as(u32, 1), store.chunkCount());
+    const third_location = store.locationOf(third).?;
+    try testing.expectEqual(@as(u32, 0), third_location.chunk_index);
+    try testing.expectEqual(@as(u32, 0), third_location.row_index);
+    try testing.expectEqual(@as(f32, 30), store.componentPtrConst(third, Position).?.x);
+    try testing.expectEqual(@as(f32, 31), store.componentPtrConst(third, Position).?.y);
+}
+
+test "archetype store reindexes swapped archetypes after removing an empty middle archetype" {
+    const Position = struct { x: f32, y: f32 };
+    const Velocity = struct { x: f32, y: f32 };
+    const Store = ArchetypeStore(.{ Position, Velocity });
+    const Key = archetype_key_mod.ArchetypeKey(.{ Position, Velocity });
+
+    var store = try Store.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 6,
+        .components_per_archetype_max = 4,
+        .chunks_max = 6,
+        .chunk_rows_max = 2,
+        .query_cache_entries_max = 0,
+        .command_buffer_entries_max = 8,
+        .side_index_entries_max = 0,
+        .budget = null,
+    });
+    defer store.deinit();
+
+    const position_entity: entity_mod.Entity = .{ .index = 0, .generation = 1 };
+    const velocity_entity: entity_mod.Entity = .{ .index = 1, .generation = 1 };
+
+    try store.spawn(position_entity);
+    try store.spawn(velocity_entity);
+    try store.insertComponent(position_entity, Position, .{ .x = 4, .y = 8 });
+    try store.insertComponent(velocity_entity, Velocity, .{ .x = 9, .y = 10 });
+
+    try testing.expectEqual(@as(u32, 3), store.archetypeCount());
+    try store.despawn(position_entity);
+
+    try testing.expect(!store.contains(position_entity));
+    try testing.expect(store.contains(velocity_entity));
+    try testing.expectEqual(@as(u32, 2), store.archetypeCount());
+    try testing.expectEqual(@as(u32, 1), store.locationOf(velocity_entity).?.archetype_index);
+    const velocity_key = store.archetypeKeyOf(velocity_entity).?;
+    const expected_velocity_key = Key.fromTypes(.{ Velocity });
+    try testing.expectEqual(expected_velocity_key.count(), velocity_key.count());
+    try testing.expect(velocity_key.containsType(Velocity));
+    try testing.expect(!velocity_key.containsType(Position));
+    try testing.expectEqual(@as(f32, 9), store.componentPtrConst(velocity_entity, Velocity).?.x);
+    try testing.expectEqual(@as(f32, 10), store.componentPtrConst(velocity_entity, Velocity).?.y);
+}
+
 test "archetype store rejects raw value-component additions without initialization and allows tag-only moves" {
     const Position = struct { x: f32, y: f32 };
     const Tag = struct {};
@@ -800,4 +945,63 @@ test "archetype store rejects raw value-component additions without initializati
     try store.moveToArchetype(entity, Key.fromTypes(.{ Tag }));
     try testing.expect(store.hasComponent(entity, Tag));
     try testing.expect(!store.hasComponent(entity, Position));
+}
+
+test "archetype store releases chunk init reservations when chunk vector append fails" {
+    const Position = struct { x: f32, y: f32 };
+    const Store = ArchetypeStore(.{ Position });
+
+    const probe_config: world_config_mod.WorldConfig = .{
+        .entities_max = 4,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 2,
+        .query_cache_entries_max = 0,
+        .command_buffer_entries_max = 8,
+        .side_index_entries_max = 0,
+        .budget = null,
+    };
+
+    var probe_budget = try memory.budget.Budget.init(1024);
+    var probe_store = try Store.init(testing.allocator, .{
+        .entities_max = probe_config.entities_max,
+        .archetypes_max = probe_config.archetypes_max,
+        .components_per_archetype_max = probe_config.components_per_archetype_max,
+        .chunks_max = probe_config.chunks_max,
+        .chunk_rows_max = probe_config.chunk_rows_max,
+        .query_cache_entries_max = probe_config.query_cache_entries_max,
+        .command_buffer_entries_max = probe_config.command_buffer_entries_max,
+        .side_index_entries_max = probe_config.side_index_entries_max,
+        .budget = &probe_budget,
+    });
+    const base_used = probe_budget.used();
+    probe_store.deinit();
+    try testing.expectEqual(@as(u64, 0), probe_budget.used());
+
+    const chunk_entity_bytes = try std.math.mul(usize, probe_config.chunk_rows_max, @sizeOf(entity_mod.Entity));
+    const limit_bytes = try std.math.add(usize, @intCast(base_used), chunk_entity_bytes);
+    var budget = try memory.budget.Budget.init(limit_bytes);
+    {
+        var store = try Store.init(testing.allocator, .{
+            .entities_max = probe_config.entities_max,
+            .archetypes_max = probe_config.archetypes_max,
+            .components_per_archetype_max = probe_config.components_per_archetype_max,
+            .chunks_max = probe_config.chunks_max,
+            .chunk_rows_max = probe_config.chunk_rows_max,
+            .query_cache_entries_max = probe_config.query_cache_entries_max,
+            .command_buffer_entries_max = probe_config.command_buffer_entries_max,
+            .side_index_entries_max = probe_config.side_index_entries_max,
+            .budget = &budget,
+        });
+        defer store.deinit();
+
+        const entity: entity_mod.Entity = .{ .index = 0, .generation = 1 };
+        try testing.expectError(error.NoSpaceLeft, store.spawn(entity));
+        try testing.expectEqual(base_used, budget.used());
+        try testing.expectEqual(@as(u32, 0), store.activeCount());
+        try testing.expectEqual(@as(u32, 0), store.chunkCount());
+        try testing.expect(!store.contains(entity));
+    }
+    try testing.expectEqual(@as(u64, 0), budget.used());
 }

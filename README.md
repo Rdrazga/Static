@@ -157,8 +157,11 @@ Workspace for the `static_*` Zig packages.
   `ArchetypeStore` structural mutation, typed query/view chunk-batch hot
   paths, a first bounded `CommandBuffer`, and typed `World.insert()` /
   `World.remove()` helpers, with raw value-adding archetype moves now rejected
-  until the caller provides typed initialization data, plus package-owned
-  `testing.model` coverage for mixed command-buffer structural sequences.
+  until the caller provides typed initialization data, direct store configs now
+  mirroring `World` on `components_per_archetype_max` validation, occupied-slot
+  aliasing rejected before mutation, and package-owned direct proof now
+  covering chunk/archetype swap reindexing plus `testing.model` coverage for
+  mixed command-buffer structural sequences.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,

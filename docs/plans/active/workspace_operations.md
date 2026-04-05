@@ -100,40 +100,51 @@ Scope note:
    - close with `zig build docs-lint`.
 ### Recently completed queue items
 
-1. `workspace_validation_followup`
+1. `static_ecs`
+   The constructor-cleanup follow-up is now closed:
+   `ChunkRecord` append-failure rollback is explicit, `World.init()` now
+   releases `EntityPool` on partial-init failure, and direct deterministic
+   budget-pressure proof now covers both cleanup paths:
+   `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`.
+2. `static_ecs`
+   The direct `ArchetypeStore` hardening reopen is now closed:
+   `components_per_archetype_max` validation matches `World`, same-index direct
+   spawn aliasing is rejected before mutation, and direct deterministic proof
+   now covers empty-chunk and empty-archetype swap reindexing.
+3. `workspace_validation_followup`
    Root command semantics are now explicit, the `static_queues` lock-free
    stress proof now matches the queue's non-blocking contention contract, the
    `static_sync` cancel-test cleanup no longer leaves live threads behind on
    failure paths, `zig build harness` now stays success-only, and `zig build
    bench` remains explicitly review-only by default.
-2. `static_memory`
+4. `static_memory`
    `Budget.release()` now fails fast on over-release in all builds, with direct
    negative coverage proving the panic path.
-3. `static_rng`
+5. `static_rng`
    `uintBelow()` now keeps an explicit bounded hard-stop contract, backed by a
    pathological-engine proof.
-4. `static_spatial`
+6. `static_spatial`
    `IncrementalBVH` query reporting now matches `BVH` total-hit semantics, with
    truncation behavior locked down in direct coverage.
-5. `static_scheduling`
+7. `static_scheduling`
    The stale `static_queues` dependency/import wiring has been removed from the
    package and root build graphs.
-6. `static_profile`
+8. `static_profile`
    The public `static_core` alias has been removed, the package boundary stays
    narrow, and the package follow-up now lives under `docs/plans/completed/`.
-7. `static_collections`
+9. `static_collections`
    The `IndexPool` / `SlotMap` free-structure invariant-hardening slice is
    complete, including fail-fast post-mutation checks and multi-node stale
    handle rejection after reuse.
-8. `static_hash`
+10. `static_hash`
    The streaming `testing.model` slice now covers early finalize plus
    finish-time fallback finalization without inventing unsupported misuse
    semantics.
-9. `static_sync`
+11. `static_sync`
    The exported-surface proof map is complete and the primitive-specific gap
    queue is now closed, so the package follow-up lives under
    `docs/plans/completed/`.
-10. `static_queues`
+12. `static_queues`
    The exported-family proof map, root review, helper audit, and package-owned
    deterministic `SpscChannel` coordination queue are complete, so the package
    follow-up now lives under `docs/plans/completed/`.
@@ -265,10 +276,10 @@ Scope note:
 - `static_hash_algorithm_portfolio_research` stays below the implementation
   queue as a research sidecar and should not preempt the concrete helper work
   above.
-- `static_ecs` now lives under the completed follow-up baseline at
-  `docs/plans/completed/static_ecs_followup_closed_2026-04-05.md`. Reopen only
-  if a concrete runtime-erased query, import/export, side-index, or benchmark
-  workload is ready to become a real package slice.
+- `static_ecs` now returns to the completed follow-up baseline at
+  `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`.
+  Keep runtime-erased query, import/export, side-index, and benchmark work
+  closed unless a separate concrete trigger appears.
 - Lower-package outcomes still matter for follow-on ECS work, but they no
   longer block opening the package plan. `static_ecs` v1 should not depend on a
   `DenseArray` relocation helper, a fixed-width repeated-record hash helper, or

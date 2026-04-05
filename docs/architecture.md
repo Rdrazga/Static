@@ -85,10 +85,13 @@ Examples:
   `static_collections` for the current world-local core; typed insert/remove
   helpers now own initialized value-component admission, raw value-adding
   archetype moves are rejected until the caller provides initialization, the
-  package now uses `static_testing` for bounded command-buffer runtime-sequence
-  review, and deferred runtime-erased queries, import/export, spatial
-  adapters, and scheduler-facing surfaces remain out of the first package
-  boundary.
+  exported direct `ArchetypeStore` surface now mirrors `World` on
+  `components_per_archetype_max` validation, rejects occupied-slot aliasing
+  before mutation, has direct deterministic chunk/archetype swap-reindex proof,
+  the package now uses `static_testing` for bounded command-buffer
+  runtime-sequence review, and deferred runtime-erased queries, import/export,
+  spatial adapters, and scheduler-facing surfaces remain out of the first
+  package boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while
   now using `static_testing` for replay-backed task-graph invariants,
   sequence-sensitive timer-wheel review, shared planning benchmark workflows,

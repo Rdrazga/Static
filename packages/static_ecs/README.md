@@ -12,6 +12,9 @@ World-local typed ECS building blocks for the `static` workspace.
 - The current implemented structural layer now also includes
   `ArchetypeStore(comptime Components)` plus `World`-level spawn, despawn, and
   explicit archetype transition support with ECS-owned row relocation.
+- Direct `ArchetypeStore` usage now also mirrors `World` on
+  `components_per_archetype_max` validation, rejects occupied-slot aliasing
+  before mutation, and directly proves chunk/archetype swap reindexing.
 - The current hot-path layer now also includes typed query descriptors and a
   chunk-batch `View` over matching archetypes.
 - The current control-plane layer now also includes a bounded
@@ -22,7 +25,7 @@ World-local typed ECS building blocks for the `static` workspace.
   world.
 - Runtime-erased queries, import/export, and spatial adapters remain deferred.
   The current reopen baseline now lives in
-  `docs/plans/completed/static_ecs_followup_closed_2026-04-05.md`.
+  `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`.
 
 ## Main surfaces
 
@@ -36,8 +39,9 @@ World-local typed ECS building blocks for the `static` workspace.
 - `src/ecs/chunk.zig` owns bounded SoA column materialization for one
   archetype chunk.
 - `src/ecs/archetype_store.zig` owns bounded archetype placement and ECS-owned
-  row relocation, with raw value-adding archetype moves fenced behind explicit
-  initialization requirements.
+  row relocation, with direct config-bound validation parity, occupied-slot
+  alias rejection before mutation, and raw value-adding archetype moves fenced
+  behind explicit initialization requirements.
 - `src/ecs/query.zig` owns typed query descriptors and matching semantics.
 - `src/ecs/view.zig` owns typed chunk-batch iteration over matching archetypes.
 - `src/ecs/command_buffer.zig` owns bounded structural staging and
@@ -57,5 +61,5 @@ World-local typed ECS building blocks for the `static` workspace.
 - `tests/integration/root.zig` wires the package-level deterministic
   integration suite, including the package-owned `testing.model` command-buffer
   sequence proof.
-- `docs/plans/completed/static_ecs_followup_closed_2026-04-05.md` records the
-  current closure posture and reopen triggers.
+- `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`
+  records the current closure posture and reopen triggers.

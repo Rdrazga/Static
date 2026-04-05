@@ -7,7 +7,7 @@ Start here when you need to review, validate, or extend `static_ecs`.
 - `src/root.zig` for the exported surface.
 - `tests/integration/root.zig` for the package-level deterministic regression
   surface.
-- `docs/plans/completed/static_ecs_followup_closed_2026-04-05.md` for the
+- `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md` for the
   current closure posture and reopen triggers.
 - `docs/plans/active/workspace_operations.md` for workspace priority and
   sequencing.
@@ -29,6 +29,9 @@ Start here when you need to review, validate, or extend `static_ecs`.
   package rather than pushing them into lower generic packages.
 - Keep hard bounds explicit in `WorldConfig`; do not hide them behind a generic
   bounded-mode flag.
+- Keep the exported direct `ArchetypeStore` surface truthful about config
+  bounds and occupied-slot rejection instead of relying on `World` as the only
+  enforcing wrapper.
 
 ## Package map
 
@@ -39,8 +42,9 @@ Start here when you need to review, validate, or extend `static_ecs`.
 - `src/ecs/archetype_key.zig`: deterministic component-subset identity.
 - `src/ecs/chunk.zig`: bounded SoA chunk layout for one archetype subset.
 - `src/ecs/archetype_store.zig`: bounded archetype ownership, placement, and
-  row relocation, with raw value-adding archetype moves rejected until the
-  caller supplies typed initialization.
+  row relocation, with direct config-bound validation parity, occupied-slot
+  alias rejection before mutation, and raw value-adding archetype moves
+  rejected until the caller supplies typed initialization.
 - `src/ecs/query.zig`: typed query descriptor validation and matching.
 - `src/ecs/view.zig`: typed chunk-batch hot-path iteration.
 - `src/ecs/command_buffer.zig`: bounded structural staging and deterministic

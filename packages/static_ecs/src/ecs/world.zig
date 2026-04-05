@@ -11,6 +11,7 @@ const archetype_store_mod = @import("archetype_store.zig");
 const query_mod = @import("query.zig");
 const view_mod = @import("view.zig");
 const command_buffer_mod = @import("command_buffer.zig");
+const memory = @import("static_memory");
 
 pub fn World(comptime Components: anytype) type {
     const Registry = component_registry_mod.ComponentRegistry(Components);
@@ -37,12 +38,15 @@ pub fn World(comptime Components: anytype) type {
             const component_count = Registry.count();
             if (component_count > config.components_per_archetype_max) return error.InvalidConfig;
 
+            var entity_pool = try entity_pool_mod.EntityPool.init(allocator, .{
+                .entities_max = config.entities_max,
+                .budget = config.budget,
+            });
+            errdefer entity_pool.deinit();
+
             var self: Self = .{
                 .config = config,
-                .entity_pool = try entity_pool_mod.EntityPool.init(allocator, .{
-                    .entities_max = config.entities_max,
-                    .budget = config.budget,
-                }),
+                .entity_pool = entity_pool,
                 .archetype_store = try ArchetypeStore.init(allocator, config),
             };
             self.assertInvariants();
@@ -363,4 +367,32 @@ test "world rejects raw value-component additions through moveToArchetype and su
     try world.remove(entity, Position);
     try testing.expect(!world.hasComponent(entity, Position));
     try testing.expect(world.hasComponent(entity, Tag));
+}
+
+test "world init releases entity-pool reservations when archetype store init fails" {
+    const Position = struct { x: f32, y: f32 };
+    const TestWorld = World(.{ Position });
+
+    var probe_budget = try memory.budget.Budget.init(1024);
+    var probe_pool = try entity_pool_mod.EntityPool.init(testing.allocator, .{
+        .entities_max = 4,
+        .budget = &probe_budget,
+    });
+    const pool_used = probe_budget.used();
+    probe_pool.deinit();
+    try testing.expectEqual(@as(u64, 0), probe_budget.used());
+
+    var budget = try memory.budget.Budget.init(@intCast(pool_used));
+    try testing.expectError(error.NoSpaceLeft, TestWorld.init(testing.allocator, .{
+        .entities_max = 4,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 2,
+        .chunk_rows_max = 4,
+        .query_cache_entries_max = 0,
+        .command_buffer_entries_max = 4,
+        .side_index_entries_max = 0,
+        .budget = &budget,
+    }));
+    try testing.expectEqual(@as(u64, 0), budget.used());
 }
