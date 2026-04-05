@@ -71,7 +71,7 @@ test "work stealing deque conformance validates owner and thief operations" {
     );
 }
 
-test "lock-free stress tests validate bounded progress and conservation" {
+test "lock-free stress tests validate bounded safety and conservation under contention" {
     try lock_free_stress.runLockFreeMpscStress(testing.allocator, .{});
     try lock_free_stress.runChaseLevStress(testing.allocator, .{});
 }

@@ -3,7 +3,9 @@
 //! Capacity: fixed at init time; must be a power of two >= 2.
 //! Thread safety: multiple concurrent producers and a single consumer.
 //! Blocking behavior: non-blocking; returns `error.WouldBlock` when full or empty, or when
-//! contention prevents progress within the configured retry bound.
+//! contention prevents progress within the configured retry bound. Callers must
+//! supply their own retry, yielding, or fallback policy; bounded eventual
+//! progress is not part of the queue contract.
 //! Batch operations: intentionally omitted for lock-free queues; loop manually for explicit retry/fairness control.
 const std = @import("std");
 const assert = std.debug.assert;

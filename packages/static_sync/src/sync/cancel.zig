@@ -26,6 +26,8 @@ pub const WakeFn = *const fn (ctx: ?*anyopaque) void;
 const registration_capacity: usize = 16;
 const invalid_slot: u32 = std.math.maxInt(u32);
 var test_after_register_hook: ?*const fn (reg: *CancelRegistration) void = null;
+const test_wait_timeout_ns: u64 = std.time.ns_per_s;
+const blocked_observation_ns: u64 = 10 * std.time.ns_per_ms;
 
 const CancelState = struct {
     cancelled: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
@@ -367,23 +369,26 @@ test "cancel unregister waits for in-flight callback to finish" {
 
     var canceller = Canceller{ .src = &src };
     var cancel_thread = try std.Thread.spawn(.{}, Canceller.run, .{&canceller});
+    var cancel_thread_joined = false;
+    defer wake_state.release.store(true, .release);
+    defer if (!cancel_thread_joined) cancel_thread.join();
 
-    try testing.expect(waitForFlagTrue(&canceller.started, 10_000));
-    try testing.expect(waitForFlagTrue(&wake_state.started, 10_000));
+    try waitForFlagTrue(&canceller.started, test_wait_timeout_ns);
+    try waitForFlagTrue(&wake_state.started, test_wait_timeout_ns);
 
     var unregisterer = Unregisterer{ .reg = &reg };
     var unregister_thread = try std.Thread.spawn(.{}, Unregisterer.run, .{&unregisterer});
+    var unregister_thread_joined = false;
+    defer if (!unregister_thread_joined) unregister_thread.join();
 
-    try testing.expect(waitForFlagTrue(&unregisterer.started, 10_000));
-    var iterations: u32 = 0;
-    while (iterations < 1_000) : (iterations += 1) {
-        try testing.expect(!unregisterer.done.load(.acquire));
-        std.Thread.yield() catch {};
-    }
+    try waitForFlagTrue(&unregisterer.started, test_wait_timeout_ns);
+    try expectFlagStaysFalse(&unregisterer.done, blocked_observation_ns);
 
     wake_state.release.store(true, .release);
     unregister_thread.join();
+    unregister_thread_joined = true;
     cancel_thread.join();
+    cancel_thread_joined = true;
 
     try testing.expect(wake_state.finished.load(.acquire));
     try testing.expect(unregisterer.done.load(.acquire));
@@ -481,11 +486,15 @@ test "cancel registration reports Cancelled when cancel races after slot install
         .token = tok,
     };
     var register_thread = try std.Thread.spawn(.{}, RegisterRunner.run, .{&runner});
+    var register_thread_joined = false;
+    defer hook_state.state.release.store(true, .release);
+    defer if (!register_thread_joined) register_thread.join();
 
-    try testing.expect(waitForFlagTrue(&hook_state.state.installed, 10_000));
+    try waitForFlagTrue(&hook_state.state.installed, test_wait_timeout_ns);
     src.cancel();
     hook_state.state.release.store(true, .release);
     register_thread.join();
+    register_thread_joined = true;
 
     try testing.expect(runner.finished.load(.acquire));
     try testing.expectEqual(@as(?RegisterError, error.Cancelled), runner.result);
@@ -505,11 +514,21 @@ test "register after cancellation returns Cancelled" {
     try testing.expectError(error.Cancelled, reg.register(tok));
 }
 
-fn waitForFlagTrue(flag: *const std.atomic.Value(bool), iterations_max: u32) bool {
-    var iterations: u32 = 0;
-    while (iterations < iterations_max) : (iterations += 1) {
-        if (flag.load(.acquire)) return true;
+fn waitForFlagTrue(flag: *const std.atomic.Value(bool), timeout_ns: u64) !void {
+    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    while (!flag.load(.acquire)) {
+        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
-    return false;
+}
+
+fn expectFlagStaysFalse(flag: *const std.atomic.Value(bool), duration_ns: u64) !void {
+    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    while (true) {
+        try testing.expect(!flag.load(.acquire));
+        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        if (elapsed >= duration_ns) return;
+        std.Thread.yield() catch {};
+    }
 }
