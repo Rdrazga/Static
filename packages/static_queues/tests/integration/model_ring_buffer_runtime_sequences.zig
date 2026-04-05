@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_queues = @import("static_queues");
 const static_testing = @import("static_testing");
 
@@ -38,8 +40,8 @@ const ReferenceState = struct {
     fn reset(self: *@This()) void {
         self.head = 0;
         self.len = 0;
-        std.debug.assert(self.head == 0);
-        std.debug.assert(self.len == 0);
+        assert(self.head == 0);
+        assert(self.len == 0);
     }
 
     fn capacity(_: *const @This()) usize {
@@ -59,7 +61,7 @@ const ReferenceState = struct {
     }
 
     fn valueAt(self: *const @This(), logical_index: usize) u8 {
-        std.debug.assert(logical_index < self.len);
+        assert(logical_index < self.len);
         return self.storage[(self.head + logical_index) % Capacity];
     }
 
@@ -68,7 +70,7 @@ const ReferenceState = struct {
         const tail_index = self.tail();
         self.storage[tail_index] = value;
         self.len += 1;
-        std.debug.assert(self.len <= Capacity);
+        assert(self.len <= Capacity);
         return true;
     }
 
@@ -77,7 +79,7 @@ const ReferenceState = struct {
         const value = self.storage[self.head];
         self.head = (self.head + 1) % Capacity;
         self.len -= 1;
-        std.debug.assert(self.len <= Capacity);
+        assert(self.len <= Capacity);
         return value;
     }
 
@@ -100,7 +102,7 @@ const ReferenceState = struct {
         if (consumed == 0) return 0;
         self.head = (self.head + consumed) % Capacity;
         self.len -= consumed;
-        std.debug.assert(self.len <= Capacity);
+        assert(self.len <= Capacity);
         return consumed;
     }
 
@@ -109,12 +111,12 @@ const ReferenceState = struct {
             const overwritten = self.storage[self.head];
             self.storage[self.head] = value;
             self.head = (self.head + 1) % Capacity;
-            std.debug.assert(self.len == Capacity);
+            assert(self.len == Capacity);
             return overwritten;
         }
 
         const inserted = self.tryPush(value);
-        std.debug.assert(inserted);
+        assert(inserted);
         return null;
     }
 
@@ -135,11 +137,11 @@ const Context = struct {
         if (self.ring_initialized) {
             self.ring.deinit();
         }
-        self.ring = RingBuffer.init(std.testing.allocator, .{ .capacity = Capacity }) catch unreachable;
+        self.ring = RingBuffer.init(testing.allocator, .{ .capacity = Capacity }) catch unreachable;
         self.ring_initialized = true;
         self.reference.reset();
-        std.debug.assert(self.ring.capacity() == Capacity);
-        std.debug.assert(self.ring.len() == 0);
+        assert(self.ring.capacity() == Capacity);
+        assert(self.ring.len() == 0);
     }
 
     fn validate(self: *@This()) checker.CheckResult {
@@ -272,8 +274,8 @@ test "ring buffer runtime sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(

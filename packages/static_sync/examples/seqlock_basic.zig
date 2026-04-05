@@ -1,5 +1,6 @@
 //! Demonstrates stale-token retry detection for a sequence lock.
 const std = @import("std");
+const assert = std.debug.assert;
 const sync = @import("static_sync");
 
 pub fn main() !void {
@@ -9,8 +10,8 @@ pub fn main() !void {
     seqlock.writeLock();
     seqlock.writeUnlock();
 
-    std.debug.assert(seqlock.readRetry(before));
+    assert(seqlock.readRetry(before));
 
     const after = seqlock.readBegin();
-    std.debug.assert(!seqlock.readRetry(after));
+    assert(!seqlock.readRetry(after));
 }

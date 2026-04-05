@@ -2,6 +2,9 @@
 //! Exercises allocation accounting under a memory budget to verify that capacity changes
 //! are correctly reflected in budget charges and that no bytes are leaked.
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
+const testing = std.testing;
 const static_collections = @import("static_collections");
 const static_memory = static_collections.memory;
 const static_testing = @import("static_testing");
@@ -96,11 +99,11 @@ const Context = struct {
         }
 
         self.budget = static_memory.budget.Budget.init(BudgetLimit) catch
-            |err| std.debug.panic("resetState: Budget.init failed: {s}", .{@errorName(err)});
-        self.vec = Vec.init(std.testing.allocator, .{
+            |err| panic("resetState: Budget.init failed: {s}", .{@errorName(err)});
+        self.vec = Vec.init(testing.allocator, .{
             .initial_capacity = InitialCapacity,
             .budget = &self.budget,
-        }) catch |err| std.debug.panic("resetState: Vec.init failed: {s}", .{@errorName(err)});
+        }) catch |err| panic("resetState: Vec.init failed: {s}", .{@errorName(err)});
         self.vec_initialized = true;
         self.values = .{ 0, 0, 0 };
         self.len = 0;
@@ -110,23 +113,23 @@ const Context = struct {
         self.saw_no_space_left = false;
         self.saw_pop_order = false;
 
-        std.debug.assert(self.vec.len() == 0);
-        std.debug.assert(self.vec.capacity() == InitialCapacity);
-        std.debug.assert(self.budget.used() == InitialCapacity);
+        assert(self.vec.len() == 0);
+        assert(self.vec.capacity() == InitialCapacity);
+        assert(self.budget.used() == InitialCapacity);
     }
 
     fn validate(self: *const @This()) checker.CheckResult {
-        std.debug.assert(self.vec_initialized);
-        std.debug.assert(self.vec.len() == self.len);
-        std.debug.assert(self.vec.capacity() == self.expected_capacity);
-        std.debug.assert(self.budget.used() == self.expected_budget_used);
-        std.debug.assert(self.budget.used() <= self.budget.limit());
-        std.debug.assert(self.budget.remaining() + self.budget.used() == self.budget.limit());
+        assert(self.vec_initialized);
+        assert(self.vec.len() == self.len);
+        assert(self.vec.capacity() == self.expected_capacity);
+        assert(self.budget.used() == self.expected_budget_used);
+        assert(self.budget.used() <= self.budget.limit());
+        assert(self.budget.remaining() + self.budget.used() == self.budget.limit());
 
         const items = self.vec.itemsConst();
-        std.debug.assert(items.len == self.len);
+        assert(items.len == self.len);
         for (items, 0..) |item, index| {
-            std.debug.assert(item == self.values[index]);
+            assert(item == self.values[index]);
         }
         if (!std.mem.eql(u8, items, self.values[0..self.len])) {
             return checker.CheckResult.fail(&violation, null);
@@ -148,13 +151,13 @@ const Context = struct {
             error.OutOfMemory => return checker.CheckResult.fail(&violation, null),
             error.InvalidConfig => return checker.CheckResult.fail(&violation, null),
         };
-        std.debug.assert(self.len == before_len);
+        assert(self.len == before_len);
         self.values[self.len] = value;
         self.len += 1;
         self.expected_capacity = self.vec.capacity();
         self.expected_budget_used = self.budget.used();
-        std.debug.assert(self.expected_capacity >= before_capacity);
-        std.debug.assert(self.expected_budget_used >= before_used);
+        assert(self.expected_capacity >= before_capacity);
+        assert(self.expected_budget_used >= before_used);
         return self.validate();
     }
 
@@ -167,10 +170,10 @@ const Context = struct {
             error.InvalidConfig => return checker.CheckResult.fail(&violation, null),
             error.OutOfMemory => return checker.CheckResult.fail(&violation, null),
         };
-        std.debug.assert(self.vec.capacity() == 3);
-        std.debug.assert(self.budget.used() == 3);
-        std.debug.assert(before_capacity <= self.vec.capacity());
-        std.debug.assert(before_used <= self.budget.used());
+        assert(self.vec.capacity() == 3);
+        assert(self.budget.used() == 3);
+        assert(before_capacity <= self.vec.capacity());
+        assert(before_used <= self.budget.used());
         self.expected_capacity = 3;
         self.expected_budget_used = 3;
         self.saw_exact_fallback = true;
@@ -184,9 +187,9 @@ const Context = struct {
         self.vec.append(value) catch |err| switch (err) {
             error.NoSpaceLeft => {
                 self.saw_no_space_left = true;
-                std.debug.assert(self.vec.len() == before_len);
-                std.debug.assert(self.vec.capacity() == before_capacity);
-                std.debug.assert(self.budget.used() == before_used);
+                assert(self.vec.len() == before_len);
+                assert(self.vec.capacity() == before_capacity);
+                assert(self.budget.used() == before_used);
                 return self.validate();
             },
             else => return checker.CheckResult.fail(&violation, null),
@@ -200,9 +203,9 @@ const Context = struct {
         const popped = self.vec.pop();
         if (expected == null) {
             if (popped != null) return checker.CheckResult.fail(&violation, null);
-            std.debug.assert(self.len == 0);
-            std.debug.assert(self.vec.capacity() == before_capacity);
-            std.debug.assert(self.budget.used() == before_used);
+            assert(self.len == 0);
+            assert(self.vec.capacity() == before_capacity);
+            assert(self.budget.used() == before_used);
             self.saw_pop_order = true;
             return self.validate();
         }
@@ -211,23 +214,23 @@ const Context = struct {
         if (popped == null or popped.? != expected_value) {
             return checker.CheckResult.fail(&violation, null);
         }
-        std.debug.assert(self.len > 0);
+        assert(self.len > 0);
         self.len -= 1;
         self.values[self.len] = 0;
-        std.debug.assert(self.vec.capacity() == before_capacity);
-        std.debug.assert(self.budget.used() == before_used);
+        assert(self.vec.capacity() == before_capacity);
+        assert(self.budget.used() == before_used);
         if (self.len == 0) self.saw_pop_order = true;
         return self.validate();
     }
 
     fn finish(self: *const @This()) checker.CheckResult {
-        std.debug.assert(self.vec_initialized);
-        std.debug.assert(self.len == 0);
-        std.debug.assert(self.saw_exact_fallback);
-        std.debug.assert(self.saw_no_space_left);
-        std.debug.assert(self.saw_pop_order);
-        std.debug.assert(self.vec.capacity() == 3);
-        std.debug.assert(self.budget.used() == 3);
+        assert(self.vec_initialized);
+        assert(self.len == 0);
+        assert(self.saw_exact_fallback);
+        assert(self.saw_no_space_left);
+        assert(self.saw_pop_order);
+        assert(self.vec.capacity() == 3);
+        assert(self.budget.used() == 3);
         return self.validate();
     }
 };
@@ -264,8 +267,8 @@ test "vec budget-aware capacity growth stays aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -274,8 +277,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 

@@ -14,6 +14,8 @@
 //!
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// Emit a single named counter via a comptime callback.
 ///
@@ -31,11 +33,11 @@ pub fn emitCounter(
     comptime emit: fn (@TypeOf(ctx), []const u8, i64) void,
 ) void {
     // Comptime preconditions: empty base or sub would produce unidentifiable counter names.
-    comptime std.debug.assert(base.len > 0);
-    comptime std.debug.assert(sub.len > 0);
+    comptime assert(base.len > 0);
+    comptime assert(sub.len > 0);
     // Runtime mirror: same property asserted from a second code path.
-    std.debug.assert(base.len > 0);
-    std.debug.assert(sub.len > 0);
+    assert(base.len > 0);
+    assert(sub.len > 0);
     emit(ctx, base ++ "." ++ sub, value);
 }
 
@@ -57,18 +59,18 @@ pub fn emitCounters(
     comptime emit: fn (@TypeOf(ctx), []const u8, i64) void,
 ) void {
     // Comptime preconditions: base and names must be non-empty.
-    comptime std.debug.assert(base.len > 0);
-    comptime std.debug.assert(names.len > 0);
+    comptime assert(base.len > 0);
+    comptime assert(names.len > 0);
     // Comptime bound: limit names to 64 entries. Larger groups should be split
     // into logical subsystems to keep per-call overhead bounded and names readable.
-    comptime std.debug.assert(names.len <= 64);
+    comptime assert(names.len <= 64);
     // Comptime per-name non-empty check: every name must be a non-empty identifier.
     comptime {
-        for (names) |name| std.debug.assert(name.len > 0);
+        for (names) |name| assert(name.len > 0);
     }
     // Runtime mirror: same properties from a second code path; values length must match names.
-    std.debug.assert(base.len > 0);
-    std.debug.assert(values.len == names.len);
+    assert(base.len > 0);
+    assert(values.len == names.len);
     inline for (names, 0..) |name, i| {
         emit(ctx, base ++ "." ++ name, values[i]);
     }
@@ -81,7 +83,7 @@ test "emitCounter calls callback with correct concatenated name and value" {
         calls: u32 = 0,
 
         fn emit(self: *@This(), name: []const u8, value: i64) void {
-            std.debug.assert(self.calls == 0); // precondition: called at most once in this test
+            assert(self.calls == 0); // precondition: called at most once in this test
             self.name = name;
             self.value = value;
             self.calls += 1;
@@ -92,16 +94,16 @@ test "emitCounter calls callback with correct concatenated name and value" {
     emitCounter("sys", "mem_used", 1024, &c, Collector.emit);
 
     // Invariant: callback was called exactly once (paired assert + expectEqual).
-    std.debug.assert(c.calls == 1);
-    try std.testing.expectEqual(@as(u32, 1), c.calls);
+    assert(c.calls == 1);
+    try testing.expectEqual(@as(u32, 1), c.calls);
 
     // Invariant: name is the concatenation of base and sub (paired assert + expectEqualStrings).
-    std.debug.assert(std.mem.eql(u8, c.name, "sys.mem_used"));
-    try std.testing.expectEqualStrings("sys.mem_used", c.name);
+    assert(std.mem.eql(u8, c.name, "sys.mem_used"));
+    try testing.expectEqualStrings("sys.mem_used", c.name);
 
     // Invariant: value is passed through unchanged (paired assert + expectEqual).
-    std.debug.assert(c.value == 1024);
-    try std.testing.expectEqual(@as(i64, 1024), c.value);
+    assert(c.value == 1024);
+    try testing.expectEqual(@as(i64, 1024), c.value);
 }
 
 test "emitCounters calls callback once per entry with correct names" {
@@ -113,7 +115,7 @@ test "emitCounters calls callback once per entry with correct names" {
 
         fn emit(self: *@This(), name: []const u8, value: i64) void {
             // Precondition: do not overflow collector buffer.
-            std.debug.assert(self.len < max_entries);
+            assert(self.len < max_entries);
             self.names[self.len] = name;
             self.values[self.len] = value;
             self.len += 1;
@@ -125,16 +127,16 @@ test "emitCounters calls callback once per entry with correct names" {
     emitCounters("perf", &.{ "a", "b", "c" }, &vals, &c, Collector.emit);
 
     // Invariant: call count equals names.len (paired assert + expectEqual).
-    std.debug.assert(c.len == 3);
-    try std.testing.expectEqual(@as(u32, 3), c.len);
+    assert(c.len == 3);
+    try testing.expectEqual(@as(u32, 3), c.len);
 
     // Invariant: names are base-prefixed (paired assert + expectEqualStrings).
-    std.debug.assert(std.mem.eql(u8, c.names[0], "perf.a"));
-    try std.testing.expectEqualStrings("perf.a", c.names[0]);
-    std.debug.assert(std.mem.eql(u8, c.names[2], "perf.c"));
-    try std.testing.expectEqualStrings("perf.c", c.names[2]);
+    assert(std.mem.eql(u8, c.names[0], "perf.a"));
+    try testing.expectEqualStrings("perf.a", c.names[0]);
+    assert(std.mem.eql(u8, c.names[2], "perf.c"));
+    try testing.expectEqualStrings("perf.c", c.names[2]);
 
     // Invariant: last value is passed through unchanged (paired assert + expectEqual).
-    std.debug.assert(c.values[2] == 30);
-    try std.testing.expectEqual(@as(i64, 30), c.values[2]);
+    assert(c.values[2] == 30);
+    try testing.expectEqual(@as(i64, 30), c.values[2]);
 }

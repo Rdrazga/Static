@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -241,7 +242,7 @@ pub fn main() !void {
         .reduction_scratch = &reduction_scratch,
     });
 
-    std.debug.assert(summary.failed_case != null);
+    assert(summary.failed_case != null);
     var summary_buffer: [768]u8 = undefined;
     const summary_text = try model.formatFailedCaseSummary(TargetError, &summary_buffer, target, summary.failed_case.?);
     std.debug.print("{s}", .{summary_text});

@@ -1,6 +1,7 @@
 //! Demonstrates replay artifact encode/decode for a tiny phase-1 trace.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -39,8 +40,8 @@ pub fn main() !void {
         artifact_bytes[0..written],
     );
 
-    std.debug.assert(std.mem.eql(u8, artifact_view.identity.package_name, run_identity.package_name));
-    std.debug.assert(std.mem.eql(u8, artifact_view.identity.run_name, run_identity.run_name));
-    std.debug.assert(artifact_view.trace_metadata.event_count == trace_metadata.event_count);
-    std.debug.assert(artifact_view.trace_metadata.last_sequence_no == trace_metadata.last_sequence_no);
+    assert(std.mem.eql(u8, artifact_view.identity.package_name, run_identity.package_name));
+    assert(std.mem.eql(u8, artifact_view.identity.run_name, run_identity.run_name));
+    assert(artifact_view.trace_metadata.event_count == trace_metadata.event_count);
+    assert(artifact_view.trace_metadata.last_sequence_no == trace_metadata.last_sequence_no);
 }

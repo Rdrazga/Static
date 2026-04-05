@@ -4,6 +4,7 @@
 //! The caller chooses vector widths; this module reports what hardware supports.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const builtin = @import("builtin");
 
 /// Detected SIMD platform tier.
@@ -106,15 +107,15 @@ test "platform detection returns a valid variant" {
     _ = p;
     // Capabilities must be consistent with the platform.
     if (Capabilities.hasAvx512()) {
-        std.debug.assert(Capabilities.hasAvx());
-        std.debug.assert(Capabilities.maxVectorWidthBits() >= 512);
+        assert(Capabilities.hasAvx());
+        assert(Capabilities.maxVectorWidthBits() >= 512);
     }
     if (Capabilities.hasAvx()) {
-        std.debug.assert(Capabilities.maxVectorWidthBits() >= 256);
+        assert(Capabilities.maxVectorWidthBits() >= 256);
     }
     if (builtin.cpu.arch == .x86_64 and Capabilities.hasFma()) {
-        std.debug.assert(Capabilities.hasAvx());
+        assert(Capabilities.hasAvx());
     }
     const width = Capabilities.maxVectorWidthBits();
-    std.debug.assert(width == 128 or width == 256 or width == 512);
+    assert(width == 128 or width == 256 or width == 512);
 }

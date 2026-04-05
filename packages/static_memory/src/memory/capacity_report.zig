@@ -8,6 +8,8 @@
 //! Memory budget: value type with no heap allocation.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const CapacityUnit = enum { bytes, blocks, items };
 
@@ -19,8 +21,8 @@ pub const CapacityReport = struct {
     overflow_count: u32 = 0,
 
     pub fn remaining(self: CapacityReport) u64 {
-        std.debug.assert(self.high_water >= self.used);
-        if (self.capacity != 0) std.debug.assert(self.capacity >= self.used);
+        assert(self.high_water >= self.used);
+        if (self.capacity != 0) assert(self.capacity >= self.used);
 
         if (self.capacity == 0) return 0;
         if (self.used >= self.capacity) return 0;
@@ -28,8 +30,8 @@ pub const CapacityReport = struct {
     }
 
     pub fn isSaturated(self: CapacityReport) bool {
-        std.debug.assert(self.high_water >= self.used);
-        if (self.capacity != 0) std.debug.assert(self.capacity >= self.used);
+        assert(self.high_water >= self.used);
+        if (self.capacity != 0) assert(self.capacity >= self.used);
 
         if (self.capacity == 0) return false;
         return self.used >= self.capacity;
@@ -39,14 +41,14 @@ pub const CapacityReport = struct {
 test "capacity report helper methods" {
     // Verifies boundary behavior for `remaining()`/`isSaturated()` across saturation and "no capacity" cases.
     const report = CapacityReport{ .unit = .bytes, .used = 10, .high_water = 20, .capacity = 64 };
-    try std.testing.expectEqual(@as(u64, 54), report.remaining());
-    try std.testing.expect(!report.isSaturated());
+    try testing.expectEqual(@as(u64, 54), report.remaining());
+    try testing.expect(!report.isSaturated());
 
     const full = CapacityReport{ .unit = .bytes, .used = 64, .high_water = 64, .capacity = 64 };
-    try std.testing.expectEqual(@as(u64, 0), full.remaining());
-    try std.testing.expect(full.isSaturated());
+    try testing.expectEqual(@as(u64, 0), full.remaining());
+    try testing.expect(full.isSaturated());
 
     const no_capacity = CapacityReport{ .unit = .bytes, .used = 123, .high_water = 123, .capacity = 0 };
-    try std.testing.expectEqual(@as(u64, 0), no_capacity.remaining());
-    try std.testing.expect(!no_capacity.isSaturated());
+    try testing.expectEqual(@as(u64, 0), no_capacity.remaining());
+    try testing.expect(!no_capacity.isSaturated());
 }

@@ -8,6 +8,8 @@
 //!   human-readable action descriptions.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const serial = @import("static_serial");
 const artifact = @import("../artifact/root.zig");
@@ -137,7 +139,7 @@ pub fn formatFailedCaseSummary(
 
     for (failed_case.recorded_actions, 0..) |action, index| {
         const descriptor = target.describeAction(action);
-        std.debug.assert(descriptor.label.len != 0);
+        assert(descriptor.label.len != 0);
         if (failed_case.failing_action_index != null and index == failed_case.failing_action_index.?) {
             try writer.writeAll(">> ");
         } else {
@@ -315,7 +317,7 @@ pub fn ModelRunner(comptime TargetError: type) type {
 
 comptime {
     core.errors.assertVocabularySubset(ModelRunError);
-    std.debug.assert(actions_format_version == 1);
+    assert(actions_format_version == 1);
 }
 
 pub fn runModelCases(
@@ -466,7 +468,7 @@ pub fn encodeRecordedActions(
         try writeInt(&writer, action.value);
     }
 
-    std.debug.assert(writer.position() == encoded_len);
+    assert(writer.position() == encoded_len);
     return encoded_len;
 }
 
@@ -609,7 +611,7 @@ fn minimizeFailure(
         run_identity,
         action_storage[0..current_len],
     );
-    std.debug.assert(!current_execution.check_result.passed);
+    assert(!current_execution.check_result.passed);
 
     var attempts_total: u32 = 0;
     var successes_total: u32 = 0;
@@ -814,7 +816,7 @@ fn makeTraceMetadata(action_count: u32) trace.TraceMetadata {
 }
 
 fn divCeil(lhs: usize, rhs: usize) usize {
-    std.debug.assert(rhs != 0);
+    assert(rhs != 0);
     return @divFloor(lhs + rhs - 1, rhs);
 }
 
@@ -824,34 +826,34 @@ fn copyCandidateWithoutChunk(
     chunk_start: usize,
     chunk_end: usize,
 ) void {
-    std.debug.assert(chunk_start <= chunk_end);
-    std.debug.assert(chunk_end <= source.len);
+    assert(chunk_start <= chunk_end);
+    assert(chunk_end <= source.len);
     const prefix_len = chunk_start;
     const suffix_len = source.len - chunk_end;
-    std.debug.assert(destination.len == prefix_len + suffix_len);
+    assert(destination.len == prefix_len + suffix_len);
     @memcpy(destination[0..prefix_len], source[0..prefix_len]);
     @memcpy(destination[prefix_len .. prefix_len + suffix_len], source[chunk_end..]);
 }
 
 fn assertCheckResult(result: checker.CheckResult) void {
     if (result.passed) {
-        std.debug.assert(result.violations.len == 0);
+        assert(result.violations.len == 0);
     } else {
-        std.debug.assert(result.violations.len > 0);
+        assert(result.violations.len > 0);
     }
 }
 
 fn assertFailedCaseSummaryInput(failed_case: ModelCaseResult) void {
-    std.debug.assert(failed_case.run_identity.package_name.len != 0);
-    std.debug.assert(failed_case.run_identity.run_name.len != 0);
-    std.debug.assert(!failed_case.check_result.passed);
-    std.debug.assert(failed_case.recorded_actions.len != 0);
-    std.debug.assert(failed_case.original_action_count >= failed_case.recorded_actions.len);
+    assert(failed_case.run_identity.package_name.len != 0);
+    assert(failed_case.run_identity.run_name.len != 0);
+    assert(!failed_case.check_result.passed);
+    assert(failed_case.recorded_actions.len != 0);
+    assert(failed_case.original_action_count >= failed_case.recorded_actions.len);
     if (failed_case.persisted_entry_name) |persisted_entry_name| {
-        std.debug.assert(persisted_entry_name.len != 0);
+        assert(persisted_entry_name.len != 0);
     }
     if (failed_case.failing_action_index) |failing_action_index| {
-        std.debug.assert(failing_action_index < failed_case.recorded_actions.len);
+        assert(failing_action_index < failed_case.recorded_actions.len);
     }
 }
 
@@ -950,7 +952,7 @@ test "encodeRecordedActions and decodeRecordedActions round-trip" {
 
     var decoded_storage: [4]RecordedAction = undefined;
     const decoded = try decodeRecordedActions(encoded[0..encoded_len], &decoded_storage);
-    try std.testing.expectEqualSlices(RecordedAction, &actions, decoded);
+    try testing.expectEqualSlices(RecordedAction, &actions, decoded);
 }
 
 test "runModelCases rejects invalid config and storage" {
@@ -974,7 +976,7 @@ test "runModelCases rejects invalid config and storage" {
 
     var action_storage: [1]RecordedAction = undefined;
     var reduction_scratch: [1]RecordedAction = undefined;
-    try std.testing.expectError(error.InvalidInput, runModelCases(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runModelCases(error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid",
@@ -997,10 +999,10 @@ test "runModelCases rejects invalid config and storage" {
 }
 
 test "runModelCases minimizes and persists failing recorded traces" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1113,12 +1115,12 @@ test "runModelCases minimizes and persists failing recorded traces" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expectEqual(@as(u32, 1), failed_case.recorded_actions.len);
-    try std.testing.expectEqual(@as(u32, 3), failed_case.original_action_count);
-    try std.testing.expectEqual(@as(u32, 99), failed_case.recorded_actions[0].tag);
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expectEqual(@as(u32, 1), failed_case.recorded_actions.len);
+    try testing.expectEqual(@as(u32, 3), failed_case.original_action_count);
+    try testing.expectEqual(@as(u32, 99), failed_case.recorded_actions[0].tag);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     var read_action_storage: [8]RecordedAction = undefined;
     var read_action_bytes: [256]u8 = undefined;
@@ -1135,9 +1137,9 @@ test "runModelCases minimizes and persists failing recorded traces" {
             .action_document_parse_buffer = &read_action_document_parse,
         },
     );
-    try std.testing.expectEqual(@as(usize, 1), recorded_view.actions.len);
-    try std.testing.expect(recorded_view.action_document != null);
-    try std.testing.expectEqualStrings("force_fail", recorded_view.action_document.?.actions[0].label);
+    try testing.expectEqual(@as(usize, 1), recorded_view.actions.len);
+    try testing.expect(recorded_view.action_document != null);
+    try testing.expectEqualStrings("force_fail", recorded_view.action_document.?.actions[0].label);
 
     var summary_buffer: [512]u8 = undefined;
     const summary_text = try formatFailedCaseSummary(error{}, &summary_buffer, Target{
@@ -1148,9 +1150,9 @@ test "runModelCases minimizes and persists failing recorded traces" {
         .finish_fn = Context.finish,
         .describe_action_fn = Context.describe,
     }, failed_case);
-    try std.testing.expect(std.mem.indexOf(u8, summary_text, "first_bad_action=0") != null);
-    try std.testing.expect(std.mem.indexOf(u8, summary_text, "violations: bad_action") != null);
-    try std.testing.expect(std.mem.indexOf(u8, summary_text, ">> action[0] tag=99 value=0 label=force_fail") != null);
+    try testing.expect(std.mem.indexOf(u8, summary_text, "first_bad_action=0") != null);
+    try testing.expect(std.mem.indexOf(u8, summary_text, "violations: bad_action") != null);
+    try testing.expect(std.mem.indexOf(u8, summary_text, ">> action[0] tag=99 value=0 label=force_fail") != null);
 
     const replay_execution = try replayRecordedActions(
         error{},
@@ -1165,6 +1167,6 @@ test "runModelCases minimizes and persists failing recorded traces" {
         failed_case.run_identity,
         recorded_view.actions,
     );
-    try std.testing.expect(!replay_execution.check_result.passed);
-    try std.testing.expectEqual(@as(u32, 1), replay_execution.executed_action_count);
+    try testing.expect(!replay_execution.check_result.passed);
+    try testing.expectEqual(@as(u32, 1), replay_execution.executed_action_count);
 }

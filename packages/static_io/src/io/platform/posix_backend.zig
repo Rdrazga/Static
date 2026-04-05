@@ -2,6 +2,7 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const backend = @import("../backend.zig");
 const config = @import("../config.zig");
 const linux_backend = @import("linux/io_uring_backend.zig");
@@ -77,7 +78,7 @@ pub const PosixBackend = struct {
 
     /// Pumps ready completions from the selected backend.
     pub fn pump(self: *PosixBackend, max_completions: u32) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         return switch (self.inner) {
             .linux => |*linux| linux.pump(max_completions),
             .bsd => |*bsd| bsd.pump(max_completions),
@@ -142,7 +143,7 @@ pub const PosixBackend = struct {
 
     /// Waits for completions, optionally bounded by timeout.
     pub fn waitForCompletions(self: *PosixBackend, max_completions: u32, timeout_ns: ?u64) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         return switch (self.inner) {
             .linux => |*linux| linux.waitForCompletions(max_completions, timeout_ns),
             .bsd => |*bsd| bsd.waitForCompletions(max_completions, timeout_ns),

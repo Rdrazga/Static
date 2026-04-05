@@ -6,6 +6,8 @@
 //! - Receive scheduling state is serialized by an internal mutex.
 //! Blocking behavior: non-blocking; returns `error.WouldBlock` when no lane can make progress.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const memory = @import("static_memory");
 const sync = @import("static_sync");
 const mpmc = @import("mpmc.zig");
@@ -13,9 +15,9 @@ const contracts = @import("../contracts.zig");
 
 pub fn QosMpmcQueue(comptime T: type, comptime lane_count_max: usize) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
-        std.debug.assert(lane_count_max > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
+        assert(lane_count_max > 0);
     }
 
     return struct {
@@ -82,8 +84,8 @@ pub fn QosMpmcQueue(comptime T: type, comptime lane_count_max: usize) type {
                 .lane_weights_recv = cfg.lane_weights_recv,
                 .scheduling_policy = cfg.scheduling_policy,
             };
-            std.debug.assert(self.laneCount() == lane_count_max);
-            std.debug.assert(self.capacity() >= self.laneCapacity());
+            assert(self.laneCount() == lane_count_max);
+            assert(self.capacity() >= self.laneCapacity());
             return self;
         }
 
@@ -114,7 +116,7 @@ pub fn QosMpmcQueue(comptime T: type, comptime lane_count_max: usize) type {
             while (lane_index < lane_count_max) : (lane_index += 1) {
                 total_len += self.lanes[lane_index].len();
             }
-            std.debug.assert(total_len <= self.capacity());
+            assert(total_len <= self.capacity());
             return total_len;
         }
 
@@ -159,7 +161,7 @@ pub fn QosMpmcQueue(comptime T: type, comptime lane_count_max: usize) type {
                 if (self.lane_budget_remaining == 0) {
                     self.lane_budget_remaining = self.lane_weights_recv[lane_index];
                 }
-                std.debug.assert(self.lane_budget_remaining > 0);
+                assert(self.lane_budget_remaining > 0);
 
                 const value = self.lanes[lane_index].tryRecv() catch |err| switch (err) {
                     error.WouldBlock => {
@@ -186,7 +188,7 @@ pub fn QosMpmcQueue(comptime T: type, comptime lane_count_max: usize) type {
 
 test "qos mpmc strict-priority mode drains higher priority lane first" {
     const Q = QosMpmcQueue(u8, 2);
-    var q = try Q.init(std.testing.allocator, .{
+    var q = try Q.init(testing.allocator, .{
         .lane_capacity = 4,
         .scheduling_policy = .strict_priority,
     });
@@ -195,13 +197,13 @@ test "qos mpmc strict-priority mode drains higher priority lane first" {
     try q.trySend(1, 20);
     try q.trySend(0, 10);
 
-    try std.testing.expectEqual(@as(u8, 10), try q.tryRecv());
-    try std.testing.expectEqual(@as(u8, 20), try q.tryRecv());
+    try testing.expectEqual(@as(u8, 10), try q.tryRecv());
+    try testing.expectEqual(@as(u8, 20), try q.tryRecv());
 }
 
 test "qos mpmc weighted round-robin mode consumes by configured receive weights" {
     const Q = QosMpmcQueue(u8, 2);
-    var q = try Q.init(std.testing.allocator, .{
+    var q = try Q.init(testing.allocator, .{
         .lane_capacity = 4,
         .lane_weights_recv = .{ 2, 1 },
         .scheduling_policy = .weighted_round_robin,
@@ -212,20 +214,20 @@ test "qos mpmc weighted round-robin mode consumes by configured receive weights"
     try q.trySend(0, 11);
     try q.trySend(1, 20);
 
-    try std.testing.expectEqual(@as(u8, 10), try q.tryRecv());
-    try std.testing.expectEqual(@as(u8, 11), try q.tryRecv());
-    try std.testing.expectEqual(@as(u8, 20), try q.tryRecv());
+    try testing.expectEqual(@as(u8, 10), try q.tryRecv());
+    try testing.expectEqual(@as(u8, 11), try q.tryRecv());
+    try testing.expectEqual(@as(u8, 20), try q.tryRecv());
 }
 
 test "qos mpmc validates lane index and lane weight configuration" {
     const Q = QosMpmcQueue(u8, 2);
-    try std.testing.expectError(error.InvalidConfig, Q.init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, Q.init(testing.allocator, .{
         .lane_capacity = 4,
         .lane_weights_recv = .{ 1, 0 },
     }));
 
-    var q = try Q.init(std.testing.allocator, .{ .lane_capacity = 2 });
+    var q = try Q.init(testing.allocator, .{ .lane_capacity = 2 });
     defer q.deinit();
-    try std.testing.expectError(error.InvalidLane, q.trySend(2, 1));
-    try std.testing.expectError(error.InvalidLane, q.tryRecvFromLane(2));
+    try testing.expectError(error.InvalidLane, q.trySend(2, 1));
+    try testing.expectError(error.InvalidLane, q.tryRecvFromLane(2));
 }

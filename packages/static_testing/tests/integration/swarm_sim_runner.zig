@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -11,10 +12,10 @@ const trace = static_testing.testing.trace;
 const ScenarioError = sim.fixture.FixtureError;
 
 test "swarm runner drives one deterministic simulation harness" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -57,7 +58,7 @@ test "swarm runner drives one deterministic simulation harness" {
         ) ScenarioError!swarm.SwarmScenarioExecution {
             var sim_fixture: sim.fixture.Fixture(4, 4, 4, 16) = undefined;
             try sim_fixture.init(.{
-                .allocator = std.testing.allocator,
+                .allocator = testing.allocator,
                 .timer_queue_config = .{
                     .buckets = 8,
                     .timers_max = 8,
@@ -217,16 +218,16 @@ test "swarm runner drives one deterministic simulation harness" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 4), summary.executed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.failed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.retained_failure_count);
-    try std.testing.expectEqual(@as(u8, 0b11), context.seen_variant_mask);
-    try std.testing.expect(summary.first_failure != null);
+    try testing.expectEqual(@as(u32, 4), summary.executed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.failed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.retained_failure_count);
+    try testing.expectEqual(@as(u8, 0b11), context.seen_variant_mask);
+    try testing.expect(summary.first_failure != null);
 
     const first_failure = summary.first_failure.?;
-    try std.testing.expectEqual(@as(u32, 1), first_failure.run_identity.run_index);
-    try std.testing.expect(first_failure.persistedEntryName() != null);
-    try std.testing.expectEqualStrings("sim.expected_failure", first_failure.check_result.violations[0].code);
+    try testing.expectEqual(@as(u32, 1), first_failure.run_identity.run_index);
+    try testing.expect(first_failure.persistedEntryName() != null);
+    try testing.expectEqualStrings("sim.expected_failure", first_failure.check_result.violations[0].code);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_buffer: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -258,26 +259,26 @@ test "swarm runner drives one deterministic simulation harness" {
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    try std.testing.expectEqual(first_failure.run_identity.seed.value, retained_entry.replay_artifact_view.identity.seed.value);
-    try std.testing.expectEqual(first_failure.trace_metadata.event_count, retained_entry.replay_artifact_view.trace_metadata.event_count);
-    try std.testing.expectEqualStrings("stress", retained_entry.manifest_document.campaign_profile.?);
-    try std.testing.expect(retained_entry.manifest_document.pending_reason != null);
-    try std.testing.expectEqual(liveness.PendingReason.reply_sequence_gap, retained_entry.manifest_document.pending_reason.?.reason);
-    try std.testing.expectEqual(@as(u32, 1), retained_entry.manifest_document.pending_reason.?.count);
-    try std.testing.expectEqual(@as(u64, 2), retained_entry.manifest_document.pending_reason.?.value);
-    try std.testing.expectEqualStrings("decision_gap", retained_entry.manifest_document.pending_reason.?.label.?);
-    try std.testing.expect(retained_entry.trace_document != null);
-    try std.testing.expect(retained_entry.retained_trace != null);
-    try std.testing.expect(retained_entry.trace_document.?.has_provenance);
-    try std.testing.expectEqual(
+    try testing.expectEqual(first_failure.run_identity.seed.value, retained_entry.replay_artifact_view.identity.seed.value);
+    try testing.expectEqual(first_failure.trace_metadata.event_count, retained_entry.replay_artifact_view.trace_metadata.event_count);
+    try testing.expectEqualStrings("stress", retained_entry.manifest_document.campaign_profile.?);
+    try testing.expect(retained_entry.manifest_document.pending_reason != null);
+    try testing.expectEqual(liveness.PendingReason.reply_sequence_gap, retained_entry.manifest_document.pending_reason.?.reason);
+    try testing.expectEqual(@as(u32, 1), retained_entry.manifest_document.pending_reason.?.count);
+    try testing.expectEqual(@as(u64, 2), retained_entry.manifest_document.pending_reason.?.value);
+    try testing.expectEqualStrings("decision_gap", retained_entry.manifest_document.pending_reason.?.label.?);
+    try testing.expect(retained_entry.trace_document != null);
+    try testing.expect(retained_entry.retained_trace != null);
+    try testing.expect(retained_entry.trace_document.?.has_provenance);
+    try testing.expectEqual(
         retained_entry.trace_document.?.caused_event_count,
         retained_entry.retained_trace.?.provenanceSummary().caused_event_count,
     );
     if (first_failure.variant_id == 1) {
-        try std.testing.expectEqualStrings("first", retained_entry.manifest_document.schedule_mode.?);
-        try std.testing.expect(retained_entry.manifest_document.schedule_seed == null);
+        try testing.expectEqualStrings("first", retained_entry.manifest_document.schedule_mode.?);
+        try testing.expect(retained_entry.manifest_document.schedule_seed == null);
     } else {
-        try std.testing.expectEqualStrings("seeded", retained_entry.manifest_document.schedule_mode.?);
-        try std.testing.expect(retained_entry.manifest_document.schedule_seed != null);
+        try testing.expectEqualStrings("seeded", retained_entry.manifest_document.schedule_mode.?);
+        try testing.expect(retained_entry.manifest_document.schedule_seed != null);
     }
 }

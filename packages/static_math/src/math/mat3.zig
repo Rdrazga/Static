@@ -16,6 +16,7 @@
 //! for `inverse`) are enforced via `std.debug.assert`.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const scalar = @import("scalar.zig");
 const vec2_mod = @import("vec2.zig");
 const vec3_mod = @import("vec3.zig");
@@ -25,7 +26,7 @@ pub const Mat3 = extern struct {
 
     comptime {
         // Compile-time invariant: extern struct must be exactly 3 Vec3 columns.
-        std.debug.assert(@sizeOf(Mat3) == 3 * @sizeOf(vec3_mod.Vec3));
+        assert(@sizeOf(Mat3) == 3 * @sizeOf(vec3_mod.Vec3));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ pub const Mat3 = extern struct {
     /// Axis-angle rotation (Rodrigues' formula).
     /// Precondition: `axis` must be normalized.
     pub inline fn fromRotation(axis: vec3_mod.Vec3, angle_rad: f32) Mat3 {
-        std.debug.assert(vec3_mod.Vec3.approxEqual(
+        assert(vec3_mod.Vec3.approxEqual(
             vec3_mod.Vec3.splat(axis.lengthSq()),
             vec3_mod.Vec3.one,
             scalar.epsilon * 100.0,
@@ -191,12 +192,12 @@ pub const Mat3 = extern struct {
     // ── Access ───────────────────────────────────────────────────────────
 
     pub inline fn col(m: Mat3, i: u2) vec3_mod.Vec3 {
-        std.debug.assert(i < 3);
+        assert(i < 3);
         return m.cols[@intCast(i)];
     }
 
     pub inline fn row(m: Mat3, i: u2) vec3_mod.Vec3 {
-        std.debug.assert(i < 3);
+        assert(i < 3);
         const idx: usize = @intCast(i);
         return .{
             .x = lane(m.cols[0], idx),
@@ -206,8 +207,8 @@ pub const Mat3 = extern struct {
     }
 
     pub inline fn at(m: Mat3, row_idx: u2, col_idx: u2) f32 {
-        std.debug.assert(row_idx < 3);
-        std.debug.assert(col_idx < 3);
+        assert(row_idx < 3);
+        assert(col_idx < 3);
         return lane(m.cols[@intCast(col_idx)], @intCast(row_idx));
     }
 
@@ -317,7 +318,7 @@ pub const Mat3 = extern struct {
 
     /// Component-wise approximate equality of all 9 elements.
     pub inline fn approxEqual(a: Mat3, b: Mat3, tolerance: f32) bool {
-        std.debug.assert(tolerance >= 0.0);
+        assert(tolerance >= 0.0);
         return vec3_mod.Vec3.approxEqual(a.cols[0], b.cols[0], tolerance) and
             vec3_mod.Vec3.approxEqual(a.cols[1], b.cols[1], tolerance) and
             vec3_mod.Vec3.approxEqual(a.cols[2], b.cols[2], tolerance);

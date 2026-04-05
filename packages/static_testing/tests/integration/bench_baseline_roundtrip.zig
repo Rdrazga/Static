@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -21,10 +22,10 @@ const CounterContext = struct {
 };
 
 test "benchmark baseline persists across file boundary and compares deterministically" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -84,10 +85,10 @@ test "benchmark baseline persists across file boundary and compares deterministi
         &comparisons,
     );
 
-    try std.testing.expect(summary.passed);
-    try std.testing.expectEqual(@as(u32, 1), summary.passed_case_count);
-    try std.testing.expectEqual(@as(usize, 1), summary.comparisons.len);
-    try std.testing.expectEqualStrings("increment", summary.comparisons[0].case_name);
-    try std.testing.expectEqual(bench.baseline.CaseStatus.compared, summary.comparisons[0].status);
-    try std.testing.expectEqual(bench.baseline.CaseDecision.pass, summary.comparisons[0].decision);
+    try testing.expect(summary.passed);
+    try testing.expectEqual(@as(u32, 1), summary.passed_case_count);
+    try testing.expectEqual(@as(usize, 1), summary.comparisons.len);
+    try testing.expectEqualStrings("increment", summary.comparisons[0].case_name);
+    try testing.expectEqual(bench.baseline.CaseStatus.compared, summary.comparisons[0].status);
+    try testing.expectEqual(bench.baseline.CaseDecision.pass, summary.comparisons[0].decision);
 }

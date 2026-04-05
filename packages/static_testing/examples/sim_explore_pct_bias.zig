@@ -1,6 +1,7 @@
 //! Demonstrates bounded PCT-style exploration bias and replay of a retained schedule.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const checker = testing.testing.checker;
@@ -79,10 +80,10 @@ pub fn main() !void {
     const summary_line = try explore.formatExplorationSummary(&summary_buffer, summary);
     std.debug.print("{s}\n", .{summary_line});
 
-    std.debug.assert(summary.first_failure != null);
+    assert(summary.first_failure != null);
     const first_failure = summary.first_failure.?;
-    std.debug.assert(std.mem.eql(u8, first_failure.schedule_mode, "pct_bias"));
-    std.debug.assert(first_failure.schedule_seed != null);
+    assert(std.mem.eql(u8, first_failure.schedule_mode, "pct_bias"));
+    assert(first_failure.schedule_seed != null);
 
     var existing_file_buffer: [512]u8 = undefined;
     var record_buffer: [256]u8 = undefined;
@@ -120,7 +121,7 @@ pub fn main() !void {
 
     for (retained_failure.recorded_decisions) |decision| {
         const replayed = try replayer.applyRecordedDecision(decision);
-        std.debug.assert(replayed.chosen_id == decision.chosen_id);
+        assert(replayed.chosen_id == decision.chosen_id);
     }
 
     std.debug.print(

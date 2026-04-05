@@ -1,6 +1,8 @@
 //! Runtime orchestration over selected `static_io` backends.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const collections = @import("static_collections");
 const io_caps = @import("caps.zig");
@@ -156,7 +158,7 @@ pub const Runtime = struct {
             var owned_pool = handle_pool;
             owned_pool.deinit();
         }
-        std.debug.assert(handles.len == handle_pool.capacity());
+        assert(handles.len == handle_pool.capacity());
 
         return .{
             .cfg = cfg,
@@ -168,7 +170,7 @@ pub const Runtime = struct {
 
     /// Deinitializes backend and runtime-owned arrays.
     pub fn deinit(self: *Runtime) void {
-        std.debug.assert(self.handles.len == self.handle_pool.capacity());
+        assert(self.handles.len == self.handle_pool.capacity());
         const allocator = switch (self.backend_storage) {
             .fake => |*fake| fake.allocator,
             .threaded => |*threaded| threaded.shared.allocator,
@@ -207,8 +209,8 @@ pub const Runtime = struct {
 
         const native = try openNativeFile(allocator, path, flags);
         const slot = &self.handles[handle.index];
-        std.debug.assert(slot.state == .open);
-        std.debug.assert(slot.kind == .file);
+        assert(slot.state == .open);
+        assert(slot.kind == .file);
         slot.adopted_native = native;
         slot.adopted_owned = true;
         var iface = self.backendIface();
@@ -239,8 +241,8 @@ pub const Runtime = struct {
 
         const native = try listenNative(allocator, endpoint, options);
         const slot = &self.handles[handle.index];
-        std.debug.assert(slot.state == .open);
-        std.debug.assert(slot.kind == .listener);
+        assert(slot.state == .open);
+        assert(slot.kind == .listener);
         slot.adopted_native = native;
         slot.adopted_owned = true;
         slot.listener_endpoint = null;
@@ -294,7 +296,7 @@ pub const Runtime = struct {
         var slot = &self.handles[handle_index];
         if (slot.state == .free) return error.InvalidInput;
         if (slot.state == .closed) return error.Closed;
-        std.debug.assert(slot.state == .open);
+        assert(slot.state == .open);
 
         slot.state = .closed;
         var iface = self.backendIface();
@@ -381,7 +383,7 @@ pub const Runtime = struct {
         _ = self.validateHandle(listener.handle, .listener) catch |err| return mapHandleSubmitError(err);
         const stream_handle = self.allocHandle(.stream) catch return error.WouldBlock;
         errdefer self.freeAllocatedHandle(stream_handle);
-        std.debug.assert(self.handles[stream_handle.index].kind == .stream);
+        assert(self.handles[stream_handle.index].kind == .stream);
         const stream = types.Stream{ .handle = stream_handle };
         return self.submit(.{ .accept = .{
             .listener = listener,
@@ -398,7 +400,7 @@ pub const Runtime = struct {
         if (endpointPort(endpoint) == 0) return error.InvalidInput;
         const stream_handle = self.allocHandle(.stream) catch return error.WouldBlock;
         errdefer self.freeAllocatedHandle(stream_handle);
-        std.debug.assert(self.handles[stream_handle.index].kind == .stream);
+        assert(self.handles[stream_handle.index].kind == .stream);
         const stream = types.Stream{ .handle = stream_handle };
         return self.submit(.{ .connect = .{
             .stream = stream,
@@ -408,7 +410,7 @@ pub const Runtime = struct {
     }
 
     pub fn pump(self: *Runtime, max_completions: u32) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         var iface = self.backendIface();
         return iface.pump(max_completions);
     }
@@ -457,7 +459,7 @@ pub const Runtime = struct {
         cancel_token: ?static_sync.cancel.CancelToken,
     ) WaitError!u32 {
         if (max_completions == 0) return error.InvalidInput;
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         if (cancel_token) |token| {
             if (token.isCancelled()) return error.Cancelled;
         }
@@ -611,8 +613,8 @@ pub const Runtime = struct {
 
         const handle = self.allocHandle(kind) catch return error.NoSpaceLeft;
         var slot = &self.handles[handle.index];
-        std.debug.assert(slot.state == .open);
-        std.debug.assert(slot.kind == kind);
+        assert(slot.state == .open);
+        assert(slot.kind == kind);
         slot.adopted_native = native;
         slot.adopted_owned = ownership == .owned;
         var iface = self.backendIface();
@@ -627,9 +629,9 @@ pub const Runtime = struct {
             error.InvalidConfig, error.OutOfMemory, error.NotFound, error.Overflow => unreachable,
         };
         const slot_index = handle.index;
-        std.debug.assert(slot_index < self.handles.len);
+        assert(slot_index < self.handles.len);
         var slot = &self.handles[slot_index];
-        std.debug.assert(slot.state == .free);
+        assert(slot.state == .free);
         slot.state = .open;
         slot.kind = kind;
         slot.adopted_native = null;
@@ -641,7 +643,7 @@ pub const Runtime = struct {
     fn freeAllocatedHandle(self: *Runtime, handle: types.Handle) void {
         if (!handle.isValid()) return;
         const slot_index = self.handle_pool.validate(handle) catch return;
-        std.debug.assert(slot_index < self.handles.len);
+        assert(slot_index < self.handles.len);
 
         var slot = &self.handles[slot_index];
         if (slot.state != .open) return;
@@ -674,7 +676,7 @@ pub const Runtime = struct {
         handle: types.Handle,
         expected_kind: types.HandleKind,
     ) error{ InvalidInput, Closed }!u32 {
-        std.debug.assert(expected_kind == .file or expected_kind == .stream or expected_kind == .listener);
+        assert(expected_kind == .file or expected_kind == .stream or expected_kind == .listener);
         const handle_index = self.handle_pool.validate(handle) catch return error.InvalidInput;
         const slot = self.handles[handle_index];
         if (slot.kind != expected_kind) return error.InvalidInput;
@@ -948,7 +950,7 @@ fn elapsedSince(start: std.time.Instant) ?u64 {
 }
 
 test "runtime fake backend preserves deterministic ordering" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
     var storage_a: [8]u8 = [_]u8{0} ** 8;
@@ -962,22 +964,22 @@ test "runtime fake backend preserves deterministic ordering" {
         .byte = 0x22,
     } });
     const id_b = try runtime_impl.submit(.{ .nop = buffer_b });
-    try std.testing.expectError(error.WouldBlock, runtime_impl.submit(.{ .nop = buffer_b }));
+    try testing.expectError(error.WouldBlock, runtime_impl.submit(.{ .nop = buffer_b }));
 
     _ = try runtime_impl.pump(8);
     const completion_a = runtime_impl.poll().?;
     const completion_b = runtime_impl.poll().?;
-    try std.testing.expect(runtime_impl.poll() == null);
+    try testing.expect(runtime_impl.poll() == null);
 
-    try std.testing.expectEqual(id_a, completion_a.operation_id);
-    try std.testing.expectEqual(id_b, completion_b.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.success, completion_a.status);
-    try std.testing.expectEqual(types.CompletionStatus.success, completion_b.status);
-    try std.testing.expectEqual(@as(u8, 0x22), completion_a.buffer.bytes[0]);
+    try testing.expectEqual(id_a, completion_a.operation_id);
+    try testing.expectEqual(id_b, completion_b.operation_id);
+    try testing.expectEqual(types.CompletionStatus.success, completion_a.status);
+    try testing.expectEqual(types.CompletionStatus.success, completion_b.status);
+    try testing.expectEqual(@as(u8, 0x22), completion_a.buffer.bytes[0]);
 }
 
 test "runtime stream write then read roundtrip through fake backend" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(4));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(4));
     defer runtime_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -987,7 +989,7 @@ test "runtime stream write then read roundtrip through fake backend" {
     const connect_id = try runtime_impl.submitConnect(endpoint, null);
     _ = try runtime_impl.pump(1);
     const connect_completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(connect_id, connect_completion.operation_id);
+    try testing.expectEqual(connect_id, connect_completion.operation_id);
     const stream = types.Stream{ .handle = connect_completion.handle.? };
 
     var write_bytes: [4]u8 = .{ 't', 'e', 's', 't' };
@@ -1002,43 +1004,43 @@ test "runtime stream write then read roundtrip through fake backend" {
     _ = try runtime_impl.pump(8);
     const first = runtime_impl.poll().?;
     const second = runtime_impl.poll().?;
-    try std.testing.expect(runtime_impl.poll() == null);
-    try std.testing.expectEqual(write_id, first.operation_id);
-    try std.testing.expectEqual(read_id, second.operation_id);
-    try std.testing.expectEqualSlices(u8, "test", second.buffer.usedSlice());
+    try testing.expect(runtime_impl.poll() == null);
+    try testing.expectEqual(write_id, first.operation_id);
+    try testing.expectEqual(read_id, second.operation_id);
+    try testing.expectEqualSlices(u8, "test", second.buffer.usedSlice());
 }
 
 test "runtime closeHandle is idempotent until recycled" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
     const file = try runtime_impl.openFile("runtime-close-handle.tmp", .{});
     try runtime_impl.closeHandle(file.handle);
-    try std.testing.expectError(error.Closed, runtime_impl.closeHandle(file.handle));
+    try testing.expectError(error.Closed, runtime_impl.closeHandle(file.handle));
 }
 
 test "runtime rejects wrong-kind and stale handles" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(1));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(1));
     defer runtime_impl.deinit();
 
     const file_a = try runtime_impl.openFile("runtime-stale-a.tmp", .{});
     var read_bytes: [8]u8 = [_]u8{0} ** 8;
     const read_buffer = types.Buffer{ .bytes = &read_bytes };
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         runtime_impl.submitStreamRead(.{ .handle = file_a.handle }, read_buffer, null),
     );
 
     try runtime_impl.closeHandle(file_a.handle);
     _ = try runtime_impl.openFile("runtime-stale-b.tmp", .{});
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         runtime_impl.submitFileReadAt(file_a, read_buffer, 0, null),
     );
 }
 
 test "runtime closeHandle forces in-flight completion closed" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(4));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(4));
     defer runtime_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1056,14 +1058,14 @@ test "runtime closeHandle forces in-flight completion closed" {
 
     _ = try runtime_impl.pump(1);
     const completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 }
 
 test "runtime immediate timeout produces timeout completion" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(4));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(4));
     defer runtime_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1080,8 +1082,8 @@ test "runtime immediate timeout produces timeout completion" {
 
     _ = try runtime_impl.pump(1);
     const completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(types.CompletionStatus.timeout, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), completion.err);
+    try testing.expectEqual(types.CompletionStatus.timeout, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), completion.err);
 }
 
 test "runtime timeout_ns==0 yields immediate timeout for all operation kinds (windows backends)" {
@@ -1095,7 +1097,7 @@ test "runtime timeout_ns==0 yields immediate timeout for all operation kinds (wi
         cfg.backend_kind = backend_kind;
         cfg.threaded_worker_count = 2;
 
-        var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+        var runtime_impl = try Runtime.init(testing.allocator, cfg);
         defer runtime_impl.deinit();
 
         const listener = try runtime_impl.listen(.{ .ipv4 = .{
@@ -1156,65 +1158,65 @@ test "runtime timeout_ns==0 yields immediate timeout for all operation kinds (wi
         const read_id = try runtime_impl.submitStreamRead(server_stream.?, read_buf, 0);
         _ = try runtime_impl.wait(1, std.time.ns_per_s, null);
         const read_completion = runtime_impl.poll() orelse return error.SkipZigTest;
-        try std.testing.expectEqual(read_id, read_completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.stream_read, read_completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, read_completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), read_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), read_completion.bytes_transferred);
+        try testing.expectEqual(read_id, read_completion.operation_id);
+        try testing.expectEqual(types.OperationTag.stream_read, read_completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, read_completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), read_completion.err);
+        try testing.expectEqual(@as(u32, 0), read_completion.bytes_transferred);
 
         const write_id = try runtime_impl.submitStreamWrite(client_stream.?, write_buf, 0);
         _ = try runtime_impl.wait(1, std.time.ns_per_s, null);
         const write_completion = runtime_impl.poll() orelse return error.SkipZigTest;
-        try std.testing.expectEqual(write_id, write_completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.stream_write, write_completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, write_completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), write_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), write_completion.bytes_transferred);
+        try testing.expectEqual(write_id, write_completion.operation_id);
+        try testing.expectEqual(types.OperationTag.stream_write, write_completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, write_completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), write_completion.err);
+        try testing.expectEqual(@as(u32, 0), write_completion.bytes_transferred);
 
         const accept_timeout_id = try runtime_impl.submitAccept(listener, 0);
         _ = try runtime_impl.wait(1, std.time.ns_per_s, null);
         const accept_timeout_completion = runtime_impl.poll() orelse return error.SkipZigTest;
-        try std.testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), accept_timeout_completion.bytes_transferred);
-        try std.testing.expectEqual(@as(?types.Handle, null), accept_timeout_completion.handle);
+        try testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
+        try testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
+        try testing.expectEqual(@as(u32, 0), accept_timeout_completion.bytes_transferred);
+        try testing.expectEqual(@as(?types.Handle, null), accept_timeout_completion.handle);
 
         const connect_timeout_id = try runtime_impl.submitConnect(local, 0);
         _ = try runtime_impl.wait(1, std.time.ns_per_s, null);
         const connect_timeout_completion = runtime_impl.poll() orelse return error.SkipZigTest;
-        try std.testing.expectEqual(connect_timeout_id, connect_timeout_completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.connect, connect_timeout_completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, connect_timeout_completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), connect_timeout_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), connect_timeout_completion.bytes_transferred);
-        try std.testing.expectEqual(@as(?types.Handle, null), connect_timeout_completion.handle);
+        try testing.expectEqual(connect_timeout_id, connect_timeout_completion.operation_id);
+        try testing.expectEqual(types.OperationTag.connect, connect_timeout_completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, connect_timeout_completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), connect_timeout_completion.err);
+        try testing.expectEqual(@as(u32, 0), connect_timeout_completion.bytes_transferred);
+        try testing.expectEqual(@as(?types.Handle, null), connect_timeout_completion.handle);
 
         const file_read_id = try runtime_impl.submitFileReadAt(file, file_read_buf, 0, 0);
         _ = try runtime_impl.wait(1, std.time.ns_per_s, null);
         const file_read_completion = runtime_impl.poll() orelse return error.SkipZigTest;
-        try std.testing.expectEqual(file_read_id, file_read_completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.file_read_at, file_read_completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, file_read_completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), file_read_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), file_read_completion.bytes_transferred);
+        try testing.expectEqual(file_read_id, file_read_completion.operation_id);
+        try testing.expectEqual(types.OperationTag.file_read_at, file_read_completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, file_read_completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), file_read_completion.err);
+        try testing.expectEqual(@as(u32, 0), file_read_completion.bytes_transferred);
 
         const file_write_id = try runtime_impl.submitFileWriteAt(file, file_write_buf, 0, 0);
         _ = try runtime_impl.wait(1, std.time.ns_per_s, null);
         const file_write_completion = runtime_impl.poll() orelse return error.SkipZigTest;
-        try std.testing.expectEqual(file_write_id, file_write_completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.file_write_at, file_write_completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, file_write_completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), file_write_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), file_write_completion.bytes_transferred);
+        try testing.expectEqual(file_write_id, file_write_completion.operation_id);
+        try testing.expectEqual(types.OperationTag.file_write_at, file_write_completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, file_write_completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), file_write_completion.err);
+        try testing.expectEqual(@as(u32, 0), file_write_completion.bytes_transferred);
 
-        try std.testing.expect(runtime_impl.poll() == null);
+        try testing.expect(runtime_impl.poll() == null);
     }
 }
 
 test "runtime rejects empty stream buffers to preserve EOF semantics" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1226,19 +1228,19 @@ test "runtime rejects empty stream buffers to preserve EOF semantics" {
     const stream = types.Stream{ .handle = runtime_impl.poll().?.handle.? };
 
     const empty = types.Buffer{ .bytes = &[_]u8{} };
-    try std.testing.expectError(error.InvalidInput, runtime_impl.submitStreamRead(stream, empty, null));
-    try std.testing.expectError(error.InvalidInput, runtime_impl.submitStreamWrite(stream, empty, null));
+    try testing.expectError(error.InvalidInput, runtime_impl.submitStreamRead(stream, empty, null));
+    try testing.expectError(error.InvalidInput, runtime_impl.submitStreamWrite(stream, empty, null));
 
     var zero_bytes: [1]u8 = .{0};
     const zero_write = types.Buffer{ .bytes = &zero_bytes };
-    try std.testing.expectError(error.InvalidInput, runtime_impl.submitStreamWrite(stream, zero_write, null));
+    try testing.expectError(error.InvalidInput, runtime_impl.submitStreamWrite(stream, zero_write, null));
 
     const file = try runtime_impl.openFile("runtime-empty-write.tmp", .{ .read = true, .write = true, .create = true });
-    try std.testing.expectError(error.InvalidInput, runtime_impl.submitFileWriteAt(file, zero_write, 0, null));
+    try testing.expectError(error.InvalidInput, runtime_impl.submitFileWriteAt(file, zero_write, 0, null));
 }
 
 test "runtime rejects read buffers with non-zero used_len" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(4));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(4));
     defer runtime_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1252,14 +1254,14 @@ test "runtime rejects read buffers with non-zero used_len" {
     var bytes: [8]u8 = [_]u8{0} ** 8;
     var buffer = types.Buffer{ .bytes = &bytes };
     try buffer.setUsedLen(1);
-    try std.testing.expectError(error.InvalidInput, runtime_impl.submitStreamRead(stream, buffer, null));
+    try testing.expectError(error.InvalidInput, runtime_impl.submitStreamRead(stream, buffer, null));
 
     const file = try runtime_impl.openFile("runtime-read-usedlen.tmp", .{ .read = true, .write = true, .create = true });
-    try std.testing.expectError(error.InvalidInput, runtime_impl.submitFileReadAt(file, buffer, 0, null));
+    try testing.expectError(error.InvalidInput, runtime_impl.submitFileReadAt(file, buffer, 0, null));
 }
 
 test "runtime returns WouldBlock on max_in_flight exhaustion" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(1));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(1));
     defer runtime_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1276,11 +1278,11 @@ test "runtime returns WouldBlock on max_in_flight exhaustion" {
 
     var storage_b: [8]u8 = [_]u8{0} ** 8;
     const buffer_b = types.Buffer{ .bytes = &storage_b };
-    try std.testing.expectError(error.WouldBlock, runtime_impl.submitStreamRead(stream, buffer_b, null));
+    try testing.expectError(error.WouldBlock, runtime_impl.submitStreamRead(stream, buffer_b, null));
 }
 
 test "runtime file_read_at permits empty buffer as no-op" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
     const file = try runtime_impl.openFile("runtime-empty-read.tmp", .{ .read = true, .write = true, .create = true });
@@ -1290,18 +1292,18 @@ test "runtime file_read_at permits empty buffer as no-op" {
 
     _ = try runtime_impl.pump(1);
     const completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_read_at, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
-    try std.testing.expectEqual(@as(usize, 0), completion.buffer.used_len);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_read_at, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, completion.status);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(@as(usize, 0), completion.buffer.used_len);
 }
 
 test "runtime cancel returns NotFound for unknown and completed operations" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
-    try std.testing.expectError(error.NotFound, runtime_impl.cancel(123456));
+    try testing.expectError(error.NotFound, runtime_impl.cancel(123456));
 
     var storage: [8]u8 = [_]u8{0} ** 8;
     const buffer = types.Buffer{ .bytes = &storage };
@@ -1310,7 +1312,7 @@ test "runtime cancel returns NotFound for unknown and completed operations" {
 
     // Once an operation has completed (even if it has not yet been polled),
     // cancellation no longer applies.
-    try std.testing.expectError(error.NotFound, runtime_impl.cancel(id));
+    try testing.expectError(error.NotFound, runtime_impl.cancel(id));
 }
 
 fn connectLoopbackPair(runtime_impl: *Runtime) !struct {
@@ -1341,13 +1343,13 @@ fn connectLoopbackPair(runtime_impl: *Runtime) !struct {
         while (runtime_impl.poll()) |completion| {
             switch (completion.tag) {
                 .accept => {
-                    try std.testing.expectEqual(accept_id, completion.operation_id);
-                    try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+                    try testing.expectEqual(accept_id, completion.operation_id);
+                    try testing.expectEqual(types.CompletionStatus.success, completion.status);
                     server = .{ .handle = completion.handle.? };
                 },
                 .connect => {
-                    try std.testing.expectEqual(connect_id, completion.operation_id);
-                    try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+                    try testing.expectEqual(connect_id, completion.operation_id);
+                    try testing.expectEqual(types.CompletionStatus.success, completion.status);
                     client = .{ .handle = completion.handle.? };
                 },
                 else => {},
@@ -1369,7 +1371,7 @@ test "runtime windows iocp cancel/close/timeout semantics are best-effort but st
 
     var cfg = config.Config.initForTest(8);
     cfg.backend_kind = .windows_iocp;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     const pair = try connectLoopbackPair(&runtime_impl);
@@ -1384,26 +1386,26 @@ test "runtime windows iocp cancel/close/timeout semantics are best-effort but st
     try runtime_impl.cancel(read_id);
     _ = try runtime_impl.wait(1, 2 * std.time.ns_per_s, null);
     const cancelled_completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(read_id, cancelled_completion.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.cancelled, cancelled_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancelled_completion.err);
-    try std.testing.expectEqual(@as(u32, 0), cancelled_completion.bytes_transferred);
-    try std.testing.expectEqual(@as(usize, 0), cancelled_completion.buffer.used_len);
+    try testing.expectEqual(read_id, cancelled_completion.operation_id);
+    try testing.expectEqual(types.CompletionStatus.cancelled, cancelled_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancelled_completion.err);
+    try testing.expectEqual(@as(u32, 0), cancelled_completion.bytes_transferred);
+    try testing.expectEqual(@as(usize, 0), cancelled_completion.buffer.used_len);
 
     // Close: closing a handle attempts to cancel in-flight operations as `.closed`.
     const close_id = try runtime_impl.submitStreamRead(pair.server, read_buffer, null);
     try runtime_impl.closeHandle(pair.server.handle);
     _ = try runtime_impl.wait(1, 2 * std.time.ns_per_s, null);
     const closed_completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(close_id, closed_completion.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.closed, closed_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), closed_completion.err);
-    try std.testing.expectEqual(@as(u32, 0), closed_completion.bytes_transferred);
-    try std.testing.expectEqual(@as(usize, 0), closed_completion.buffer.used_len);
+    try testing.expectEqual(close_id, closed_completion.operation_id);
+    try testing.expectEqual(types.CompletionStatus.closed, closed_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), closed_completion.err);
+    try testing.expectEqual(@as(u32, 0), closed_completion.bytes_transferred);
+    try testing.expectEqual(@as(usize, 0), closed_completion.buffer.used_len);
 
     // Timeout: idle reads complete as `.timeout`, not EOF.
     // Re-open a fresh pair because we closed the server stream above.
-    var runtime_impl2 = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl2 = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl2.deinit();
     const pair2 = try connectLoopbackPair(&runtime_impl2);
     defer runtime_impl2.closeHandle(pair2.client.handle) catch {};
@@ -1413,11 +1415,11 @@ test "runtime windows iocp cancel/close/timeout semantics are best-effort but st
     const timeout_id = try runtime_impl2.submitStreamRead(pair2.server, read_buffer, 100 * std.time.ns_per_ms);
     _ = try runtime_impl2.wait(1, 2 * std.time.ns_per_s, null);
     const timeout_completion = runtime_impl2.poll().?;
-    try std.testing.expectEqual(timeout_id, timeout_completion.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
-    try std.testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
-    try std.testing.expectEqual(@as(usize, 0), timeout_completion.buffer.used_len);
+    try testing.expectEqual(timeout_id, timeout_completion.operation_id);
+    try testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
+    try testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
+    try testing.expectEqual(@as(usize, 0), timeout_completion.buffer.used_len);
 }
 
 test "runtime windows iocp accept immediate timeout does not leak stream handles" {
@@ -1427,7 +1429,7 @@ test "runtime windows iocp accept immediate timeout does not leak stream handles
 
     var cfg = config.Config.initForTest(2);
     cfg.backend_kind = .windows_iocp;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     const listener = try runtime_impl.listen(.{ .ipv4 = .{ .address = .init(127, 0, 0, 1), .port = 0 } }, .{});
@@ -1437,14 +1439,14 @@ test "runtime windows iocp accept immediate timeout does not leak stream handles
     while (iteration < 8) : (iteration += 1) {
         const accept_id = try runtime_impl.submitAccept(listener, 0);
         const pumped = try runtime_impl.pump(4);
-        try std.testing.expect(pumped >= 1);
+        try testing.expect(pumped >= 1);
 
         const completion = runtime_impl.poll().?;
-        try std.testing.expectEqual(accept_id, completion.operation_id);
-        try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.timeout, completion.status);
-        try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), completion.err);
-        try std.testing.expect(completion.handle == null);
+        try testing.expectEqual(accept_id, completion.operation_id);
+        try testing.expectEqual(types.OperationTag.accept, completion.tag);
+        try testing.expectEqual(types.CompletionStatus.timeout, completion.status);
+        try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), completion.err);
+        try testing.expect(completion.handle == null);
     }
 }
 
@@ -1456,12 +1458,12 @@ test "runtime openFile maps OS errors to stable control-plane errors" {
     var cfg = config.Config.initForTest(4);
     cfg.backend_kind = .threaded;
     cfg.threaded_worker_count = 1;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     const missing_path = "static_io_missing_open.tmp";
     deleteFileBestEffort(missing_path);
-    try std.testing.expectError(error.NotFound, runtime_impl.openFile(missing_path, .{ .read = true }));
+    try testing.expectError(error.NotFound, runtime_impl.openFile(missing_path, .{ .read = true }));
 
     const existing_path = "static_io_existing_open.tmp";
     deleteFileBestEffort(existing_path);
@@ -1469,7 +1471,7 @@ test "runtime openFile maps OS errors to stable control-plane errors" {
     try runtime_impl.closeHandle(created.handle);
     defer deleteFileBestEffort(existing_path);
 
-    try std.testing.expectError(error.AlreadyExists, runtime_impl.openFile(existing_path, .{
+    try testing.expectError(error.AlreadyExists, runtime_impl.openFile(existing_path, .{
         .read = true,
         .write = true,
         .create = true,
@@ -1479,13 +1481,13 @@ test "runtime openFile maps OS errors to stable control-plane errors" {
 
 fn deleteFileBestEffort(path: []const u8) void {
     if (builtin.os.tag == .windows) {
-        const path_w = std.unicode.utf8ToUtf16LeAllocZ(std.testing.allocator, path) catch return;
-        defer std.testing.allocator.free(path_w);
+        const path_w = std.unicode.utf8ToUtf16LeAllocZ(testing.allocator, path) catch return;
+        defer testing.allocator.free(path_w);
         _ = windows_platform.DeleteFileW(path_w.ptr);
         return;
     }
 
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
     const path_z = allocator.alloc(u8, path.len + 1) catch return;
     defer allocator.free(path_z);
     @memcpy(path_z[0..path.len], path);
@@ -1502,7 +1504,7 @@ test "runtime listen maps OS errors to stable control-plane errors" {
     var cfg = config.Config.initForTest(4);
     cfg.backend_kind = .threaded;
     cfg.threaded_worker_count = 1;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     const endpoint_any = types.Endpoint{ .ipv4 = .{ .address = .init(127, 0, 0, 1), .port = 0 } };
@@ -1511,19 +1513,19 @@ test "runtime listen maps OS errors to stable control-plane errors" {
 
     const bound = try runtime_impl.listenerLocalEndpoint(listener);
     switch (bound) {
-        .ipv4 => |ipv4| try std.testing.expect(ipv4.port != 0),
-        .ipv6 => |ipv6| try std.testing.expect(ipv6.port != 0),
+        .ipv4 => |ipv4| try testing.expect(ipv4.port != 0),
+        .ipv6 => |ipv6| try testing.expect(ipv6.port != 0),
     }
 
-    try std.testing.expectError(error.AddressInUse, runtime_impl.listen(bound, .{}));
+    try testing.expectError(error.AddressInUse, runtime_impl.listen(bound, .{}));
 }
 
 test "runtime adopt APIs follow build-option gating" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
     if (!io_caps.os_backends_enabled) {
-        try std.testing.expectError(error.Unsupported, runtime_impl.adoptFile(1, .owned));
+        try testing.expectError(error.Unsupported, runtime_impl.adoptFile(1, .owned));
         return;
     }
 
@@ -1532,27 +1534,27 @@ test "runtime adopt APIs follow build-option gating" {
 }
 
 test "runtime wait supports timeout and cancellation" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
-    try std.testing.expectError(error.Timeout, runtime_impl.wait(1, 0, null));
+    try testing.expectError(error.Timeout, runtime_impl.wait(1, 0, null));
 
     var cancel_source = static_sync.cancel.CancelSource{};
     cancel_source.cancel();
-    try std.testing.expectError(error.Cancelled, runtime_impl.wait(1, null, cancel_source.token()));
+    try testing.expectError(error.Cancelled, runtime_impl.wait(1, null, cancel_source.token()));
 }
 
 test "runtime capabilities include typed operation support" {
-    var runtime_impl = try Runtime.init(std.testing.allocator, config.Config.initForTest(2));
+    var runtime_impl = try Runtime.init(testing.allocator, config.Config.initForTest(2));
     defer runtime_impl.deinit();
 
     const caps = runtime_impl.capabilities();
-    try std.testing.expect(caps.supports_nop);
-    try std.testing.expect(caps.supports_fill);
-    try std.testing.expect(caps.supports_stream_read);
-    try std.testing.expect(caps.supports_stream_write);
-    try std.testing.expect(caps.supports_file_read_at);
-    try std.testing.expect(caps.supports_file_write_at);
+    try testing.expect(caps.supports_nop);
+    try testing.expect(caps.supports_fill);
+    try testing.expect(caps.supports_stream_read);
+    try testing.expect(caps.supports_stream_write);
+    try testing.expect(caps.supports_file_read_at);
+    try testing.expect(caps.supports_file_write_at);
 }
 
 test "runtime backend kind gating matches host support" {
@@ -1577,10 +1579,10 @@ test "runtime backend kind gating matches host support" {
         };
 
         if (expected_supported) {
-            var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+            var runtime_impl = try Runtime.init(testing.allocator, cfg);
             runtime_impl.deinit();
         } else {
-            try std.testing.expectError(error.Unsupported, Runtime.init(std.testing.allocator, cfg));
+            try testing.expectError(error.Unsupported, Runtime.init(testing.allocator, cfg));
         }
     }
 }
@@ -1592,7 +1594,7 @@ test "runtime wait uses backend blocking path on windows iocp" {
 
     var cfg = config.Config.initForTest(2);
     cfg.backend_kind = .windows_iocp;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     var storage: [8]u8 = [_]u8{0} ** 8;
@@ -1604,11 +1606,11 @@ test "runtime wait uses backend blocking path on windows iocp" {
         .byte = 0x33,
     } });
     const waited_count = try runtime_impl.wait(1, 1_000_000_000, null);
-    try std.testing.expect(waited_count >= 1);
+    try testing.expect(waited_count >= 1);
 
     const completion = runtime_impl.poll().?;
-    try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-    try std.testing.expectEqual(@as(u8, 0x33), completion.buffer.bytes[0]);
+    try testing.expectEqual(types.CompletionStatus.success, completion.status);
+    try testing.expectEqual(@as(u8, 0x33), completion.buffer.bytes[0]);
 }
 
 test "runtime wait cancellation wakes windows iocp backend wait" {
@@ -1618,7 +1620,7 @@ test "runtime wait cancellation wakes windows iocp backend wait" {
 
     var cfg = config.Config.initForTest(2);
     cfg.backend_kind = .windows_iocp;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     var cancel_source = static_sync.cancel.CancelSource{};
@@ -1647,10 +1649,10 @@ test "runtime wait cancellation wakes windows iocp backend wait" {
     defer canceller.join();
 
     const start = std.time.Instant.now() catch return;
-    try std.testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
+    try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
     const elapsed_ns = (std.time.Instant.now() catch return).since(start);
-    try std.testing.expect(elapsed_ns >= cancel_delay_ns / 2);
-    try std.testing.expect(elapsed_ns < timeout_ns / 2);
+    try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
+    try testing.expect(elapsed_ns < timeout_ns / 2);
 }
 
 test "runtime wait cancellation wakes threaded backend wait" {
@@ -1660,7 +1662,7 @@ test "runtime wait cancellation wakes threaded backend wait" {
 
     var cfg = config.Config.initForTest(2);
     cfg.backend_kind = .threaded;
-    var runtime_impl = try Runtime.init(std.testing.allocator, cfg);
+    var runtime_impl = try Runtime.init(testing.allocator, cfg);
     defer runtime_impl.deinit();
 
     var cancel_source = static_sync.cancel.CancelSource{};
@@ -1691,10 +1693,10 @@ test "runtime wait cancellation wakes threaded backend wait" {
     defer canceller.join();
 
     const start = std.time.Instant.now() catch return;
-    try std.testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
+    try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
     const elapsed_ns = (std.time.Instant.now() catch return).since(start);
-    try std.testing.expect(elapsed_ns >= cancel_delay_ns / 2);
-    try std.testing.expect(elapsed_ns < timeout_ns / 2);
+    try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
+    try testing.expect(elapsed_ns < timeout_ns / 2);
 }
 
 test "runtime wait cancellation wakes linux io_uring backend wait" {
@@ -1704,7 +1706,7 @@ test "runtime wait cancellation wakes linux io_uring backend wait" {
 
     var cfg = config.Config.initForTest(2);
     cfg.backend_kind = .linux_io_uring;
-    var runtime_impl = Runtime.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var runtime_impl = Runtime.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1738,10 +1740,10 @@ test "runtime wait cancellation wakes linux io_uring backend wait" {
     defer canceller.join();
 
     const start = std.time.Instant.now() catch return error.SkipZigTest;
-    try std.testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
+    try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
     const elapsed_ns = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
-    try std.testing.expect(elapsed_ns >= cancel_delay_ns / 2);
-    try std.testing.expect(elapsed_ns < timeout_ns / 2);
+    try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
+    try testing.expect(elapsed_ns < timeout_ns / 2);
 }
 
 test "runtime wait cancellation wakes bsd kqueue backend wait" {
@@ -1751,7 +1753,7 @@ test "runtime wait cancellation wakes bsd kqueue backend wait" {
 
     var cfg = config.Config.initForTest(2);
     cfg.backend_kind = .bsd_kqueue;
-    var runtime_impl = Runtime.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var runtime_impl = Runtime.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1785,8 +1787,8 @@ test "runtime wait cancellation wakes bsd kqueue backend wait" {
     defer canceller.join();
 
     const start = std.time.Instant.now() catch return error.SkipZigTest;
-    try std.testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
+    try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
     const elapsed_ns = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
-    try std.testing.expect(elapsed_ns >= cancel_delay_ns / 2);
-    try std.testing.expect(elapsed_ns < timeout_ns / 2);
+    try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
+    try testing.expect(elapsed_ns < timeout_ns / 2);
 }

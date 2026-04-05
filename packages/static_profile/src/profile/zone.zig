@@ -6,6 +6,7 @@
 //!
 //! Thread safety: value type; no shared state.
 const std = @import("std");
+const assert = std.debug.assert;
 
 pub const ZoneToken = struct {
     name: []const u8,
@@ -15,5 +16,5 @@ pub const ZoneToken = struct {
 
 // ZoneToken carries name (slice = 2 words) + tid + pid; must never collapse to zero size.
 comptime {
-    std.debug.assert(@sizeOf(ZoneToken) > 0);
+    assert(@sizeOf(ZoneToken) > 0);
 }

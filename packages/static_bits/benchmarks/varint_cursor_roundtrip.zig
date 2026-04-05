@@ -1,6 +1,7 @@
 //! `static_bits` cursor-based varint roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_bits = @import("static_bits");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -65,8 +66,8 @@ const VarintContext = struct {
         context.sleb_index = (context.sleb_index + 1) % sleb_values.len;
         const sleb_bits: u64 = @bitCast(sleb_decoded);
         context.sink = bench.case.blackBox(uleb_decoded ^ sleb_bits);
-        std.debug.assert(uleb_reader.position() == uleb_len);
-        std.debug.assert(sleb_reader.position() == sleb_len);
+        assert(uleb_reader.position() == uleb_len);
+        assert(sleb_reader.position() == sleb_len);
     }
 };
 
@@ -119,11 +120,11 @@ fn validateSemanticPreflight() void {
     static_bits.varint.writeUleb128(&writer, 624485) catch unreachable;
     var reader = static_bits.cursor.ByteReader.init(bytes[0..writer.position()]);
     const uleb_value = static_bits.varint.readUleb128(&reader) catch unreachable;
-    std.debug.assert(uleb_value == 624485);
+    assert(uleb_value == 624485);
 
     writer = static_bits.cursor.ByteWriter.init(&bytes);
     static_bits.varint.writeSleb128(&writer, -624485) catch unreachable;
     reader = static_bits.cursor.ByteReader.init(bytes[0..writer.position()]);
     const sleb_value = static_bits.varint.readSleb128(&reader) catch unreachable;
-    std.debug.assert(sleb_value == -624485);
+    assert(sleb_value == -624485);
 }

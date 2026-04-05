@@ -9,6 +9,8 @@
 //! are enforced via `std.debug.assert` — programmer errors per agents.md §3.10.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const pi: f32 = 3.14159265358979323846;
 pub const tau: f32 = 2.0 * pi;
@@ -32,7 +34,7 @@ pub inline fn lerp(a: f32, b: f32, t: f32) f32 {
 /// Inverse lerp: find t such that lerp(a, b, t) == v.
 /// Precondition: a != b.
 pub inline fn inverseLerp(a: f32, b: f32, v: f32) f32 {
-    std.debug.assert(a != b);
+    assert(a != b);
     return (v - a) / (b - a);
 }
 
@@ -51,7 +53,7 @@ pub inline fn remap(
 /// Clamp val to [min_val, max_val].
 /// Precondition: min_val <= max_val.
 pub inline fn clamp(val: f32, min_val: f32, max_val: f32) f32 {
-    std.debug.assert(min_val <= max_val);
+    assert(min_val <= max_val);
     return @max(min_val, @min(max_val, val));
 }
 
@@ -63,7 +65,7 @@ pub inline fn saturate(val: f32) f32 {
 /// Hermite interpolation (C1 continuous).
 /// Precondition: edge0 < edge1.
 pub inline fn smoothstep(edge0: f32, edge1: f32, x: f32) f32 {
-    std.debug.assert(edge0 < edge1);
+    assert(edge0 < edge1);
     const t = saturate((x - edge0) / (edge1 - edge0));
     return t * t * (3.0 - 2.0 * t);
 }
@@ -71,7 +73,7 @@ pub inline fn smoothstep(edge0: f32, edge1: f32, x: f32) f32 {
 /// Perlin improved interpolation (C2 continuous).
 /// Precondition: edge0 < edge1.
 pub inline fn smootherstep(edge0: f32, edge1: f32, x: f32) f32 {
-    std.debug.assert(edge0 < edge1);
+    assert(edge0 < edge1);
     const t = saturate((x - edge0) / (edge1 - edge0));
     return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
@@ -96,71 +98,71 @@ pub inline fn step(edge: f32, x: f32) f32 {
 /// Floored modulo. Result has same sign as y.
 /// Precondition: y != 0.
 pub inline fn mod(x: f32, y: f32) f32 {
-    std.debug.assert(y != 0.0);
+    assert(y != 0.0);
     return x - y * @floor(x / y);
 }
 
 test "radians/degrees roundtrip" {
-    try std.testing.expectApproxEqAbs(pi, toRadians(180.0), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 180.0), toDegrees(pi), epsilon);
+    try testing.expectApproxEqAbs(pi, toRadians(180.0), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 180.0), toDegrees(pi), epsilon);
 }
 
 test "lerp at 0, 0.5, 1 and extrapolation" {
     // Uses approx comparison: the `a + (b - a) * t` form is not
     // endpoint-exact at t=1 for arbitrary inputs (see doc comment).
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), lerp(0.0, 10.0, 0.0), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 5.0), lerp(0.0, 10.0, 0.5), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 10.0), lerp(0.0, 10.0, 1.0), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, -5.0), lerp(0.0, 10.0, -0.5), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 15.0), lerp(0.0, 10.0, 1.5), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), lerp(0.0, 10.0, 0.0), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 5.0), lerp(0.0, 10.0, 0.5), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 10.0), lerp(0.0, 10.0, 1.0), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, -5.0), lerp(0.0, 10.0, -0.5), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 15.0), lerp(0.0, 10.0, 1.5), epsilon);
 }
 
 test "inverseLerp" {
-    try std.testing.expectEqual(@as(f32, 0.5), inverseLerp(0.0, 10.0, 5.0));
+    try testing.expectEqual(@as(f32, 0.5), inverseLerp(0.0, 10.0, 5.0));
 }
 
 test "clamp boundaries" {
-    try std.testing.expectEqual(@as(f32, 0.5), clamp(0.5, 0.0, 1.0));
-    try std.testing.expectEqual(@as(f32, 0.0), clamp(-1.0, 0.0, 1.0));
-    try std.testing.expectEqual(@as(f32, 1.0), clamp(2.0, 0.0, 1.0));
+    try testing.expectEqual(@as(f32, 0.5), clamp(0.5, 0.0, 1.0));
+    try testing.expectEqual(@as(f32, 0.0), clamp(-1.0, 0.0, 1.0));
+    try testing.expectEqual(@as(f32, 1.0), clamp(2.0, 0.0, 1.0));
 }
 
 test "saturate" {
-    try std.testing.expectEqual(@as(f32, 0.0), saturate(-1.0));
-    try std.testing.expectEqual(@as(f32, 0.5), saturate(0.5));
-    try std.testing.expectEqual(@as(f32, 1.0), saturate(2.0));
+    try testing.expectEqual(@as(f32, 0.0), saturate(-1.0));
+    try testing.expectEqual(@as(f32, 0.5), saturate(0.5));
+    try testing.expectEqual(@as(f32, 1.0), saturate(2.0));
 }
 
 test "smoothstep at edges and midpoint" {
-    try std.testing.expectEqual(@as(f32, 0.0), smoothstep(0.0, 1.0, 0.0));
-    try std.testing.expectEqual(@as(f32, 0.5), smoothstep(0.0, 1.0, 0.5));
-    try std.testing.expectEqual(@as(f32, 1.0), smoothstep(0.0, 1.0, 1.0));
+    try testing.expectEqual(@as(f32, 0.0), smoothstep(0.0, 1.0, 0.0));
+    try testing.expectEqual(@as(f32, 0.5), smoothstep(0.0, 1.0, 0.5));
+    try testing.expectEqual(@as(f32, 1.0), smoothstep(0.0, 1.0, 1.0));
 }
 
 test "sign with negative/zero/positive/NaN" {
-    try std.testing.expectEqual(@as(f32, -1.0), sign(-5.0));
-    try std.testing.expectEqual(@as(f32, 0.0), sign(0.0));
-    try std.testing.expectEqual(@as(f32, 1.0), sign(5.0));
-    try std.testing.expectEqual(@as(f32, 0.0), sign(std.math.nan(f32)));
+    try testing.expectEqual(@as(f32, -1.0), sign(-5.0));
+    try testing.expectEqual(@as(f32, 0.0), sign(0.0));
+    try testing.expectEqual(@as(f32, 1.0), sign(5.0));
+    try testing.expectEqual(@as(f32, 0.0), sign(std.math.nan(f32)));
 }
 
 test "fract with positive/negative/integer" {
-    try std.testing.expectApproxEqAbs(@as(f32, 0.7), fract(3.7), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), fract(3.0), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.8), fract(-1.2), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 0.7), fract(3.7), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), fract(3.0), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 0.8), fract(-1.2), epsilon);
 }
 
 test "step" {
-    try std.testing.expectEqual(@as(f32, 0.0), step(0.5, 0.0));
-    try std.testing.expectEqual(@as(f32, 1.0), step(0.5, 0.5));
-    try std.testing.expectEqual(@as(f32, 1.0), step(0.5, 1.0));
+    try testing.expectEqual(@as(f32, 0.0), step(0.5, 0.0));
+    try testing.expectEqual(@as(f32, 1.0), step(0.5, 0.5));
+    try testing.expectEqual(@as(f32, 1.0), step(0.5, 1.0));
 }
 
 test "mod with positive/negative" {
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), mod(11.0, 10.0), epsilon);
-    try std.testing.expectApproxEqAbs(@as(f32, 9.0), mod(-1.0, 10.0), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), mod(11.0, 10.0), epsilon);
+    try testing.expectApproxEqAbs(@as(f32, 9.0), mod(-1.0, 10.0), epsilon);
 }
 
 test "remap" {
-    try std.testing.expectEqual(@as(f32, 50.0), remap(5.0, 0.0, 10.0, 0.0, 100.0));
+    try testing.expectEqual(@as(f32, 50.0), remap(5.0, 0.0, 10.0, 0.0, 100.0));
 }

@@ -1,6 +1,8 @@
 //! Threaded backend for legacy `nop`/`fill` operations.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const io_caps = @import("caps.zig");
 const static_queues = @import("static_queues");
@@ -175,8 +177,8 @@ pub const ThreadedBackend = struct {
             error.Overflow => return error.Overflow,
         };
         if (cfg.backend_kind == .threaded and cfg.threaded_worker_count == 0) return error.InvalidConfig;
-        std.debug.assert(cfg.max_in_flight > 0);
-        std.debug.assert(cfg.threaded_worker_count > 0);
+        assert(cfg.max_in_flight > 0);
+        assert(cfg.threaded_worker_count > 0);
 
         var wsa_started = false;
         if (comptime builtin.os.tag == .windows) {
@@ -357,8 +359,8 @@ pub const ThreadedBackend = struct {
         errdefer freeSlotLocked(shared, slot_index);
 
         var slot = &shared.slots[slot_index];
-        std.debug.assert(slot.state == .free);
-        std.debug.assert(slot.generation != 0);
+        assert(slot.state == .free);
+        assert(slot.generation != 0);
         const operation_id = encodeOperationId(slot_index, slot.generation);
         slot.state = .pending;
         slot.operation_id = operation_id;
@@ -375,7 +377,7 @@ pub const ThreadedBackend = struct {
 
     /// Moves worker completions into the public completion queue.
     pub fn pump(self: *ThreadedBackend, max_completions: u32) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         const shared = self.shared;
         shared.mutex.lock();
         defer shared.mutex.unlock();
@@ -461,7 +463,7 @@ pub const ThreadedBackend = struct {
         const slot_index = shared.completed.tryPop() catch return null;
         const slot = &shared.slots[slot_index];
         if (slot.state != .completed) {
-            std.debug.assert(slot.state == .completed);
+            assert(slot.state == .completed);
             return null;
         }
         const completion = slot.completion;
@@ -663,25 +665,25 @@ pub const ThreadedBackend = struct {
     }
 
     fn allocSlotLocked(shared: *Shared) error{WouldBlock}!u32 {
-        std.debug.assert(shared.free_len <= shared.free_slots.len);
+        assert(shared.free_len <= shared.free_slots.len);
         if (shared.free_len == 0) return error.WouldBlock;
         shared.free_len -= 1;
         const slot_index = shared.free_slots[shared.free_len];
-        std.debug.assert(slot_index < shared.slots.len);
-        std.debug.assert(shared.slots[slot_index].state == .free);
+        assert(slot_index < shared.slots.len);
+        assert(shared.slots[slot_index].state == .free);
         return slot_index;
     }
 
     fn freeSlotLocked(shared: *Shared, slot_index: u32) void {
-        std.debug.assert(slot_index < shared.slots.len);
-        std.debug.assert(shared.free_len < shared.free_slots.len);
+        assert(slot_index < shared.slots.len);
+        assert(shared.free_len < shared.free_slots.len);
         const next_generation = nextGeneration(shared.slots[slot_index].generation);
         shared.slots[slot_index] = .{
             .generation = next_generation,
         };
         shared.free_slots[shared.free_len] = slot_index;
         shared.free_len += 1;
-        std.debug.assert(shared.free_len <= shared.free_slots.len);
+        assert(shared.free_len <= shared.free_slots.len);
     }
 
     fn executeOperation(operation_id: types.OperationId, operation: types.Operation) types.Completion {
@@ -836,7 +838,7 @@ fn executeStreamRead(operation_id: types.OperationId, op: @FieldType(types.Opera
     var buffer = op.buffer;
     buffer.used_len = 0;
     const request_len: u32 = @intCast(buffer.bytes.len);
-    std.debug.assert(request_len > 0);
+    assert(request_len > 0);
 
     return switch (builtin.os.tag) {
         .windows => executeStreamReadWindows(operation_id, op, stream_native, buffer, request_len),
@@ -853,7 +855,7 @@ fn executeStreamWrite(operation_id: types.OperationId, op: @FieldType(types.Oper
         return ThreadedBackend.makeSimpleCompletion(operation_id, .{ .stream_write = op }, .invalid_input, .invalid_input);
     }
     const request_len: u32 = op.buffer.used_len;
-    std.debug.assert(request_len > 0);
+    assert(request_len > 0);
 
     return switch (builtin.os.tag) {
         .windows => executeStreamWriteWindows(operation_id, op, stream_native, request_len),
@@ -1435,7 +1437,7 @@ fn executeFileWriteAt(operation_id: types.OperationId, op: @FieldType(types.Oper
         return ThreadedBackend.makeSimpleCompletion(operation_id, .{ .file_write_at = op }, .invalid_input, .invalid_input);
     }
     const request_len: u32 = op.buffer.used_len;
-    std.debug.assert(request_len > 0);
+    assert(request_len > 0);
 
     return switch (builtin.os.tag) {
         .windows => executeFileWriteAtWindows(operation_id, op, native_handle, request_len),
@@ -1594,11 +1596,11 @@ test "threaded backend deterministic parity with single worker" {
     cfg.threaded_worker_count = 1;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     var storage_a: [8]u8 = [_]u8{0} ** 8;
@@ -1618,16 +1620,16 @@ test "threaded backend deterministic parity with single worker" {
     while (attempts < 8 and pumped_total < 2) : (attempts += 1) {
         pumped_total += try backend_impl.waitForCompletions(2 - pumped_total, 2 * std.time.ns_per_s);
     }
-    try std.testing.expect(pumped_total >= 2);
+    try testing.expect(pumped_total >= 2);
 
     const first = backend_impl.poll().?;
     const second = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
-    try std.testing.expectEqual(id_a, first.operation_id);
-    try std.testing.expectEqual(id_b, second.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.success, first.status);
-    try std.testing.expectEqual(types.CompletionStatus.success, second.status);
-    try std.testing.expectEqual(@as(u8, 0xBC), first.buffer.bytes[0]);
+    try testing.expect(backend_impl.poll() == null);
+    try testing.expectEqual(id_a, first.operation_id);
+    try testing.expectEqual(id_b, second.operation_id);
+    try testing.expectEqual(types.CompletionStatus.success, first.status);
+    try testing.expectEqual(types.CompletionStatus.success, second.status);
+    try testing.expectEqual(@as(u8, 0xBC), first.buffer.bytes[0]);
 }
 
 test "threaded backend returns WouldBlock when max_in_flight is exhausted" {
@@ -1638,17 +1640,17 @@ test "threaded backend returns WouldBlock when max_in_flight is exhausted" {
     cfg.completion_queue_capacity = 2;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     var storage: [8]u8 = [_]u8{0} ** 8;
     const buf = types.Buffer{ .bytes = &storage };
     _ = try backend_impl.submit(.{ .nop = buf });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf }));
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf }));
 
     try pumpUntilReady(&backend_impl, 1);
     _ = backend_impl.poll().?;
@@ -1661,12 +1663,12 @@ test "threaded backend supports connect/accept and stream read/write" {
     cfg.threaded_worker_count = 2;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const windows = std.os.windows;
@@ -1679,20 +1681,20 @@ test "threaded backend supports connect/accept and stream read/write" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAnyWindows.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     var name: windows.ws2_32.sockaddr.in = undefined;
     var name_len: i32 = @sizeOf(windows.ws2_32.sockaddr.in);
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.getsockname(listen_sock, @ptrCast(&name), &name_len));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.getsockname(listen_sock, @ptrCast(&name), &name_len));
     const port: u16 = std.mem.bigToNative(u16, name.port);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intFromPtr(listen_sock), true);
@@ -1726,15 +1728,15 @@ test "threaded backend supports connect/accept and stream read/write" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             seen_accept = true;
-            try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.OperationTag.accept, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         } else if (completion.operation_id == connect_id) {
             seen_connect = true;
-            try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.OperationTag.connect, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         }
     }
-    try std.testing.expect(seen_accept and seen_connect);
+    try testing.expect(seen_accept and seen_connect);
 
     var write_bytes: [5]u8 = .{ 'h', 'e', 'l', 'l', 'o' };
     var write_buf = types.Buffer{ .bytes = &write_bytes };
@@ -1762,18 +1764,18 @@ test "threaded backend supports connect/accept and stream read/write" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
         } else if (completion.operation_id == read_id) {
             got_read = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
-            try std.testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
         }
     }
-    try std.testing.expect(got_write and got_read);
+    try testing.expect(got_write and got_read);
 
     backend_impl.notifyHandleClosed(server_stream.handle);
     backend_impl.notifyHandleClosed(client_stream.handle);
@@ -1785,12 +1787,12 @@ test "threaded backend close of pending accept completes closed" {
     cfg.threaded_worker_count = 1;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const windows = std.os.windows;
@@ -1803,14 +1805,14 @@ test "threaded backend close of pending accept completes closed" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAnyWindows.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intFromPtr(listen_sock), true);
@@ -1827,11 +1829,11 @@ test "threaded backend close of pending accept completes closed" {
 
     try pumpUntilReady(&backend_impl, 1);
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(accept_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(accept_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 }
 
 test "threaded backend close of in-flight stream_read completes closed" {
@@ -1840,12 +1842,12 @@ test "threaded backend close of in-flight stream_read completes closed" {
     cfg.threaded_worker_count = 1;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const windows = std.os.windows;
@@ -1858,21 +1860,21 @@ test "threaded backend close of in-flight stream_read completes closed" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
     defer _ = windows.ws2_32.closesocket(listen_sock);
 
     var bind_addr = SockaddrAnyWindows.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     var name: windows.ws2_32.sockaddr.in = undefined;
     var name_len: i32 = @sizeOf(windows.ws2_32.sockaddr.in);
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.getsockname(listen_sock, @ptrCast(&name), &name_len));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.getsockname(listen_sock, @ptrCast(&name), &name_len));
     const port: u16 = std.mem.bigToNative(u16, name.port);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const client_sock = windows.ws2_32.WSASocketW(
         windows.ws2_32.AF.INET,
@@ -1882,17 +1884,17 @@ test "threaded backend close of in-flight stream_read completes closed" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(client_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(client_sock != windows.ws2_32.INVALID_SOCKET);
     errdefer _ = windows.ws2_32.closesocket(client_sock);
 
     var remote_addr = SockaddrAnyWindows.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = port,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.connect(client_sock, remote_addr.ptr(), remote_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.connect(client_sock, remote_addr.ptr(), remote_addr.len()));
 
     const accepted = windows.ws2_32.accept(listen_sock, null, null);
-    try std.testing.expect(accepted != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(accepted != windows.ws2_32.INVALID_SOCKET);
     errdefer _ = windows.ws2_32.closesocket(accepted);
 
     const server_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
@@ -1914,11 +1916,11 @@ test "threaded backend close of in-flight stream_read completes closed" {
 
     try pumpUntilReady(&backend_impl, 1);
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1929,12 +1931,12 @@ test "threaded backend close of pending stream_write completes closed" {
     cfg.threaded_worker_count = 1;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const windows = std.os.windows;
@@ -1947,21 +1949,21 @@ test "threaded backend close of pending stream_write completes closed" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
     defer _ = windows.ws2_32.closesocket(listen_sock);
 
     var bind_addr = SockaddrAnyWindows.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     var name: windows.ws2_32.sockaddr.in = undefined;
     var name_len: i32 = @sizeOf(windows.ws2_32.sockaddr.in);
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.getsockname(listen_sock, @ptrCast(&name), &name_len));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.getsockname(listen_sock, @ptrCast(&name), &name_len));
     const port: u16 = std.mem.bigToNative(u16, name.port);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const client_sock = windows.ws2_32.WSASocketW(
         windows.ws2_32.AF.INET,
@@ -1971,17 +1973,17 @@ test "threaded backend close of pending stream_write completes closed" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(client_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(client_sock != windows.ws2_32.INVALID_SOCKET);
     errdefer _ = windows.ws2_32.closesocket(client_sock);
 
     var remote_addr = SockaddrAnyWindows.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = port,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.connect(client_sock, remote_addr.ptr(), remote_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.connect(client_sock, remote_addr.ptr(), remote_addr.len()));
 
     const accepted = windows.ws2_32.accept(listen_sock, null, null);
-    try std.testing.expect(accepted != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(accepted != windows.ws2_32.INVALID_SOCKET);
     errdefer _ = windows.ws2_32.closesocket(accepted);
 
     const server_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
@@ -2019,15 +2021,15 @@ test "threaded backend close of pending stream_write completes closed" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == read_id) {
             got_read = true;
-            try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-            try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+            try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+            try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
         } else if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-            try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+            try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+            try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
         }
     }
-    try std.testing.expect(got_read and got_write);
+    try testing.expect(got_read and got_write);
 }
 
 test "threaded backend supports file read/write via adopted handle" {
@@ -2036,18 +2038,18 @@ test "threaded backend supports file read/write via adopted handle" {
     cfg.threaded_worker_count = 1;
 
     if (!io_caps.threadedBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, ThreadedBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, ThreadedBackend.init(testing.allocator, cfg));
         return;
     }
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
-    var backend_impl = try ThreadedBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const filename_utf8 = "static_io_threaded_file_io.tmp";
 
     var filename_w: [64:0]u16 = undefined;
-    std.debug.assert(filename_utf8.len + 1 <= filename_w.len);
+    assert(filename_utf8.len + 1 <= filename_w.len);
     for (filename_utf8, 0..) |byte, index| {
         filename_w[index] = byte;
     }
@@ -2070,7 +2072,7 @@ test "threaded backend supports file read/write via adopted handle" {
         flags_and_attributes,
         null,
     );
-    try std.testing.expect(native_handle != windows.INVALID_HANDLE_VALUE);
+    try testing.expect(native_handle != windows.INVALID_HANDLE_VALUE);
 
     const file_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(file_handle, .file, @intFromPtr(native_handle), true);
@@ -2089,11 +2091,11 @@ test "threaded backend supports file read/write via adopted handle" {
     } });
     try pumpUntilReady(&backend_impl, 1);
     const write_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, write_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_write_at, write_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, write_completion.status);
-    try std.testing.expectEqual(@as(u32, 4), write_completion.bytes_transferred);
-    try std.testing.expectEqual(@as(?types.Handle, file_handle), write_completion.handle);
+    try testing.expectEqual(write_id, write_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_write_at, write_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, write_completion.status);
+    try testing.expectEqual(@as(u32, 4), write_completion.bytes_transferred);
+    try testing.expectEqual(@as(?types.Handle, file_handle), write_completion.handle);
 
     var read_bytes: [8]u8 = [_]u8{0} ** 8;
     const read_buf = types.Buffer{ .bytes = &read_bytes };
@@ -2105,11 +2107,11 @@ test "threaded backend supports file read/write via adopted handle" {
     } });
     try pumpUntilReady(&backend_impl, 1);
     const read_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(read_id, read_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_read_at, read_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, read_completion.status);
-    try std.testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
-    try std.testing.expectEqual(@as(?types.Handle, file_handle), read_completion.handle);
+    try testing.expectEqual(read_id, read_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_read_at, read_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, read_completion.status);
+    try testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
+    try testing.expectEqual(@as(?types.Handle, file_handle), read_completion.handle);
 }
 
 fn pumpUntilReady(backend_impl: *ThreadedBackend, target: u32) !void {
@@ -2119,7 +2121,7 @@ fn pumpUntilReady(backend_impl: *ThreadedBackend, target: u32) !void {
         pumped_total += try backend_impl.pump(target - pumped_total);
         std.Thread.yield() catch {};
     }
-    try std.testing.expect(pumped_total >= target);
+    try testing.expect(pumped_total >= target);
 }
 
 extern "kernel32" fn DeleteFileW(lpFileName: std.os.windows.LPCWSTR) callconv(.winapi) std.os.windows.BOOL;

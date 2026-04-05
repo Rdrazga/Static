@@ -1,6 +1,8 @@
 //! Bounded benchmark history records with environment metadata.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const config = @import("config.zig");
 const baseline = @import("baseline.zig");
@@ -57,13 +59,13 @@ pub const HistoryAppendBuffers = struct {
 };
 
 comptime {
-    std.debug.assert(history_version == 1);
-    std.debug.assert(std.meta.fields(HistoryAction).len == 3);
+    assert(history_version == 1);
+    assert(std.meta.fields(HistoryAction).len == 3);
 }
 
 pub fn captureEnvironmentMetadata(options: CaptureEnvironmentOptions) EnvironmentMetadataView {
-    std.debug.assert(options.package_name.len > 0);
-    std.debug.assert(options.baseline_path.len > 0);
+    assert(options.package_name.len > 0);
+    assert(options.baseline_path.len > 0);
 
     return .{
         .package_name = options.package_name,
@@ -691,19 +693,19 @@ test "history record json round-trips with environment metadata" {
     var decoded_cases: [2]stats.BenchmarkStats = undefined;
     var string_buffer: [256]u8 = undefined;
     const decoded = try decodeRecordJson(encoded, &decoded_cases, &string_buffer);
-    try std.testing.expectEqual(HistoryAction.compared, decoded.action);
-    try std.testing.expectEqual(@as(u64, 1234), decoded.timestamp_unix_ms);
-    try std.testing.expect(decoded.comparison_passed.?);
-    try std.testing.expectEqualStrings("static_sync", decoded.environment.package_name);
-    try std.testing.expectEqualStrings("devbox", decoded.environment.host_label.?);
-    try std.testing.expectEqualStrings("event_try_wait_signaled", decoded.cases[0].case_name);
+    try testing.expectEqual(HistoryAction.compared, decoded.action);
+    try testing.expectEqual(@as(u64, 1234), decoded.timestamp_unix_ms);
+    try testing.expect(decoded.comparison_passed.?);
+    try testing.expectEqualStrings("static_sync", decoded.environment.package_name);
+    try testing.expectEqualStrings("devbox", decoded.environment.host_label.?);
+    try testing.expectEqualStrings("event_try_wait_signaled", decoded.cases[0].case_name);
 }
 
 test "appendRecordFile bounds retained history and compatibility filtering works" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -804,11 +806,11 @@ test "appendRecordFile bounds retained history and compatibility filtering works
         },
     )).?;
 
-    try std.testing.expectEqual(@as(u64, 3), latest.timestamp_unix_ms);
+    try testing.expectEqual(@as(u64, 3), latest.timestamp_unix_ms);
 
     const stored = try tmp_dir.dir.readFile(io, "history.jsonl", &read_file);
     var line_count: usize = 0;
     var tokenizer = std.mem.tokenizeScalar(u8, stored, '\n');
     while (tokenizer.next()) |_| line_count += 1;
-    try std.testing.expectEqual(@as(usize, 2), line_count);
+    try testing.expectEqual(@as(usize, 2), line_count);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const concepts = @import("../concepts/root.zig");
 
 pub fn runWorkStealingDequeConformance(comptime D: type, allocator: std.mem.Allocator, capacity: usize) !void {
@@ -10,13 +11,13 @@ pub fn runWorkStealingDequeConformance(comptime D: type, allocator: std.mem.Allo
 
     try deque.pushBottom(@as(T, 1));
     try deque.pushBottom(@as(T, 2));
-    try std.testing.expectEqual(@as(T, 1), try deque.stealTop());
-    try std.testing.expectEqual(@as(T, 2), try deque.popBottom());
-    try std.testing.expectError(error.WouldBlock, deque.popBottom());
+    try testing.expectEqual(@as(T, 1), try deque.stealTop());
+    try testing.expectEqual(@as(T, 2), try deque.popBottom());
+    try testing.expectError(error.WouldBlock, deque.popBottom());
 
     var i: usize = 0;
     while (i < capacity) : (i += 1) {
         try deque.pushBottom(@as(T, @intCast(i)));
     }
-    try std.testing.expectError(error.WouldBlock, deque.pushBottom(@as(T, 9)));
+    try testing.expectError(error.WouldBlock, deque.pushBottom(@as(T, 9)));
 }

@@ -9,6 +9,8 @@
 //! hexadecimal. Bare hexadecimal therefore requires at least one `a-f` digit.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const rng = @import("static_rng");
 
@@ -32,7 +34,7 @@ const named_seed_tag: u64 = 0x53545f4c4142454c; // "ST_LABEL"
 comptime {
     core.errors.assertVocabularySubset(SeedParseError);
     core.errors.assertVocabularySubset(SeedDeriveError);
-    std.debug.assert(split_seed_tag != named_seed_tag);
+    assert(split_seed_tag != named_seed_tag);
 }
 
 /// Stable deterministic seed wrapper.
@@ -65,8 +67,8 @@ pub fn parseSeed(text: []const u8) SeedParseError!Seed {
 pub fn formatSeed(seed: Seed) [formatted_seed_len]u8 {
     var buffer: [formatted_seed_len]u8 = undefined;
     const formatted = std.fmt.bufPrint(&buffer, "0x{x:0>16}", .{seed.value}) catch unreachable;
-    std.debug.assert(formatted.len == buffer.len);
-    std.debug.assert(formatted[0] == '0');
+    assert(formatted.len == buffer.len);
+    assert(formatted[0] == '0');
     return buffer;
 }
 
@@ -86,13 +88,13 @@ pub fn deriveNamedSeed(seed: Seed, label: []const u8) SeedDeriveError!Seed {
 }
 
 fn hasHexPrefix(text: []const u8) bool {
-    std.debug.assert(text.len > 0);
+    assert(text.len > 0);
     if (text.len < 2) return false;
     return text[0] == '0' and (text[1] == 'x' or text[1] == 'X');
 }
 
 fn isDecimalText(text: []const u8) bool {
-    std.debug.assert(text.len > 0);
+    assert(text.len > 0);
 
     for (text) |byte| {
         if (!std.ascii.isDigit(byte)) return false;
@@ -101,7 +103,7 @@ fn isDecimalText(text: []const u8) bool {
 }
 
 fn isBareHexText(text: []const u8) bool {
-    std.debug.assert(text.len > 0);
+    assert(text.len > 0);
     if (text.len > 16) return false;
 
     var saw_hex_alpha = false;
@@ -115,7 +117,7 @@ fn isBareHexText(text: []const u8) bool {
 }
 
 fn parseDecimalDigits(text: []const u8) SeedParseError!Seed {
-    std.debug.assert(text.len > 0);
+    assert(text.len > 0);
     const parsed = std.fmt.parseUnsigned(u64, text, 10) catch |err| return switch (err) {
         error.InvalidCharacter => error.InvalidInput,
         error.Overflow => error.Overflow,
@@ -134,28 +136,28 @@ fn parseHexDigits(text: []const u8) SeedParseError!Seed {
 }
 
 test "parseSeed accepts decimal and hexadecimal formats" {
-    try std.testing.expectEqual(@as(u64, 42), (try parseSeed("42")).value);
-    try std.testing.expectEqual(@as(u64, 42), (try parseSeed("0x2a")).value);
-    try std.testing.expectEqual(@as(u64, 42), (try parseSeed("0X2A")).value);
-    try std.testing.expectEqual(@as(u64, 0xdeadbeef), (try parseSeed("deadbeef")).value);
-    try std.testing.expectEqual(@as(u64, 0xDEADBEEF), (try parseSeed("DEADBEEF")).value);
-    try std.testing.expectEqual(std.math.maxInt(u64), (try parseSeed("0xffffffffffffffff")).value);
-    try std.testing.expectEqual(std.math.maxInt(u64), (try parseSeed("ffffffffffffffff")).value);
+    try testing.expectEqual(@as(u64, 42), (try parseSeed("42")).value);
+    try testing.expectEqual(@as(u64, 42), (try parseSeed("0x2a")).value);
+    try testing.expectEqual(@as(u64, 42), (try parseSeed("0X2A")).value);
+    try testing.expectEqual(@as(u64, 0xdeadbeef), (try parseSeed("deadbeef")).value);
+    try testing.expectEqual(@as(u64, 0xDEADBEEF), (try parseSeed("DEADBEEF")).value);
+    try testing.expectEqual(std.math.maxInt(u64), (try parseSeed("0xffffffffffffffff")).value);
+    try testing.expectEqual(std.math.maxInt(u64), (try parseSeed("ffffffffffffffff")).value);
 }
 
 test "parseSeed rejects empty or malformed input" {
-    try std.testing.expectError(error.InvalidInput, parseSeed(""));
-    try std.testing.expectError(error.InvalidInput, parseSeed("0x"));
-    try std.testing.expectError(error.InvalidInput, parseSeed("xyz"));
-    try std.testing.expectError(error.Overflow, parseSeed("18446744073709551616"));
-    try std.testing.expectError(error.Overflow, parseSeed("0x10000000000000000"));
+    try testing.expectError(error.InvalidInput, parseSeed(""));
+    try testing.expectError(error.InvalidInput, parseSeed("0x"));
+    try testing.expectError(error.InvalidInput, parseSeed("xyz"));
+    try testing.expectError(error.Overflow, parseSeed("18446744073709551616"));
+    try testing.expectError(error.Overflow, parseSeed("0x10000000000000000"));
 }
 
 test "formatSeed round-trips through parseSeed" {
     const seed = Seed.init(0x0123_4567_89ab_cdef);
     const formatted = formatSeed(seed);
     const reparsed = try parseSeed(&formatted);
-    try std.testing.expectEqual(seed.value, reparsed.value);
+    try testing.expectEqual(seed.value, reparsed.value);
 }
 
 test "splitSeed is stable and stream-separated" {
@@ -164,8 +166,8 @@ test "splitSeed is stable and stream-separated" {
     const child_b = splitSeed(base_seed, 1);
     const child_c = splitSeed(base_seed, 2);
 
-    try std.testing.expectEqual(child_a.value, child_b.value);
-    try std.testing.expect(child_a.value != child_c.value);
+    try testing.expectEqual(child_a.value, child_b.value);
+    try testing.expect(child_a.value != child_c.value);
 }
 
 test "deriveNamedSeed is stable and rejects empty labels" {
@@ -174,7 +176,7 @@ test "deriveNamedSeed is stable and rejects empty labels" {
     const derived_b = try deriveNamedSeed(base_seed, "worker-a");
     const derived_c = try deriveNamedSeed(base_seed, "worker-b");
 
-    try std.testing.expectEqual(derived_a.value, derived_b.value);
-    try std.testing.expect(derived_a.value != derived_c.value);
-    try std.testing.expectError(error.InvalidInput, deriveNamedSeed(base_seed, ""));
+    try testing.expectEqual(derived_a.value, derived_b.value);
+    try testing.expect(derived_a.value != derived_c.value);
+    try testing.expectError(error.InvalidInput, deriveNamedSeed(base_seed, ""));
 }

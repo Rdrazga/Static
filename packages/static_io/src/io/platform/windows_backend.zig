@@ -1,6 +1,7 @@
 //! Windows backend selector.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const backend = @import("../backend.zig");
 const config = @import("../config.zig");
 const iocp_backend = @import("windows/iocp_backend.zig");
@@ -56,7 +57,7 @@ pub const WindowsBackend = struct {
 
     /// Pumps ready completions from the IOCP port.
     pub fn pump(self: *WindowsBackend, max_completions: u32) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         return self.inner.pump(max_completions);
     }
 
@@ -97,7 +98,7 @@ pub const WindowsBackend = struct {
 
     /// Waits for completions, optionally bounded by timeout.
     pub fn waitForCompletions(self: *WindowsBackend, max_completions: u32, timeout_ns: ?u64) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         return self.inner.waitForCompletions(max_completions, timeout_ns);
     }
 

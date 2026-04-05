@@ -14,6 +14,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const memory = @import("static_memory");
 const static_hash = @import("static_hash");
 const assert = std.debug.assert;
@@ -594,28 +595,28 @@ test "flat hash map basic put/get/remove" {
     // Goal: verify basic CRUD behavior and missing-key semantics.
     // Method: insert, retrieve, remove, and assert NotFound on repeated removal.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
     try map.putNoClobber(2, 20);
-    try std.testing.expectEqual(@as(u32, 10), map.get(1).?.*);
-    try std.testing.expectEqual(@as(u32, 20), map.get(2).?.*);
-    try std.testing.expectEqual(@as(u32, 10), try map.remove(1));
-    try std.testing.expectError(error.NotFound, map.remove(1));
+    try testing.expectEqual(@as(u32, 10), map.get(1).?.*);
+    try testing.expectEqual(@as(u32, 20), map.get(2).?.*);
+    try testing.expectEqual(@as(u32, 10), try map.remove(1));
+    try testing.expectError(error.NotFound, map.remove(1));
 }
 
 test "flat hash map rejects invalid load factor configuration" {
     // Goal: reject configuration outside the supported load factor interval.
     // Method: initialize with max_load_percent at invalid low and high bounds.
     const Ctx = struct {};
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
-        FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .max_load_percent = 0, .budget = null }),
+        FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .max_load_percent = 0, .budget = null }),
     );
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
-        FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .max_load_percent = 96, .budget = null }),
+        FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .max_load_percent = 96, .budget = null }),
     );
 }
 
@@ -623,21 +624,21 @@ test "flat hash map put updates existing key without changing len" {
     // Goal: ensure put overwrites value for an existing key.
     // Method: write same key twice and assert cardinality remains one.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(7, 10);
     try map.put(7, 20);
-    std.debug.assert(map.len() == 1);
-    try std.testing.expectEqual(@as(usize, 1), map.len());
-    try std.testing.expectEqual(@as(u32, 20), map.get(7).?.*);
+    assert(map.len() == 1);
+    try testing.expectEqual(@as(usize, 1), map.len());
+    try testing.expectEqual(@as(u32, 20), map.get(7).?.*);
 }
 
 test "flat hash map reuses tombstone slots after remove" {
     // Goal: verify removed slots are reusable for future insertions.
     // Method: remove one key, insert another, then validate reachable values.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
@@ -645,27 +646,27 @@ test "flat hash map reuses tombstone slots after remove" {
     _ = try map.remove(1);
     try map.put(3, 30);
 
-    try std.testing.expect(map.get(1) == null);
-    try std.testing.expectEqual(@as(u32, 20), map.get(2).?.*);
-    try std.testing.expectEqual(@as(u32, 30), map.get(3).?.*);
+    try testing.expect(map.get(1) == null);
+    try testing.expectEqual(@as(u32, 20), map.get(2).?.*);
+    try testing.expectEqual(@as(u32, 30), map.get(3).?.*);
 }
 
 test "flat hash map rehash preserves all entries" {
     // Goal: verify growth preserves key/value associations.
     // Method: insert enough keys to force resize and then read them all back.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer map.deinit();
 
     var i: u32 = 0;
     while (i < 64) : (i += 1) {
         try map.put(i, i * 10);
     }
-    try std.testing.expect(map.capacity() >= 64);
+    try testing.expect(map.capacity() >= 64);
 
     i = 0;
     while (i < 64) : (i += 1) {
-        try std.testing.expectEqual(i * 10, map.get(i).?.*);
+        try testing.expectEqual(i * 10, map.get(i).?.*);
     }
 }
 
@@ -673,36 +674,36 @@ test "flat hash set insert contains remove" {
     // Goal: ensure set wrapper forwards map semantics correctly.
     // Method: insert one key, check containment, remove, then assert absence.
     const Ctx = struct {};
-    var set = try FlatHashSet(u32, Ctx).init(std.testing.allocator, .{ .budget = null });
+    var set = try FlatHashSet(u32, Ctx).init(testing.allocator, .{ .budget = null });
     defer set.deinit();
 
     try set.insert(9);
-    try std.testing.expect(set.contains(9));
+    try testing.expect(set.contains(9));
     try set.remove(9);
-    try std.testing.expect(!set.contains(9));
-    try std.testing.expectError(error.NotFound, set.remove(9));
+    try testing.expect(!set.contains(9));
+    try testing.expectError(error.NotFound, set.remove(9));
 }
 
 test "flat hash map clear resets count and allows reuse" {
     // Goal: confirm clear resets logical state while preserving capacity and budget.
     // Method: insert values, clear, verify empty, then reinsert.
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
     try map.put(2, 20);
-    try std.testing.expectEqual(@as(usize, 2), map.len());
+    try testing.expectEqual(@as(usize, 2), map.len());
     const cap_before = map.capacity();
 
     map.clear();
-    try std.testing.expectEqual(@as(usize, 0), map.len());
-    try std.testing.expectEqual(cap_before, map.capacity());
-    try std.testing.expect(map.get(1) == null);
+    try testing.expectEqual(@as(usize, 0), map.len());
+    try testing.expectEqual(cap_before, map.capacity());
+    try testing.expect(map.get(1) == null);
 
     try map.put(3, 30);
-    try std.testing.expectEqual(@as(usize, 1), map.len());
-    try std.testing.expectEqual(@as(u32, 30), map.get(3).?.*);
+    try testing.expectEqual(@as(usize, 1), map.len());
+    try testing.expectEqual(@as(u32, 30), map.get(3).?.*);
 }
 
 test "flat hash map with custom Ctx hash and eql" {
@@ -717,23 +718,23 @@ test "flat hash map with custom Ctx hash and eql" {
             return (a & 0xFF) == (b & 0xFF);
         }
     };
-    var map = try FlatHashMap(u32, u32, ModCtx).init(std.testing.allocator, .{ .budget = null });
+    var map = try FlatHashMap(u32, u32, ModCtx).init(testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(1, 10);
     try map.put(2, 20);
-    try std.testing.expectEqual(@as(u32, 10), map.get(1).?.*);
-    try std.testing.expectEqual(@as(u32, 20), map.get(2).?.*);
+    try testing.expectEqual(@as(u32, 10), map.get(1).?.*);
+    try testing.expectEqual(@as(u32, 20), map.get(2).?.*);
 
     // 257 & 0xFF == 1, so this should overwrite key 1.
     try map.put(257, 99);
-    try std.testing.expectEqual(@as(usize, 2), map.len());
-    try std.testing.expectEqual(@as(u32, 99), map.get(1).?.*);
+    try testing.expectEqual(@as(usize, 2), map.len());
+    try testing.expectEqual(@as(u32, 99), map.get(1).?.*);
 }
 
 test "flat hash map clone preserves tombstones and live entries" {
     const Ctx = struct {};
-    var map = try FlatHashMap(u32, u32, Ctx).init(std.testing.allocator, .{ .budget = null });
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.putNoClobber(1, 10);
@@ -744,11 +745,11 @@ test "flat hash map clone preserves tombstones and live entries" {
     var clone = try map.clone();
     defer clone.deinit();
 
-    try std.testing.expectEqual(map.len(), clone.len());
-    try std.testing.expectEqual(map.tombstones, clone.tombstones);
-    try std.testing.expect(clone.getConst(1) == null);
-    try std.testing.expectEqual(@as(u32, 20), clone.getConst(2).?.*);
-    try std.testing.expectEqual(@as(u32, 30), clone.getConst(3).?.*);
+    try testing.expectEqual(map.len(), clone.len());
+    try testing.expectEqual(map.tombstones, clone.tombstones);
+    try testing.expect(clone.getConst(1) == null);
+    try testing.expectEqual(@as(u32, 20), clone.getConst(2).?.*);
+    try testing.expectEqual(@as(u32, 30), clone.getConst(3).?.*);
 }
 
 test "flat hash map overwrite does not allocate before proving insertion is needed" {
@@ -758,7 +759,7 @@ test "flat hash map overwrite does not allocate before proving insertion is need
     const init_bytes = init_capacity * @sizeOf(Map.Entry) + init_capacity * @sizeOf(SlotState);
     var budget = try memory.budget.Budget.init(init_bytes);
 
-    var map = try Map.init(std.testing.allocator, .{
+    var map = try Map.init(testing.allocator, .{
         .initial_capacity = init_capacity,
         .budget = &budget,
     });
@@ -773,10 +774,10 @@ test "flat hash map overwrite does not allocate before proving insertion is need
 
     try map.put(2, 999);
 
-    try std.testing.expectEqual(cap_before, map.capacity());
-    try std.testing.expectEqual(budget_before, budget.used());
-    try std.testing.expectEqual(@as(usize, 5), map.len());
-    try std.testing.expectEqual(@as(u32, 999), map.getConst(2).?.*);
+    try testing.expectEqual(cap_before, map.capacity());
+    try testing.expectEqual(budget_before, budget.used());
+    try testing.expectEqual(@as(usize, 5), map.len());
+    try testing.expectEqual(@as(u32, 999), map.getConst(2).?.*);
 }
 
 test "flat hash map duplicate rejection beats growth failure" {
@@ -786,7 +787,7 @@ test "flat hash map duplicate rejection beats growth failure" {
     const init_bytes = init_capacity * @sizeOf(Map.Entry) + init_capacity * @sizeOf(SlotState);
     var budget = try memory.budget.Budget.init(init_bytes);
 
-    var map = try Map.init(std.testing.allocator, .{
+    var map = try Map.init(testing.allocator, .{
         .initial_capacity = init_capacity,
         .budget = &budget,
     });
@@ -799,10 +800,10 @@ test "flat hash map duplicate rejection beats growth failure" {
     const cap_before = map.capacity();
     const budget_before = budget.used();
 
-    try std.testing.expectError(error.AlreadyExists, map.putNoClobber(4, 444));
-    try std.testing.expectEqual(cap_before, map.capacity());
-    try std.testing.expectEqual(budget_before, budget.used());
-    try std.testing.expectEqual(@as(u32, 40), map.getConst(4).?.*);
+    try testing.expectError(error.AlreadyExists, map.putNoClobber(4, 444));
+    try testing.expectEqual(cap_before, map.capacity());
+    try testing.expectEqual(budget_before, budget.used());
+    try testing.expectEqual(@as(u32, 40), map.getConst(4).?.*);
 }
 
 test "flat hash map custom hash supports padded composite keys" {
@@ -834,11 +835,11 @@ test "flat hash map custom hash supports padded composite keys" {
     second.tag = 7;
     second.value = 42;
 
-    try std.testing.expect(std.meta.eql(first, second));
+    try testing.expect(std.meta.eql(first, second));
 
-    var map = try Map.init(std.testing.allocator, .{ .budget = null });
+    var map = try Map.init(testing.allocator, .{ .budget = null });
     defer map.deinit();
 
     try map.put(first, 99);
-    try std.testing.expectEqual(@as(u32, 99), map.getConst(second).?.*);
+    try testing.expectEqual(@as(u32, 99), map.getConst(second).?.*);
 }

@@ -9,6 +9,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const vec = @import("vec.zig");
 const memory = @import("static_memory");
 const assert = std.debug.assert;
@@ -154,25 +155,25 @@ pub fn DenseArray(comptime T: type) type {
 test "dense array append and get" {
     // Goal: verify stable indexing and retrieval after ordered appends.
     // Method: append three values and validate returned indices plus reads.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     const idx0 = try da.append(10);
     const idx1 = try da.append(20);
     const idx2 = try da.append(30);
 
-    try std.testing.expectEqual(@as(usize, 0), idx0);
-    try std.testing.expectEqual(@as(usize, 1), idx1);
-    try std.testing.expectEqual(@as(usize, 2), idx2);
-    try std.testing.expectEqual(@as(u32, 10), da.get(0).?.*);
-    try std.testing.expectEqual(@as(u32, 20), da.get(1).?.*);
-    try std.testing.expect(da.get(3) == null);
+    try testing.expectEqual(@as(usize, 0), idx0);
+    try testing.expectEqual(@as(usize, 1), idx1);
+    try testing.expectEqual(@as(usize, 2), idx2);
+    try testing.expectEqual(@as(u32, 10), da.get(0).?.*);
+    try testing.expectEqual(@as(u32, 20), da.get(1).?.*);
+    try testing.expect(da.get(3) == null);
 }
 
 test "dense array swapRemove maintains density" {
     // Goal: ensure swapRemove keeps storage dense without preserving order.
     // Method: remove a middle item and confirm last element back-fills the gap.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(10);
@@ -180,63 +181,63 @@ test "dense array swapRemove maintains density" {
     _ = try da.append(30);
 
     const removed = try da.swapRemove(1);
-    try std.testing.expectEqual(@as(u32, 20), removed);
-    try std.testing.expectEqual(@as(u32, 10), da.get(0).?.*);
-    try std.testing.expectEqual(@as(u32, 30), da.get(1).?.*);
+    try testing.expectEqual(@as(u32, 20), removed);
+    try testing.expectEqual(@as(u32, 10), da.get(0).?.*);
+    try testing.expectEqual(@as(u32, 30), da.get(1).?.*);
 }
 
 test "dense array swapRemove last element" {
     // Goal: ensure removing the tail element decrements length correctly.
     // Method: insert one value, remove index 0, and validate empty state.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(42);
     const removed = try da.swapRemove(0);
-    try std.testing.expectEqual(@as(u32, 42), removed);
-    try std.testing.expectEqual(@as(usize, 0), da.len());
+    try testing.expectEqual(@as(u32, 42), removed);
+    try testing.expectEqual(@as(usize, 0), da.len());
 }
 
 test "dense array swapRemove out-of-bounds returns NotFound" {
     // Goal: reject invalid removals outside current dense range.
     // Method: attempt remove at len and assert NotFound.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(1);
-    try std.testing.expectError(error.NotFound, da.swapRemove(1));
+    try testing.expectError(error.NotFound, da.swapRemove(1));
 }
 
 test "dense array swapRemove from empty returns NotFound" {
     // Goal: enforce invalid-data handling on empty container removal.
     // Method: remove index 0 from an empty array and assert NotFound.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
-    try std.testing.expectError(error.NotFound, da.swapRemove(0));
+    try testing.expectError(error.NotFound, da.swapRemove(0));
 }
 
 test "dense array clear resets length and allows reuse" {
     // Goal: confirm clear resets logical length without releasing capacity.
     // Method: append values, clear, assert empty, then append again and verify.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(10);
     _ = try da.append(20);
-    try std.testing.expectEqual(@as(usize, 2), da.len());
+    try testing.expectEqual(@as(usize, 2), da.len());
 
     da.clear();
-    try std.testing.expectEqual(@as(usize, 0), da.len());
+    try testing.expectEqual(@as(usize, 0), da.len());
 
     const idx = try da.append(30);
-    try std.testing.expectEqual(@as(usize, 0), idx);
-    try std.testing.expectEqual(@as(u32, 30), da.get(0).?.*);
+    try testing.expectEqual(@as(usize, 0), idx);
+    try testing.expectEqual(@as(u32, 30), da.get(0).?.*);
 }
 
 test "dense array itemsConst provides read-only dense slice" {
     // Goal: confirm itemsConst returns a const view matching append order.
     // Method: append values, read via itemsConst, then verify length and content.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .budget = null });
     defer da.deinit();
 
     _ = try da.append(10);
@@ -244,23 +245,23 @@ test "dense array itemsConst provides read-only dense slice" {
     _ = try da.append(30);
 
     const slice = da.itemsConst();
-    try std.testing.expectEqual(@as(usize, 3), slice.len);
-    try std.testing.expectEqual(@as(u32, 10), slice[0]);
-    try std.testing.expectEqual(@as(u32, 20), slice[1]);
-    try std.testing.expectEqual(@as(u32, 30), slice[2]);
+    try testing.expectEqual(@as(usize, 3), slice.len);
+    try testing.expectEqual(@as(u32, 10), slice[0]);
+    try testing.expectEqual(@as(u32, 20), slice[1]);
+    try testing.expectEqual(@as(u32, 30), slice[2]);
 }
 
 test "dense array capacity reports backing storage size" {
     // Goal: confirm capacity is at least as large as len and grows with appends.
     // Method: check capacity after init and after appends.
-    var da = try DenseArray(u32).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
+    var da = try DenseArray(u32).init(testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer da.deinit();
 
-    try std.testing.expect(da.capacity() >= 8);
-    try std.testing.expectEqual(@as(usize, 0), da.len());
+    try testing.expect(da.capacity() >= 8);
+    try testing.expectEqual(@as(usize, 0), da.len());
 
     _ = try da.append(1);
     _ = try da.append(2);
-    try std.testing.expect(da.capacity() >= 2);
-    try std.testing.expect(da.capacity() >= da.len());
+    try testing.expect(da.capacity() >= 2);
+    try testing.expect(da.capacity() >= da.len());
 }

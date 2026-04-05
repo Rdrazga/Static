@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const sync = @import("static_sync");
 
 test "host-thread smoke validates event wait/set handoff" {
@@ -31,7 +32,7 @@ test "host-thread smoke validates event wait/set handoff" {
     event.set();
     thread.join();
 
-    try std.testing.expect(waiter_finished.load(.acquire));
+    try testing.expect(waiter_finished.load(.acquire));
     try event.tryWait();
 }
 
@@ -65,8 +66,8 @@ test "host-thread smoke validates semaphore wait/post handoff" {
     semaphore.post(1);
     thread.join();
 
-    try std.testing.expectEqual(@as(u32, 1), acquired_count.load(.acquire));
-    try std.testing.expectError(error.WouldBlock, semaphore.tryWait());
+    try testing.expectEqual(@as(u32, 1), acquired_count.load(.acquire));
+    try testing.expectError(error.WouldBlock, semaphore.tryWait());
 }
 
 test "host-thread smoke validates wait_queue wait/wake handoff" {
@@ -102,7 +103,7 @@ test "host-thread smoke validates wait_queue wait/wake handoff" {
     sync.wait_queue.wakeValue(u32, &state, 1);
     thread.join();
 
-    try std.testing.expect(waiter_finished.load(.acquire));
+    try testing.expect(waiter_finished.load(.acquire));
 }
 
 test "host-thread smoke validates condvar signal handoff" {
@@ -150,7 +151,7 @@ test "host-thread smoke validates condvar signal handoff" {
     condvar.signal();
     thread.join();
 
-    try std.testing.expect(waiter_finished.load(.acquire));
+    try testing.expect(waiter_finished.load(.acquire));
 }
 
 fn waitForFlag(flag: *std.atomic.Value(bool), timeout_ns: u64) !void {

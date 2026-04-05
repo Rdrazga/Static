@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const concepts = @import("../concepts/root.zig");
 
 pub fn runRegisteredFanoutRingConformance(comptime F: type, allocator: std.mem.Allocator, capacity: usize, consumers_max: usize) !void {
@@ -17,16 +18,16 @@ pub fn runRegisteredFanoutRingConformance(comptime F: type, allocator: std.mem.A
     try fanout.trySend(@as(T, 11));
     try fanout.trySend(@as(T, 22));
 
-    try std.testing.expectEqual(@as(T, 11), try fanout.tryRecv(consumer_a));
-    try std.testing.expectEqual(@as(T, 22), try fanout.tryRecv(consumer_a));
-    try std.testing.expectEqual(@as(T, 11), try fanout.tryRecv(consumer_b));
-    try std.testing.expectEqual(@as(T, 22), try fanout.tryRecv(consumer_b));
+    try testing.expectEqual(@as(T, 11), try fanout.tryRecv(consumer_a));
+    try testing.expectEqual(@as(T, 22), try fanout.tryRecv(consumer_a));
+    try testing.expectEqual(@as(T, 11), try fanout.tryRecv(consumer_b));
+    try testing.expectEqual(@as(T, 22), try fanout.tryRecv(consumer_b));
 
-    try std.testing.expectEqual(@as(usize, 0), fanout.pending(consumer_a));
-    try std.testing.expectEqual(@as(usize, 0), fanout.pending(consumer_b));
-    try std.testing.expectError(error.WouldBlock, fanout.tryRecv(consumer_a));
+    try testing.expectEqual(@as(usize, 0), fanout.pending(consumer_a));
+    try testing.expectEqual(@as(usize, 0), fanout.pending(consumer_b));
+    try testing.expectError(error.WouldBlock, fanout.tryRecv(consumer_a));
 
     if (consumers_max == 2) {
-        try std.testing.expectError(error.NoSpaceLeft, fanout.addConsumer());
+        try testing.expectError(error.NoSpaceLeft, fanout.addConsumer());
     }
 }

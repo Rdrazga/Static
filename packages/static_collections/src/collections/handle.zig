@@ -8,6 +8,7 @@
 //!
 //! Thread safety: value type; no shared state.
 const std = @import("std");
+const testing = std.testing;
 const assert = std.debug.assert;
 
 pub const Handle = packed struct {
@@ -34,24 +35,24 @@ test "handle invalid sentinel and isValid" {
     // Method: check invalid sentinel, known-valid handle, and each invalid dimension.
     const h = Handle.invalid();
     assert(h.generation == 0);
-    try std.testing.expect(!h.isValid());
+    try testing.expect(!h.isValid());
 
     const valid: Handle = .{ .index = 0, .generation = 1 };
     assert(valid.generation != 0);
-    try std.testing.expect(valid.isValid());
+    try testing.expect(valid.isValid());
 
     // Generation 0 is always invalid regardless of index.
     const zero_gen: Handle = .{ .index = 0, .generation = 0 };
-    try std.testing.expect(!zero_gen.isValid());
+    try testing.expect(!zero_gen.isValid());
 
     // Max index sentinel is always invalid regardless of generation.
     const max_idx: Handle = .{ .index = std.math.maxInt(u32), .generation = 1 };
-    try std.testing.expect(!max_idx.isValid());
+    try testing.expect(!max_idx.isValid());
 }
 
 test "handle remains packed to 8 bytes" {
     // Goal: keep ABI and storage expectations stable for handle-based tables.
     // Method: assert compile-time and runtime size observations match 8 bytes.
     comptime assert(@sizeOf(Handle) == 8);
-    try std.testing.expectEqual(@as(usize, 8), @sizeOf(Handle));
+    try testing.expectEqual(@as(usize, 8), @sizeOf(Handle));
 }

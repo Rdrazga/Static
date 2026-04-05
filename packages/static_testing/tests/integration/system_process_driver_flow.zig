@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 const integration_options = @import("static_testing_integration_options");
 
@@ -10,7 +11,7 @@ const temporal = static_testing.testing.temporal;
 test "system harness composes process drivers with deterministic retention" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -18,7 +19,7 @@ test "system harness composes process drivers with deterministic retention" {
 
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 16) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -31,12 +32,12 @@ test "system harness composes process drivers with deterministic retention" {
     defer sim_fixture.deinit();
 
     var response_mailbox = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 4 },
     );
     defer response_mailbox.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
     const components = [_]system.ComponentSpec{
@@ -75,8 +76,8 @@ test "system harness composes process drivers with deterministic retention" {
             self: *@This(),
             context: *system.SystemContext(@TypeOf(sim_fixture)),
         ) anyerror!static_testing.testing.checker.CheckResult {
-            try std.testing.expect(context.hasComponent("echo_driver"));
-            try std.testing.expect(context.hasComponent("response_mailbox"));
+            try testing.expect(context.hasComponent("echo_driver"));
+            try testing.expect(context.hasComponent("response_mailbox"));
 
             _ = try context.appendTraceEvent(
                 &self.next_sequence_no,
@@ -106,12 +107,12 @@ test "system harness composes process drivers with deterministic retention" {
 
             var payload_buffer: [16]u8 = undefined;
             const response = try driver.recvResponse(&payload_buffer);
-            try std.testing.expectEqual(request_id, response.header.request_id);
-            try std.testing.expectEqual(static_testing.testing.driver_protocol.DriverMessageKind.ok, response.header.kind);
-            try std.testing.expectEqualStrings("hello", response.payload);
+            try testing.expectEqual(request_id, response.header.request_id);
+            try testing.expectEqual(static_testing.testing.driver_protocol.DriverMessageKind.ok, response.header.kind);
+            try testing.expectEqualStrings("hello", response.payload);
 
             try self.mailbox.send(@intCast(response.payload.len));
-            try std.testing.expectEqual(@as(u32, 5), try self.mailbox.recv());
+            try testing.expectEqual(@as(u32, 5), try self.mailbox.recv());
 
             _ = try context.fixture.sim_clock.advance(.init(1));
             const response_seq = try context.appendTraceEvent(
@@ -139,13 +140,13 @@ test "system harness composes process drivers with deterministic retention" {
                 .{ .label = "process.request", .surface_label = "echo_driver" },
                 .{ .label = "process.response", .surface_label = "echo_driver" },
             );
-            try std.testing.expect(ordering.check_result.passed);
+            try testing.expect(ordering.check_result.passed);
 
             const response_once = try temporal.checkExactlyOnce(
                 snapshot,
                 .{ .label = "process.response", .surface_label = "echo_driver" },
             );
-            try std.testing.expect(response_once.check_result.passed);
+            try testing.expect(response_once.check_result.passed);
 
             return static_testing.testing.checker.CheckResult.fail(&violations, null);
         }
@@ -174,9 +175,9 @@ test "system harness composes process drivers with deterministic retention" {
         },
     }, &runner, Runner.run);
 
-    try std.testing.expect(!execution.check_result.passed);
-    try std.testing.expect(execution.retained_bundle != null);
-    try std.testing.expectEqual(@as(u32, 4), execution.trace_metadata.event_count);
+    try testing.expect(!execution.check_result.passed);
+    try testing.expect(execution.retained_bundle != null);
+    try testing.expectEqual(@as(u32, 4), execution.trace_metadata.event_count);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [static_testing.testing.failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -211,10 +212,10 @@ test "system harness composes process drivers with deterministic retention" {
         },
     );
 
-    try std.testing.expectEqualStrings("system_process_driver_flow", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expect(bundle.trace_document.?.has_provenance);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqual(@as(usize, 4), bundle.retained_trace.?.items.len);
-    try std.testing.expectEqualStrings("system_process_boundary_failure", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_process_driver_flow", bundle.manifest_document.run_name);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expect(bundle.trace_document.?.has_provenance);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqual(@as(usize, 4), bundle.retained_trace.?.items.len);
+    try testing.expectEqualStrings("system_process_boundary_failure", bundle.violations_document.violations[0].code);
 }

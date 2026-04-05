@@ -1,6 +1,8 @@
 //! Incremental bounded frame decoder.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_bits = @import("static_bits");
 const static_serial = @import("static_serial");
 const errors = @import("errors.zig");
@@ -207,9 +209,9 @@ pub const Decoder = struct {
     }
 
     fn consumePayload(self: *Decoder, input: []const u8, consumed: *usize, out_payload: []u8) ?DecodeStep {
-        std.debug.assert(self.stage == .payload);
-        std.debug.assert(self.payload_len > 0);
-        std.debug.assert(self.payload_written <= self.payload_len);
+        assert(self.stage == .payload);
+        assert(self.payload_len > 0);
+        assert(self.payload_written <= self.payload_len);
 
         if (out_payload.len < self.payload_len) {
             self.reset();
@@ -260,7 +262,7 @@ pub const Decoder = struct {
     }
 
     fn consumeChecksum(self: *Decoder, input: []const u8, consumed: *usize, out_payload: []u8) ?DecodeStep {
-        std.debug.assert(self.stage == .checksum);
+        assert(self.stage == .checksum);
         if (self.ensureOutputStable(out_payload)) |stable_err| {
             self.reset();
             return .{
@@ -333,10 +335,10 @@ test "decode roundtrip for zero-length payload" {
     var decoder = try Decoder.init(cfg);
     var payload_out: [64]u8 = [_]u8{0} ** 64;
     const step = decoder.decode(encoded[0..written], &payload_out);
-    try std.testing.expectEqual(written, step.consumed);
-    try std.testing.expect(step.status == .frame);
-    try std.testing.expectEqual(@as(u32, 0), step.status.frame.payload_len);
-    try std.testing.expect(!step.status.frame.checksum_present);
+    try testing.expectEqual(written, step.consumed);
+    try testing.expect(step.status == .frame);
+    try testing.expectEqual(@as(u32, 0), step.status.frame.payload_len);
+    try testing.expect(!step.status.frame.checksum_present);
 }
 
 test "decode roundtrip for maximum allowed payload" {
@@ -348,9 +350,9 @@ test "decode roundtrip for maximum allowed payload" {
     var decoder = try Decoder.init(cfg);
     var payload_out: [8]u8 = [_]u8{0} ** 8;
     const step = decoder.decode(encoded[0..written], &payload_out);
-    try std.testing.expect(step.status == .frame);
-    try std.testing.expectEqual(@as(u32, payload.len), step.status.frame.payload_len);
-    try std.testing.expectEqualSlices(u8, payload, payload_out[0..payload.len]);
+    try testing.expect(step.status == .frame);
+    try testing.expectEqual(@as(u32, payload.len), step.status.frame.payload_len);
+    try testing.expectEqualSlices(u8, payload, payload_out[0..payload.len]);
 }
 
 test "decode rejects over-limit payload lengths from headers" {
@@ -364,8 +366,8 @@ test "decode rejects over-limit payload lengths from headers" {
     var decoder = try Decoder.init(cfg);
     var payload_out: [8]u8 = [_]u8{0} ** 8;
     const step = decoder.decode(&encoded, &payload_out);
-    try std.testing.expect(step.status == .err);
-    try std.testing.expectEqual(error.NoSpaceLeft, step.status.err);
+    try testing.expect(step.status == .err);
+    try testing.expectEqual(error.NoSpaceLeft, step.status.err);
 }
 
 test "decode reports EndOfStream on truncated frame when stream closes" {
@@ -377,8 +379,8 @@ test "decode reports EndOfStream on truncated frame when stream closes" {
     var decoder = try Decoder.init(cfg);
     var payload_out: [64]u8 = [_]u8{0} ** 64;
     const step = decoder.decode(encoded[0 .. written - 1], &payload_out);
-    try std.testing.expect(step.status == .need_more_input);
-    try std.testing.expectError(error.EndOfStream, decoder.endOfInput());
+    try testing.expect(step.status == .need_more_input);
+    try testing.expectError(error.EndOfStream, decoder.endOfInput());
 }
 
 test "decode rejects non-canonical varint length encodings" {
@@ -394,8 +396,8 @@ test "decode rejects non-canonical varint length encodings" {
     var decoder = try Decoder.init(cfg);
     var payload_out: [64]u8 = [_]u8{0} ** 64;
     const step = decoder.decode(&encoded, &payload_out);
-    try std.testing.expect(step.status == .err);
-    try std.testing.expectEqual(error.InvalidInput, step.status.err);
+    try testing.expect(step.status == .err);
+    try testing.expectEqual(error.InvalidInput, step.status.err);
 }
 
 test "decode detects checksum mismatches when checksum mode is enabled" {
@@ -413,8 +415,8 @@ test "decode detects checksum mismatches when checksum mode is enabled" {
     var decoder = try Decoder.init(cfg);
     var payload_out: [64]u8 = [_]u8{0} ** 64;
     const step = decoder.decode(encoded[0..written], &payload_out);
-    try std.testing.expect(step.status == .err);
-    try std.testing.expectEqual(error.CorruptData, step.status.err);
+    try testing.expect(step.status == .err);
+    try testing.expectEqual(error.CorruptData, step.status.err);
 }
 
 test "decode is deterministic across chunk boundaries" {
@@ -431,15 +433,15 @@ test "decode is deterministic across chunk boundaries" {
         const split = @min(first_chunk, written);
         const step_a = decoder.decode(encoded[0..split], &out);
         if (split < written) {
-            try std.testing.expect(step_a.status == .need_more_input);
+            try testing.expect(step_a.status == .need_more_input);
             const step_b = decoder.decode(encoded[split..written], &out);
-            try std.testing.expect(step_b.status == .frame);
-            try std.testing.expectEqual(@as(u32, payload.len), step_b.status.frame.payload_len);
+            try testing.expect(step_b.status == .frame);
+            try testing.expectEqual(@as(u32, payload.len), step_b.status.frame.payload_len);
         } else {
-            try std.testing.expect(step_a.status == .frame);
-            try std.testing.expectEqual(@as(u32, payload.len), step_a.status.frame.payload_len);
+            try testing.expect(step_a.status == .frame);
+            try testing.expectEqual(@as(u32, payload.len), step_a.status.frame.payload_len);
         }
-        try std.testing.expectEqualSlices(u8, payload, out[0..payload.len]);
+        try testing.expectEqualSlices(u8, payload, out[0..payload.len]);
     }
 }
 
@@ -466,14 +468,14 @@ test "seeded malformed corpus does not violate decoder bounds contracts" {
                 if (decoder.isIdle()) {
                     try decoder.endOfInput();
                 } else {
-                    try std.testing.expectError(error.EndOfStream, decoder.endOfInput());
+                    try testing.expectError(error.EndOfStream, decoder.endOfInput());
                 }
             },
             .frame => |frame| {
-                try std.testing.expect(frame.payload_len <= cfg.max_payload_bytes);
-                try std.testing.expect(decoder.isIdle());
+                try testing.expect(frame.payload_len <= cfg.max_payload_bytes);
+                try testing.expect(decoder.isIdle());
             },
-            .err => try std.testing.expect(decoder.isIdle()),
+            .err => try testing.expect(decoder.isIdle()),
         }
     }
 
@@ -492,14 +494,14 @@ test "seeded malformed corpus does not violate decoder bounds contracts" {
                 if (decoder.isIdle()) {
                     try decoder.endOfInput();
                 } else {
-                    try std.testing.expectError(error.EndOfStream, decoder.endOfInput());
+                    try testing.expectError(error.EndOfStream, decoder.endOfInput());
                 }
             },
             .frame => |frame| {
-                try std.testing.expect(frame.payload_len <= cfg.max_payload_bytes);
-                try std.testing.expect(decoder.isIdle());
+                try testing.expect(frame.payload_len <= cfg.max_payload_bytes);
+                try testing.expect(decoder.isIdle());
             },
-            .err => try std.testing.expect(decoder.isIdle()),
+            .err => try testing.expect(decoder.isIdle()),
         }
     }
 }

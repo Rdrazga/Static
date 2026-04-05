@@ -10,6 +10,8 @@
 //! 64 bytes on 64-bit targets.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 const builtin = @import("builtin");
 const CapacityReport = @import("capacity_report.zig").CapacityReport;
 
@@ -49,8 +51,8 @@ pub const SoftLimitAllocator = struct {
     // struct size so the full header always fits in the prefix reserved before each payload,
     // and must be a multiple of the header alignment so back-to-back placements stay aligned.
     comptime {
-        std.debug.assert(header_size >= @sizeOf(Header));
-        std.debug.assert(header_size % header_align == 0);
+        assert(header_size >= @sizeOf(Header));
+        assert(header_size % header_align == 0);
     }
 
     const vtable: std.mem.Allocator.VTable = .{
@@ -65,22 +67,22 @@ pub const SoftLimitAllocator = struct {
     pub fn init(primary: std.mem.Allocator, fallback: ?std.mem.Allocator, policy: DevModePolicy) Self {
         const out: Self = .{ .primary = primary, .fallback = fallback, .policy = policy };
         // Postcondition: usage tracking must start at zero; no allocation has occurred yet.
-        std.debug.assert(out.used_bytes == 0);
+        assert(out.used_bytes == 0);
         // Postcondition: overflow count must start at zero.
-        std.debug.assert(out.overflow_count == 0);
+        assert(out.overflow_count == 0);
         return out;
     }
 
     pub fn allocator(self: *Self) std.mem.Allocator {
-        std.debug.assert(@intFromPtr(self) != 0);
+        assert(@intFromPtr(self) != 0);
         const alloc_if: std.mem.Allocator = .{ .ptr = self, .vtable = &vtable };
         // Postcondition: the vtable must be the one associated with this type.
-        std.debug.assert(alloc_if.vtable == &vtable);
+        assert(alloc_if.vtable == &vtable);
         return alloc_if;
     }
 
     pub fn report(self: *const Self) CapacityReport {
-        std.debug.assert(self.high_water_bytes >= self.used_bytes);
+        assert(self.high_water_bytes >= self.used_bytes);
         const r: CapacityReport = .{
             .unit = .bytes,
             .used = self.used_bytes,
@@ -89,7 +91,7 @@ pub const SoftLimitAllocator = struct {
             .overflow_count = self.overflow_count,
         };
         // Postcondition: reported high_water must be >= reported used.
-        std.debug.assert(r.high_water >= r.used);
+        assert(r.high_water >= r.used);
         return r;
     }
 
@@ -99,7 +101,7 @@ pub const SoftLimitAllocator = struct {
             .soft_fallback => builtin.mode == .Debug and self.fallback != null,
         };
         // Pair assertion: strict policy must always deny fallback.
-        if (self.policy == .strict) std.debug.assert(!result);
+        if (self.policy == .strict) assert(!result);
         return result;
     }
 
@@ -138,9 +140,9 @@ pub const SoftLimitAllocator = struct {
     ) [*]u8 {
         // Precondition: base_ptr must be non-null; the caller must have confirmed the
         // allocation succeeded before calling finishAlloc.
-        std.debug.assert(@intFromPtr(base_ptr) != 0);
+        assert(@intFromPtr(base_ptr) != 0);
         // Precondition: payload_align must be a non-zero power of two.
-        std.debug.assert(payload_align != 0);
+        assert(payload_align != 0);
         const base_addr = @intFromPtr(base_ptr);
         const after_header = std.math.add(usize, base_addr, header_size) catch @panic("SoftLimitAllocator: address overflow");
         const payload_addr = std.mem.alignForward(usize, after_header, payload_align);
@@ -188,51 +190,51 @@ pub const SoftLimitAllocator = struct {
         const payload_addr = @intFromPtr(payload_ptr);
         // Precondition: payload address must be large enough to hold a header before it.
         if (payload_addr < header_size) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: invalid payload address", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: invalid payload address", .{});
             return null;
         }
 
         const header_addr = payload_addr - header_size;
         // Precondition: header must be naturally aligned to Header's alignment.
         if (header_addr % header_align != 0) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: misaligned header", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: misaligned header", .{});
             return null;
         }
 
         const header: *Header = @ptrFromInt(header_addr);
         if (header.magic != magic) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: header magic mismatch", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: header magic mismatch", .{});
             return null;
         }
         if (header.payload_len != memory_len) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: length mismatch", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: length mismatch", .{});
             return null;
         }
         if (header.payload_align == 0 or !std.math.isPowerOfTwo(header.payload_align)) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: invalid payload alignment", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: invalid payload alignment", .{});
             return null;
         }
 
         const base_end = std.math.add(usize, header.base_ptr, header.alloc_len) catch {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: alloc_len overflow", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: alloc_len overflow", .{});
             return null;
         };
         if (header.base_ptr > header_addr or header_addr >= base_end) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: header out of range", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: header out of range", .{});
             return null;
         }
         const payload_end = std.math.add(usize, payload_addr, memory_len) catch {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: payload overflow", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: payload overflow", .{});
             return null;
         };
         if (payload_end > base_end) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: payload out of range", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: payload out of range", .{});
             return null;
         }
         // Pair assertion: base pointer must be aligned to at least header.payload_align so the
         // original allocation was served from the correct position within the padded region.
         if (header.base_ptr % header.payload_align != 0) {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: base misaligned", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: base misaligned", .{});
             return null;
         }
 
@@ -249,20 +251,20 @@ pub const SoftLimitAllocator = struct {
         const payload_len = header.payload_len;
         const payload_align = header.payload_align;
         // Postcondition: validateHeader guarantees these fields are valid before we use them.
-        std.debug.assert(payload_align != 0);
-        std.debug.assert(std.math.isPowerOfTwo(payload_align));
+        assert(payload_align != 0);
+        assert(std.math.isPowerOfTwo(payload_align));
 
         const base_ptr: [*]u8 = @ptrFromInt(header.base_ptr);
         const base = base_ptr[0..header.alloc_len];
 
         const which = std.enums.fromInt(Which, header.which) orelse {
-            if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: invalid allocator tag", .{});
+            if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: invalid allocator tag", .{});
             return;
         };
         const underlying = switch (which) {
             .primary => self.primary,
             .fallback => self.fallback orelse {
-                if (std.debug.runtime_safety) std.debug.panic("SoftLimitAllocator.free: fallback missing", .{});
+                if (std.debug.runtime_safety) panic("SoftLimitAllocator.free: fallback missing", .{});
                 return;
             },
         };
@@ -271,7 +273,7 @@ pub const SoftLimitAllocator = struct {
         underlying.vtable.free(underlying.ptr, base, alloc_alignment, ret_addr);
 
         // usize fits in u64 on all supported platforms; the widening is always safe.
-        if (std.debug.runtime_safety) std.debug.assert(self.used_bytes >= @as(u64, payload_len));
+        if (std.debug.runtime_safety) assert(self.used_bytes >= @as(u64, payload_len));
         self.used_bytes -|= @as(u64, payload_len);
     }
 };

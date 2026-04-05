@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -12,9 +13,9 @@ pub fn connectStream(
     const connect_id = try runtime.submitConnect(endpoint, null);
     _ = try runtime.pump(1);
     const connect_completion = runtime.poll() orelse return error.MissingCompletion;
-    try std.testing.expectEqual(connect_id, connect_completion.operation_id);
-    try std.testing.expectEqual(static_io.types.CompletionStatus.success, connect_completion.status);
-    try std.testing.expect(connect_completion.handle != null);
+    try testing.expectEqual(connect_id, connect_completion.operation_id);
+    try testing.expectEqual(static_io.types.CompletionStatus.success, connect_completion.status);
+    try testing.expect(connect_completion.handle != null);
 
     _ = try context.appendTraceEvent(
         next_sequence_no,

@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -32,7 +34,7 @@ const IncrementalContext = struct {
     fn resetState(self: *IncrementalContext) void {
         @memset(self.buffer[0..], 0);
         self.len = 0;
-        std.debug.assert(self.len == 0);
+        assert(self.len == 0);
     }
 
     fn validate(self: *IncrementalContext) checker.CheckResult {
@@ -72,7 +74,7 @@ const IncrementalContext = struct {
             self.scratch_frame[0..frame_len],
         );
         self.len += frame_len;
-        std.debug.assert(self.len <= self.buffer.len);
+        assert(self.len <= self.buffer.len);
         return self.validate();
     }
 
@@ -238,7 +240,7 @@ test "static_serial incremental frame sequences stay aligned with testing.model"
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 96), summary.executed_case_count);
+    try testing.expectEqual(@as(u32, 96), summary.executed_case_count);
     if (summary.failed_case) |failed_case| {
         var summary_buffer: [1536]u8 = undefined;
         const summary_text = try model.formatFailedCaseSummary(

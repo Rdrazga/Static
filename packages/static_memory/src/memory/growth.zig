@@ -10,6 +10,8 @@
 //! instantaneous usage. Freed or shrunk memory does not reduce the growth counter.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const GrowthPolicy = union(enum) {
     allow,
@@ -24,9 +26,9 @@ pub const GrowthPolicy = union(enum) {
         };
         // Pair assertion: `.deny` must always return false; allowing dynamic allocation
         // on a deny policy would silently bypass the growth guard's purpose.
-        if (self == .deny) std.debug.assert(!result);
+        if (self == .deny) assert(!result);
         // Pair assertion: `.allow` must always return true.
-        if (self == .allow) std.debug.assert(result);
+        if (self == .allow) assert(result);
         return result;
     }
 };
@@ -50,19 +52,19 @@ pub const Guard = struct {
                 .allow_with_budget => |b| b,
             },
         };
-        std.debug.assert(!out.locked);
-        std.debug.assert(out.used_growth_bytes == 0);
+        assert(!out.locked);
+        assert(out.used_growth_bytes == 0);
         return out;
     }
 
     pub fn lock(self: *Guard) void {
         self.locked = true;
-        std.debug.assert(self.locked);
+        assert(self.locked);
     }
 
     pub fn unlock(self: *Guard) void {
         self.locked = false;
-        std.debug.assert(!self.locked);
+        assert(!self.locked);
     }
 
     pub fn isLocked(self: *const Guard) bool {
@@ -70,8 +72,8 @@ pub const Guard = struct {
         // Pair assertion: the returned bool must be consistent with the stored field from
         // both the true and false directions. A discrepancy would indicate a torn read or
         // aliasing bug that could silently bypass policy enforcement.
-        std.debug.assert(locked == self.locked);
-        std.debug.assert(!locked == !self.locked);
+        assert(locked == self.locked);
+        assert(!locked == !self.locked);
         return locked;
     }
 
@@ -81,10 +83,10 @@ pub const Guard = struct {
         // Exceeding the budget means a commit bypassed canConsumeGrowthBytes, which is a
         // programmer error.
         if (self.policy == .allow_with_budget) {
-            std.debug.assert(used <= self.budget_growth_bytes);
+            assert(used <= self.budget_growth_bytes);
         }
         // Postcondition: the returned value must equal the stored field (no silent transform).
-        std.debug.assert(used == self.used_growth_bytes);
+        assert(used == self.used_growth_bytes);
         return used;
     }
 
@@ -101,14 +103,14 @@ pub const Guard = struct {
         };
         // Postcondition: remaining budget cannot exceed total budget (used >= 0, always).
         if (self.policy == .allow_with_budget) {
-            std.debug.assert(remaining <= self.budget_growth_bytes);
+            assert(remaining <= self.budget_growth_bytes);
         }
         // Postcondition: remaining + used == budget for the budget policy (when not over-limit).
         // When used exceeds the budget (possible if budget was reduced after commit), remaining
         // is clamped to 0, so the sum invariant does not hold in that edge case.
         if (self.policy == .allow_with_budget) {
             if (self.used_growth_bytes <= self.budget_growth_bytes) {
-                std.debug.assert(remaining + self.used_growth_bytes == self.budget_growth_bytes);
+                assert(remaining + self.used_growth_bytes == self.budget_growth_bytes);
             }
         }
         return remaining;
@@ -128,14 +130,14 @@ pub const Guard = struct {
         };
         // Pair assertion: `.deny` policy must always reject growth while locked; `.allow` must always permit it.
         if (self.locked) {
-            if (self.policy == .deny) std.debug.assert(!result);
-            if (self.policy == .allow) std.debug.assert(result);
+            if (self.policy == .deny) assert(!result);
+            if (self.policy == .allow) assert(result);
         }
         return result;
     }
 
     pub fn commitGrowthBytes(self: *Guard, additional_bytes: u64) void {
-        if (self.locked) std.debug.assert(self.canConsumeGrowthBytes(additional_bytes));
+        if (self.locked) assert(self.canConsumeGrowthBytes(additional_bytes));
 
         if (!self.locked) return;
         if (additional_bytes == 0) return;
@@ -155,11 +157,11 @@ pub const Guard = struct {
                 // canConsumeGrowthBytes, which performs this same checked addition
                 // and returns false on overflow. Saturating here would mask bugs.
                 const next = std.math.add(u64, self.used_growth_bytes, additional_bytes) catch unreachable;
-                std.debug.assert(next <= self.budget_growth_bytes);
+                assert(next <= self.budget_growth_bytes);
                 self.used_growth_bytes = next;
             },
         }
-        std.debug.assert(self.used_growth_bytes >= old_used);
+        assert(self.used_growth_bytes >= old_used);
     }
 
     pub fn tryConsumeGrowthBytes(self: *Guard, additional_bytes: u64) GrowthError!void {
@@ -167,11 +169,11 @@ pub const Guard = struct {
         if (!self.canConsumeGrowthBytes(additional_bytes)) return error.NoSpaceLeft;
         self.commitGrowthBytes(additional_bytes);
         // Postcondition: used bytes must be >= the old value (monotonically increasing).
-        std.debug.assert(self.used_growth_bytes >= old_used);
+        assert(self.used_growth_bytes >= old_used);
         // Postcondition: if locked and the policy has a budget, used must not exceed it.
         if (self.locked) {
             if (self.policy == .allow_with_budget) {
-                std.debug.assert(self.used_growth_bytes <= self.budget_growth_bytes);
+                assert(self.used_growth_bytes <= self.budget_growth_bytes);
             }
         }
     }
@@ -198,30 +200,30 @@ pub const GuardedAllocator = struct {
             .denied_last = false,
         };
         // Postcondition: guard must start unlocked so pre-lock allocations bypass policy.
-        std.debug.assert(!out.guard.locked);
+        assert(!out.guard.locked);
         // Postcondition: denied_last must start false; no allocation has been attempted yet.
-        std.debug.assert(!out.denied_last);
+        assert(!out.denied_last);
         return out;
     }
 
     pub fn lock(self: *Self) void {
         self.guard.lock();
         // Postcondition: the underlying guard must now be locked.
-        std.debug.assert(self.guard.isLocked());
+        assert(self.guard.isLocked());
     }
 
     pub fn unlock(self: *Self) void {
         self.guard.unlock();
         // Postcondition: the underlying guard must now be unlocked.
-        std.debug.assert(!self.guard.isLocked());
+        assert(!self.guard.isLocked());
     }
 
     pub fn allocator(self: *Self) std.mem.Allocator {
-        std.debug.assert(@intFromPtr(self) != 0);
+        assert(@intFromPtr(self) != 0);
         const alloc_if: std.mem.Allocator = .{ .ptr = self, .vtable = &vtable };
         // Postcondition: the vtable must be the one associated with this type; a mismatch
         // would silently route calls to the wrong dispatch functions.
-        std.debug.assert(alloc_if.vtable == &vtable);
+        assert(alloc_if.vtable == &vtable);
         return alloc_if;
     }
 
@@ -230,7 +232,7 @@ pub const GuardedAllocator = struct {
         const value = self.denied_last;
         self.denied_last = false;
         // Postcondition: denied_last must be false after consumption.
-        std.debug.assert(!self.denied_last);
+        assert(!self.denied_last);
         return value;
     }
 
@@ -308,9 +310,9 @@ pub fn additionalBytesForRealloc(comptime Elem: type, old_len: usize, new_len: u
         return std.math.maxInt(u64);
     };
     // Postcondition: the result must be non-zero when elements have positive size and new > old.
-    std.debug.assert(result > 0);
+    assert(result > 0);
     // Postcondition: the result must not exceed maxInt(u64) (saturated at that value on overflow).
-    std.debug.assert(result <= std.math.maxInt(u64));
+    assert(result <= std.math.maxInt(u64));
     return result;
 }
 
@@ -326,9 +328,9 @@ pub fn additionalBytesForBitSetResize(old_max: u32, new_max: u32) u64 {
         return std.math.maxInt(u64);
     };
     // Postcondition: the result must be non-zero when words increased.
-    std.debug.assert(result > 0);
+    assert(result > 0);
     // Postcondition: result must be a multiple of @sizeOf(u64) because bitset words are u64.
-    std.debug.assert(result % @as(u64, @sizeOf(u64)) == 0);
+    assert(result % @as(u64, @sizeOf(u64)) == 0);
     return result;
 }
 
@@ -336,34 +338,34 @@ test "guard policy enforcement" {
     // Verifies policy behavior for allow/deny/budget and validates accounting when locked.
     var allow_guard = Guard.init(.allow);
     allow_guard.lock();
-    try std.testing.expect(allow_guard.canConsumeGrowthBytes(1000));
+    try testing.expect(allow_guard.canConsumeGrowthBytes(1000));
 
     var deny_guard = Guard.init(.deny);
     deny_guard.lock();
-    try std.testing.expect(!deny_guard.canConsumeGrowthBytes(1));
+    try testing.expect(!deny_guard.canConsumeGrowthBytes(1));
 
     var budget_guard = Guard.init(.{ .allow_with_budget = 100 });
     budget_guard.lock();
-    try std.testing.expect(budget_guard.canConsumeGrowthBytes(50));
-    try std.testing.expect(budget_guard.canConsumeGrowthBytes(100));
-    try std.testing.expect(!budget_guard.canConsumeGrowthBytes(101));
+    try testing.expect(budget_guard.canConsumeGrowthBytes(50));
+    try testing.expect(budget_guard.canConsumeGrowthBytes(100));
+    try testing.expect(!budget_guard.canConsumeGrowthBytes(101));
 
     try budget_guard.tryConsumeGrowthBytes(50);
-    try std.testing.expectEqual(@as(u64, 50), budget_guard.usedBytes());
-    try std.testing.expectEqual(@as(u64, 50), budget_guard.remainingBudget());
-    try std.testing.expectError(error.NoSpaceLeft, budget_guard.tryConsumeGrowthBytes(51));
+    try testing.expectEqual(@as(u64, 50), budget_guard.usedBytes());
+    try testing.expectEqual(@as(u64, 50), budget_guard.remainingBudget());
+    try testing.expectError(error.NoSpaceLeft, budget_guard.tryConsumeGrowthBytes(51));
 }
 
 test "guard unlocked permits all allocations" {
     // Verifies that policy checks are bypassed before `lock()` is called.
     var guard = Guard.init(.deny);
-    try std.testing.expect(guard.canConsumeGrowthBytes(1));
-    try std.testing.expect(guard.canConsumeGrowthBytes(1_000_000));
+    try testing.expect(guard.canConsumeGrowthBytes(1));
+    try testing.expect(guard.canConsumeGrowthBytes(1_000_000));
 }
 
 test "guarded allocator sets denied_last on policy rejection" {
     // Verifies that guarded allocators surface policy rejections through `takeDeniedLast()`.
-    var guarded = GuardedAllocator.init(std.testing.allocator, .{ .allow_with_budget = 16 });
+    var guarded = GuardedAllocator.init(testing.allocator, .{ .allow_with_budget = 16 });
     const a = guarded.allocator();
 
     // Before lock: not charged.
@@ -374,31 +376,31 @@ test "guarded allocator sets denied_last on policy rejection" {
 
     const runtime_mem = try a.alloc(u8, 8);
     defer a.free(runtime_mem);
-    try std.testing.expect(!guarded.takeDeniedLast());
+    try testing.expect(!guarded.takeDeniedLast());
 
     // Over budget.
-    try std.testing.expectError(error.OutOfMemory, a.alloc(u8, 32));
-    try std.testing.expect(guarded.takeDeniedLast());
+    try testing.expectError(error.OutOfMemory, a.alloc(u8, 32));
+    try testing.expect(guarded.takeDeniedLast());
 }
 
 test "additionalBytesForRealloc computes delta bytes" {
     // Verifies that the helper returns `(new_len - old_len) * @sizeOf(Elem)` and treats zero-sized elements as free.
-    try std.testing.expectEqual(@as(u64, 0), additionalBytesForRealloc(void, 0, 100));
-    try std.testing.expectEqual(@as(u64, 10), additionalBytesForRealloc(u8, 0, 10));
-    try std.testing.expectEqual(@as(u64, 16), additionalBytesForRealloc(u64, 1, 3));
+    try testing.expectEqual(@as(u64, 0), additionalBytesForRealloc(void, 0, 100));
+    try testing.expectEqual(@as(u64, 10), additionalBytesForRealloc(u8, 0, 10));
+    try testing.expectEqual(@as(u64, 16), additionalBytesForRealloc(u64, 1, 3));
 
     if (@sizeOf(usize) == 8) {
         const huge = additionalBytesForRealloc(u64, 0, std.math.maxInt(usize));
-        try std.testing.expectEqual(std.math.maxInt(u64), huge);
+        try testing.expectEqual(std.math.maxInt(u64), huge);
     }
 }
 
 test "additionalBytesForBitSetResize computes delta words" {
     // Verifies the word-based delta for bitset growth (rounded up to 64-bit words).
-    try std.testing.expectEqual(@as(u64, 0), additionalBytesForBitSetResize(0, 0));
-    try std.testing.expectEqual(@as(u64, 0), additionalBytesForBitSetResize(63, 64));
+    try testing.expectEqual(@as(u64, 0), additionalBytesForBitSetResize(0, 0));
+    try testing.expectEqual(@as(u64, 0), additionalBytesForBitSetResize(63, 64));
 
     const one_word: u64 = @sizeOf(u64);
-    try std.testing.expectEqual(one_word, additionalBytesForBitSetResize(64, 65));
-    try std.testing.expectEqual(one_word, additionalBytesForBitSetResize(1, 65));
+    try testing.expectEqual(one_word, additionalBytesForBitSetResize(64, 65));
+    try testing.expectEqual(one_word, additionalBytesForBitSetResize(1, 65));
 }

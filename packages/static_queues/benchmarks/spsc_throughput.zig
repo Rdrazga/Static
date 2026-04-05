@@ -4,6 +4,7 @@
 //! workflow and retained baseline artifacts.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_queues = @import("static_queues");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -20,8 +21,8 @@ const SpscContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *SpscContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.queue.capacity() == batch_count);
-        std.debug.assert(context.queue.isEmpty());
+        assert(context.queue.capacity() == batch_count);
+        assert(context.queue.isEmpty());
 
         var index: usize = 0;
         while (index < batch_count) : (index += 1) {
@@ -35,8 +36,8 @@ const SpscContext = struct {
             context.sink = bench.case.blackBox(context.sink + item);
         }
 
-        std.debug.assert(context.queue.isEmpty());
-        std.debug.assert(context.sink > 0);
+        assert(context.queue.isEmpty());
+        assert(context.sink > 0);
     }
 };
 
@@ -89,17 +90,17 @@ fn validateSemanticPreflight(allocator: std.mem.Allocator) !void {
     var q = try SpscQueue.init(allocator, .{ .capacity = batch_count });
     defer q.deinit();
 
-    std.debug.assert(q.capacity() == batch_count);
-    std.debug.assert(q.isEmpty());
+    assert(q.capacity() == batch_count);
+    assert(q.isEmpty());
 
     var index: usize = 0;
     while (index < batch_count) : (index += 1) {
         try q.trySend(@as(u64, @intCast(index)));
     }
-    std.debug.assert(q.isFull());
+    assert(q.isFull());
     index = 0;
     while (index < batch_count) : (index += 1) {
         _ = try q.tryRecv();
     }
-    std.debug.assert(q.isEmpty());
+    assert(q.isEmpty());
 }

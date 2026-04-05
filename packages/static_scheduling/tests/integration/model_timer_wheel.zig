@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_scheduling = @import("static_scheduling");
 const static_testing = @import("static_testing");
 
@@ -61,7 +63,7 @@ const TimerWheelModelContext = struct {
     drain_buffer: [8]u32 = [_]u32{0} ** 8,
 
     fn init(allocator: std.mem.Allocator) !TimerWheelModelContext {
-        std.debug.assert(@sizeOf(ExpectedTimer) > 0);
+        assert(@sizeOf(ExpectedTimer) > 0);
         var context = TimerWheelModelContext{
             .allocator = allocator,
             .wheel = try Wheel.init(allocator, .{
@@ -69,13 +71,13 @@ const TimerWheelModelContext = struct {
                 .entries_max = 8,
             }),
         };
-        std.debug.assert(context.wheel.nowTick() == 0);
-        std.debug.assert(context.activeCount() == 0);
+        assert(context.wheel.nowTick() == 0);
+        assert(context.activeCount() == 0);
         return context;
     }
 
     fn deinit(self: *TimerWheelModelContext) void {
-        std.debug.assert(self.expected.len == 8);
+        assert(self.expected.len == 8);
         self.wheel.deinit();
         self.* = undefined;
     }
@@ -89,8 +91,8 @@ const TimerWheelModelContext = struct {
         self.expected = [_]ExpectedTimer{.{}} ** 8;
         self.next_sequence_no = 0;
         @memset(self.drain_buffer[0..], 0);
-        std.debug.assert(self.wheel.nowTick() == 0);
-        std.debug.assert(self.activeCount() == 0);
+        assert(self.wheel.nowTick() == 0);
+        assert(self.activeCount() == 0);
     }
 
     fn activeCount(self: *const TimerWheelModelContext) u32 {
@@ -98,7 +100,7 @@ const TimerWheelModelContext = struct {
         for (self.expected) |timer| {
             if (timer.active) count += 1;
         }
-        std.debug.assert(count <= self.expected.len);
+        assert(count <= self.expected.len);
         return count;
     }
 
@@ -143,7 +145,7 @@ const TimerWheelModelContext = struct {
         delay_ticks: u64,
         entry: u32,
     ) static_scheduling.timer_wheel.TimerError!checker.CheckResult {
-        std.debug.assert(entry != 0);
+        assert(entry != 0);
         if (self.firstFreeSlotIndex()) |slot_index| {
             const id = try self.wheel.schedule(entry, delay_ticks);
             self.expected[slot_index] = .{
@@ -154,7 +156,7 @@ const TimerWheelModelContext = struct {
                 .sequence_no = self.next_sequence_no,
             };
             self.next_sequence_no += 1;
-            std.debug.assert(self.expected[slot_index].active);
+            assert(self.expected[slot_index].active);
             return self.pass();
         }
 
@@ -171,7 +173,7 @@ const TimerWheelModelContext = struct {
         const cancelled = try self.wheel.cancel(expected_timer.id);
         if (cancelled != expected_timer.entry) return self.fail(&cancel_violation);
         self.expected[slot_index] = .{};
-        std.debug.assert(!self.expected[slot_index].active);
+        assert(!self.expected[slot_index].active);
         return self.pass();
     }
 
@@ -198,7 +200,7 @@ const TimerWheelModelContext = struct {
             due_slots[cursor] = slot_index;
         }
 
-        std.debug.assert(due_count <= self.expected.len);
+        assert(due_count <= self.expected.len);
         return due_count;
     }
 
@@ -218,7 +220,7 @@ const TimerWheelModelContext = struct {
             self.expected[slot_index] = .{};
         }
 
-        std.debug.assert(self.wheel.nowTick() == due_tick);
+        assert(self.wheel.nowTick() == due_tick);
         return self.pass();
     }
 
@@ -305,7 +307,7 @@ test "timer wheel operation sequences stay aligned with testing.model" {
     const Target = model.ModelTarget(static_scheduling.timer_wheel.TimerError);
     const Runner = model.ModelRunner(static_scheduling.timer_wheel.TimerError);
 
-    var context = try TimerWheelModelContext.init(std.testing.allocator);
+    var context = try TimerWheelModelContext.init(testing.allocator);
     defer context.deinit();
 
     var action_storage: [24]model.RecordedAction = undefined;
@@ -332,7 +334,7 @@ test "timer wheel operation sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 96), summary.executed_case_count);
+    try testing.expectEqual(@as(u32, 96), summary.executed_case_count);
     if (summary.failed_case) |failed_case| {
         var summary_buffer: [1024]u8 = undefined;
         const summary_text = try model.formatFailedCaseSummary(

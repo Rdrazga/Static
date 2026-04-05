@@ -8,6 +8,7 @@
 //! Run via `zig build bench` from the workspace root.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_memory = @import("static_memory");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -37,12 +38,12 @@ const PoolContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *PoolContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.pool.total() == pool_capacity);
+        assert(context.pool.total() == pool_capacity);
 
         const block = context.pool.allocBlock() catch unreachable;
         context.pool.freeBlock(block) catch unreachable;
         context.sink = bench.case.blackBox(block.len);
-        std.debug.assert(context.sink == block_size);
+        assert(context.sink == block_size);
     }
 };
 
@@ -169,7 +170,7 @@ fn validateSemanticPreflight(allocator: std.mem.Allocator) PreflightError!void {
     if (exhausted) |_| {
         return error.PoolExhaustionContractViolation;
     } else |err| {
-        std.debug.assert(err == error.NoSpaceLeft);
+        assert(err == error.NoSpaceLeft);
     }
     var free_idx: u32 = 0;
     while (free_idx < count) : (free_idx += 1) {

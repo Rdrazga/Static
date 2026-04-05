@@ -1,6 +1,8 @@
 //! Bounded benchmark history records with environment metadata.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const artifact = @import("../artifact/root.zig");
 const config = @import("config.zig");
@@ -70,16 +72,16 @@ pub const HistoryAppendBuffers = struct {
 const null_optional_string_len = std.math.maxInt(u32);
 
 comptime {
-    std.debug.assert(history_version == 3);
-    std.debug.assert(std.meta.fields(HistoryAction).len == 3);
+    assert(history_version == 3);
+    assert(std.meta.fields(HistoryAction).len == 3);
 }
 
 pub fn captureEnvironmentMetadata(options: CaptureEnvironmentOptions) EnvironmentMetadataView {
-    std.debug.assert(options.package_name.len > 0);
-    std.debug.assert(options.baseline_path.len > 0);
-    std.debug.assert(options.environment_tags.len <= max_environment_tags);
+    assert(options.package_name.len > 0);
+    assert(options.baseline_path.len > 0);
+    assert(options.environment_tags.len <= max_environment_tags);
     for (options.environment_tags) |tag| {
-        std.debug.assert(tag.len > 0);
+        assert(tag.len > 0);
     }
 
     return .{
@@ -778,17 +780,17 @@ test "history record binary round-trips with environment metadata" {
     var string_buffer: [256]u8 = undefined;
     var tag_storage: [4][]const u8 = undefined;
     const decoded = try decodeRecordBinary(encoded, &decoded_cases, &string_buffer, &tag_storage);
-    try std.testing.expectEqual(HistoryAction.compared, decoded.action);
-    try std.testing.expectEqual(@as(u64, 1234), decoded.timestamp_unix_ms);
-    try std.testing.expect(decoded.comparison_passed.?);
-    try std.testing.expectEqualStrings("static_sync", decoded.environment.package_name);
-    try std.testing.expectEqualStrings("devbox", decoded.environment.host_label.?);
-    try std.testing.expectEqualStrings("lab-a", decoded.environment.environment_note.?);
-    try std.testing.expectEqual(@as(usize, 2), decoded.environment.tags.len);
-    try std.testing.expectEqualStrings("smoke", decoded.environment.tags[0]);
-    try std.testing.expectEqualStrings("baseline", decoded.environment.tags[1]);
-    try std.testing.expectEqualStrings("event_try_wait_signaled", decoded.cases[0].case_name);
-    try std.testing.expectEqual(@as(?u64, 20), decoded.cases[0].p99_elapsed_ns);
+    try testing.expectEqual(HistoryAction.compared, decoded.action);
+    try testing.expectEqual(@as(u64, 1234), decoded.timestamp_unix_ms);
+    try testing.expect(decoded.comparison_passed.?);
+    try testing.expectEqualStrings("static_sync", decoded.environment.package_name);
+    try testing.expectEqualStrings("devbox", decoded.environment.host_label.?);
+    try testing.expectEqualStrings("lab-a", decoded.environment.environment_note.?);
+    try testing.expectEqual(@as(usize, 2), decoded.environment.tags.len);
+    try testing.expectEqualStrings("smoke", decoded.environment.tags[0]);
+    try testing.expectEqualStrings("baseline", decoded.environment.tags[1]);
+    try testing.expectEqualStrings("event_try_wait_signaled", decoded.cases[0].case_name);
+    try testing.expectEqual(@as(?u64, 20), decoded.cases[0].p99_elapsed_ns);
 }
 
 test "decodeRecordBinary reads legacy v1 records without note or p99" {
@@ -820,11 +822,11 @@ test "decodeRecordBinary reads legacy v1 records without note or p99" {
     var string_buffer: [256]u8 = undefined;
     var tag_storage: [4][]const u8 = undefined;
     const decoded = try decodeRecordBinary(writer.finish(), &decoded_cases, &string_buffer, &tag_storage);
-    try std.testing.expectEqual(@as(u64, 99), decoded.timestamp_unix_ms);
-    try std.testing.expectEqualStrings("legacy-host", decoded.environment.host_label.?);
-    try std.testing.expectEqual(@as(?[]const u8, null), decoded.environment.environment_note);
-    try std.testing.expectEqual(@as(?u64, null), decoded.cases[0].p99_elapsed_ns);
-    try std.testing.expectEqual(@as(usize, 0), decoded.environment.tags.len);
+    try testing.expectEqual(@as(u64, 99), decoded.timestamp_unix_ms);
+    try testing.expectEqualStrings("legacy-host", decoded.environment.host_label.?);
+    try testing.expectEqual(@as(?[]const u8, null), decoded.environment.environment_note);
+    try testing.expectEqual(@as(?u64, null), decoded.cases[0].p99_elapsed_ns);
+    try testing.expectEqual(@as(usize, 0), decoded.environment.tags.len);
 }
 
 test "decodeRecordBinary reads legacy v2 records without tags" {
@@ -857,18 +859,18 @@ test "decodeRecordBinary reads legacy v2 records without tags" {
     var string_buffer: [256]u8 = undefined;
     var tag_storage: [4][]const u8 = undefined;
     const decoded = try decodeRecordBinary(writer.finish(), &decoded_cases, &string_buffer, &tag_storage);
-    try std.testing.expectEqual(@as(u64, 101), decoded.timestamp_unix_ms);
-    try std.testing.expectEqualStrings("legacy-host", decoded.environment.host_label.?);
-    try std.testing.expectEqualStrings("legacy-note", decoded.environment.environment_note.?);
-    try std.testing.expectEqual(@as(?u64, null), decoded.cases[0].p99_elapsed_ns);
-    try std.testing.expectEqual(@as(usize, 0), decoded.environment.tags.len);
+    try testing.expectEqual(@as(u64, 101), decoded.timestamp_unix_ms);
+    try testing.expectEqualStrings("legacy-host", decoded.environment.host_label.?);
+    try testing.expectEqualStrings("legacy-note", decoded.environment.environment_note.?);
+    try testing.expectEqual(@as(?u64, null), decoded.cases[0].p99_elapsed_ns);
+    try testing.expectEqual(@as(usize, 0), decoded.environment.tags.len);
 }
 
 test "appendRecordFile bounds retained history and compatibility filtering works" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1002,14 +1004,14 @@ test "appendRecordFile bounds retained history and compatibility filtering works
         },
     )).?;
 
-    try std.testing.expectEqual(@as(u64, 3), latest.timestamp_unix_ms);
-    try std.testing.expectEqual(@as(usize, 2), latest.environment.tags.len);
-    try std.testing.expectEqualStrings("stable", latest.environment.tags[0]);
-    try std.testing.expectEqualStrings("cpu-a", latest.environment.tags[1]);
+    try testing.expectEqual(@as(u64, 3), latest.timestamp_unix_ms);
+    try testing.expectEqual(@as(usize, 2), latest.environment.tags.len);
+    try testing.expectEqualStrings("stable", latest.environment.tags[0]);
+    try testing.expectEqualStrings("cpu-a", latest.environment.tags[1]);
 
     const stored = try artifact.record_log.readLogFile(io, tmp_dir.dir, "history.binlog", &read_file);
     var iter = try artifact.record_log.iterateRecords(stored);
     var count: usize = 0;
     while (try iter.next()) |_| count += 1;
-    try std.testing.expectEqual(@as(usize, 2), count);
+    try testing.expectEqual(@as(usize, 2), count);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -15,7 +16,7 @@ pub fn main() !void {
     try lane.submitFailure(.init(0), 11, 500);
     try lane.submitSuccess(.init(0), 12, 200);
     const delivered = try lane.deliverDueToMailbox(.init(1), &completions, null);
-    std.debug.assert(delivered.success_count == 1);
-    std.debug.assert(delivered.failure_count == 1);
+    assert(delivered.success_count == 1);
+    assert(delivered.failure_count == 1);
     std.debug.print("storage lane delivered success=1 failure=1\n", .{});
 }

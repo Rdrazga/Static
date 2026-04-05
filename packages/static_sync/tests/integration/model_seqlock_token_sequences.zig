@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_sync = @import("static_sync");
 const static_testing = @import("static_testing");
 
@@ -130,7 +132,7 @@ const Context = struct {
         self.saw_manual_odd_retry = false;
         self.saw_refresh_open = false;
         self.saw_multi_cycle_progression = false;
-        std.debug.assert(self.lock.seq.load(.acquire) == 0);
+        assert(self.lock.seq.load(.acquire) == 0);
     }
 
     fn validate(self: *const @This()) checker.CheckResult {
@@ -205,15 +207,15 @@ const Context = struct {
     }
 
     fn finish(self: *const @This(), case_index: u32) checker.CheckResult {
-        std.debug.assert(case_index < ScenarioCount);
+        assert(case_index < ScenarioCount);
         const expectations = scenario_expectations[case_index];
-        std.debug.assert(!self.writer_locked);
-        std.debug.assert((self.expected_seq & 1) == 0);
-        std.debug.assert(self.captured_token != null);
-        std.debug.assert(self.saw_stale_retry == expectations.stale_retry);
-        std.debug.assert(self.saw_manual_odd_retry == expectations.manual_odd_retry);
-        std.debug.assert(self.saw_refresh_open == expectations.refresh_open);
-        std.debug.assert(self.saw_multi_cycle_progression == expectations.multi_cycle_progression);
+        assert(!self.writer_locked);
+        assert((self.expected_seq & 1) == 0);
+        assert(self.captured_token != null);
+        assert(self.saw_stale_retry == expectations.stale_retry);
+        assert(self.saw_manual_odd_retry == expectations.manual_odd_retry);
+        assert(self.saw_refresh_open == expectations.refresh_open);
+        assert(self.saw_multi_cycle_progression == expectations.multi_cycle_progression);
         return self.validate();
     }
 };
@@ -249,8 +251,8 @@ test "seqlock token sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -259,8 +261,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 

@@ -14,6 +14,7 @@
 //! No allocation (stack/register only)
 
 const std = @import("std");
+const assert = std.debug.assert;
 const scalar = @import("scalar.zig");
 const vec3_mod = @import("vec3.zig");
 const mat3_mod = @import("mat3.zig");
@@ -21,7 +22,7 @@ const mat4_mod = @import("mat4.zig");
 const quat_mod = @import("quat.zig");
 
 fn normalizeColumnOrFallback(column: vec3_mod.Vec3, fallback: vec3_mod.Vec3) vec3_mod.Vec3 {
-    std.debug.assert(vec3_mod.Vec3.lengthSq(fallback) > 0.0);
+    assert(vec3_mod.Vec3.lengthSq(fallback) > 0.0);
     const column_len_sq = vec3_mod.Vec3.lengthSq(column);
     if (column_len_sq > 0.0) {
         return vec3_mod.Vec3.scale(column, 1.0 / @sqrt(column_len_sq));
@@ -31,7 +32,7 @@ fn normalizeColumnOrFallback(column: vec3_mod.Vec3, fallback: vec3_mod.Vec3) vec
 }
 
 fn perpendicularUnit(dir: vec3_mod.Vec3) vec3_mod.Vec3 {
-    std.debug.assert(vec3_mod.Vec3.lengthSq(dir) > 0.0);
+    assert(vec3_mod.Vec3.lengthSq(dir) > 0.0);
 
     const axis_x = vec3_mod.Vec3.cross(dir, vec3_mod.Vec3.unit_x);
     if (vec3_mod.Vec3.lengthSq(axis_x) > scalar.epsilon) {
@@ -39,7 +40,7 @@ fn perpendicularUnit(dir: vec3_mod.Vec3) vec3_mod.Vec3 {
     }
 
     const axis_y = vec3_mod.Vec3.cross(dir, vec3_mod.Vec3.unit_y);
-    std.debug.assert(vec3_mod.Vec3.lengthSq(axis_y) > 0.0);
+    assert(vec3_mod.Vec3.lengthSq(axis_y) > 0.0);
     return vec3_mod.Vec3.normalize(axis_y);
 }
 
@@ -157,10 +158,10 @@ pub const Transform = extern struct {
         p: vec3_mod.Vec3,
     ) vec3_mod.Vec3 {
         // Precondition: uniform scale for exact TRS inverse.
-        std.debug.assert(t.scale.x != 0.0);
+        assert(t.scale.x != 0.0);
         // Precondition: scale must be uniform — non-uniform scale requires different
         // handling (the function only uses t.scale.x for the inverse).
-        std.debug.assert(t.scale.x == t.scale.y and t.scale.x == t.scale.z);
+        assert(t.scale.x == t.scale.y and t.scale.x == t.scale.z);
         const inv_rot = quat_mod.Quat.conjugate(t.rotation);
         const translated = vec3_mod.Vec3.sub(p, t.translation);
         const rotated = quat_mod.Quat.rotate(inv_rot, translated);
@@ -221,7 +222,7 @@ pub const Transform = extern struct {
         else
             perpendicularUnit(r0);
         var r2 = vec3_mod.Vec3.cross(r0, r1);
-        std.debug.assert(vec3_mod.Vec3.lengthSq(r2) > 0.0);
+        assert(vec3_mod.Vec3.lengthSq(r2) > 0.0);
         r2 = vec3_mod.Vec3.normalize(r2);
         const aligned_r1 = if (vec3_mod.Vec3.dot(r2, col2_unit) >= 0.0) r1 else vec3_mod.Vec3.neg(r1);
         const aligned_r2 = if (vec3_mod.Vec3.dot(r2, col2_unit) >= 0.0) r2 else vec3_mod.Vec3.neg(r2);
@@ -239,9 +240,9 @@ pub const Transform = extern struct {
     /// Precondition: all scale components are non-zero (otherwise the
     /// TRS matrix is singular and has no inverse).
     pub fn inverseMat4(t: Transform) mat4_mod.Mat4 {
-        std.debug.assert(t.scale.x != 0.0);
-        std.debug.assert(t.scale.y != 0.0);
-        std.debug.assert(t.scale.z != 0.0);
+        assert(t.scale.x != 0.0);
+        assert(t.scale.y != 0.0);
+        assert(t.scale.z != 0.0);
         const m = toMat4(t);
         // A TRS matrix with non-zero scale is always invertible: the
         // determinant is scale.x * scale.y * scale.z (rotation contributes
@@ -254,14 +255,14 @@ pub const Transform = extern struct {
     ///
     /// Precondition: uniform, non-zero scale.
     pub fn inverse(t: Transform) Transform {
-        std.debug.assert(t.scale.x != 0.0);
-        std.debug.assert(t.scale.y != 0.0);
-        std.debug.assert(t.scale.z != 0.0);
+        assert(t.scale.x != 0.0);
+        assert(t.scale.y != 0.0);
+        assert(t.scale.z != 0.0);
 
         // Inverse of a TRS transform is not generally representable as
         // TRS without shear unless the scale is uniform (or rotation is
         // identity). Require uniform scale.
-        std.debug.assert(t.scale.x == t.scale.y and t.scale.x == t.scale.z);
+        assert(t.scale.x == t.scale.y and t.scale.x == t.scale.z);
 
         const inv_s: f32 = 1.0 / t.scale.x;
         const inv_scale = vec3_mod.Vec3.splat(inv_s);

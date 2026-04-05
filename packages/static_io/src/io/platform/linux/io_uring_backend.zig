@@ -9,6 +9,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const io_caps = @import("../../caps.zig");
 const static_queues = @import("static_queues");
 const backend = @import("../../backend.zig");
@@ -103,10 +105,10 @@ fn timeoutNsToTimespec(timeout_ns: u64) linux.kernel_timespec {
 }
 
 fn errnoFromCqeRes(res: i32) linux.E {
-    std.debug.assert(res < 0);
+    assert(res < 0);
     const errno_int: i32 = -res;
-    std.debug.assert(errno_int >= 0);
-    std.debug.assert(errno_int <= std.math.maxInt(u16));
+    assert(errno_int >= 0);
+    assert(errno_int <= std.math.maxInt(u16));
     return @enumFromInt(@as(u16, @intCast(errno_int)));
 }
 
@@ -318,31 +320,31 @@ const LinuxIoUringBackend = struct {
     }
 
     fn allocSlot(self: *LinuxIoUringBackend) backend.SubmitError!u32 {
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
         if (self.free_len == 0) return error.WouldBlock;
         self.free_len -= 1;
         const slot_index = self.free_slots[self.free_len];
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.slots[slot_index].state == .free);
+        assert(slot_index < self.slots.len);
+        assert(self.slots[slot_index].state == .free);
         return slot_index;
     }
 
     fn freeSlot(self: *LinuxIoUringBackend, slot_index: u32) void {
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.free_len < self.free_slots.len);
+        assert(slot_index < self.slots.len);
+        assert(self.free_len < self.free_slots.len);
         const next_generation = nextGeneration(self.slots[slot_index].generation);
         self.slots[slot_index] = .{
             .generation = next_generation,
         };
         self.free_slots[self.free_len] = slot_index;
         self.free_len += 1;
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
     }
 
     fn completeImmediate(self: *LinuxIoUringBackend, op: types.Operation, completion: types.Completion) backend.SubmitError!types.OperationId {
         const slot_index = try self.allocSlot();
         var slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .free);
+        assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);
         var out_completion = completion;
@@ -505,7 +507,7 @@ const LinuxIoUringBackend = struct {
 
         const slot_index = try self.allocSlot();
         var slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .free);
+        assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);
         slot.* = .{
@@ -781,7 +783,7 @@ const LinuxIoUringBackend = struct {
         const slot_index = self.completed.tryPop() catch return null;
         const slot = &self.slots[slot_index];
         if (slot.state != .ready) {
-            std.debug.assert(slot.state == .ready);
+            assert(slot.state == .ready);
             return null;
         }
         const completion = slot.completion;
@@ -1090,11 +1092,11 @@ test "io_uring backend supports bounded nop/fill completions" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1111,17 +1113,17 @@ test "io_uring backend supports bounded nop/fill completions" {
         .byte = 0x7A,
     } });
     const id_b = try backend_impl.submit(.{ .nop = buf_b });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
 
     _ = try backend_impl.pump(8);
     const first = backend_impl.poll().?;
     const second = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
-    try std.testing.expectEqual(id_a, first.operation_id);
-    try std.testing.expectEqual(id_b, second.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.success, first.status);
-    try std.testing.expectEqual(types.CompletionStatus.success, second.status);
-    try std.testing.expectEqual(@as(u8, 0x7A), first.buffer.bytes[0]);
+    try testing.expect(backend_impl.poll() == null);
+    try testing.expectEqual(id_a, first.operation_id);
+    try testing.expectEqual(id_b, second.operation_id);
+    try testing.expectEqual(types.CompletionStatus.success, first.status);
+    try testing.expectEqual(types.CompletionStatus.success, second.status);
+    try testing.expectEqual(@as(u8, 0x7A), first.buffer.bytes[0]);
 }
 
 test "io_uring backend supports connect/accept, stream read/write, and stream read timeout" {
@@ -1129,11 +1131,11 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1151,14 +1153,14 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const listen_rc2 = std.posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1193,26 +1195,26 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             seen_accept = true;
-            try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(?types.Handle, server_stream.handle), completion.handle);
+            try testing.expectEqual(types.OperationTag.accept, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(?types.Handle, server_stream.handle), completion.handle);
             const peer = completion.endpoint orelse return error.MissingAcceptPeerEndpoint;
             switch (peer) {
                 .ipv4 => |ipv4| {
-                    try std.testing.expectEqual([4]u8{ 127, 0, 0, 1 }, ipv4.address.octets);
-                    try std.testing.expect(ipv4.port != 0);
-                    try std.testing.expect(ipv4.port != port);
+                    try testing.expectEqual([4]u8{ 127, 0, 0, 1 }, ipv4.address.octets);
+                    try testing.expect(ipv4.port != 0);
+                    try testing.expect(ipv4.port != port);
                 },
                 else => return error.UnexpectedAcceptPeerEndpoint,
             }
         } else if (completion.operation_id == connect_id) {
             seen_connect = true;
-            try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(?types.Handle, client_stream.handle), completion.handle);
+            try testing.expectEqual(types.OperationTag.connect, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(?types.Handle, client_stream.handle), completion.handle);
         }
     }
-    try std.testing.expect(seen_accept and seen_connect);
+    try testing.expect(seen_accept and seen_connect);
 
     var write_bytes: [5]u8 = .{ 'h', 'e', 'l', 'l', 'o' };
     var write_buf = types.Buffer{ .bytes = &write_bytes };
@@ -1241,18 +1243,18 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
         } else if (completion.operation_id == read_id) {
             got_read = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
-            try std.testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
         }
     }
-    try std.testing.expect(got_write and got_read);
+    try testing.expect(got_write and got_read);
 
     if (!backend_impl.capabilities().supports_cancel) {
         backend_impl.notifyHandleClosed(server_stream.handle);
@@ -1271,10 +1273,10 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
     try backend_impl.cancel(cancel_read_id);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const cancel_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(cancel_read_id, cancel_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, cancel_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.cancelled, cancel_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancel_completion.err);
+    try testing.expectEqual(cancel_read_id, cancel_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, cancel_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.cancelled, cancel_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancel_completion.err);
 
     var timeout_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const timeout_read_buf = types.Buffer{ .bytes = &timeout_read_bytes };
@@ -1285,10 +1287,10 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const timeout_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(timeout_read_id, timeout_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, timeout_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
+    try testing.expectEqual(timeout_read_id, timeout_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, timeout_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
 
     const accept_timeout_stream = types.Stream{ .handle = .{ .index = 3, .generation = 1 } };
     const accept_timeout_id = backend_impl.submit(.{ .accept = .{
@@ -1297,7 +1299,7 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
         .timeout_ns = 50 * std.time.ns_per_ms,
     } }) catch |err| switch (err) {
         error.Unsupported => {
-            try std.testing.expect(!backend_impl.capabilities().supports_timeouts);
+            try testing.expect(!backend_impl.capabilities().supports_timeouts);
             backend_impl.notifyHandleClosed(server_stream.handle);
             backend_impl.notifyHandleClosed(client_stream.handle);
             std.posix.close(listen_fd);
@@ -1307,10 +1309,10 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
     };
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const accept_timeout_completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
+    try testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
 
     var close_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const close_read_buf = types.Buffer{ .bytes = &close_read_bytes };
@@ -1322,10 +1324,10 @@ test "io_uring backend supports connect/accept, stream read/write, and stream re
     backend_impl.notifyHandleClosed(server_stream.handle);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const close_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(close_read_id, close_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, close_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, close_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_completion.err);
+    try testing.expectEqual(close_read_id, close_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, close_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, close_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
     std.posix.close(listen_fd);
@@ -1336,11 +1338,11 @@ test "io_uring backend maps connection refused on connect" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1357,11 +1359,11 @@ test "io_uring backend maps connection refused on connect" {
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(reserve_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const reserved = socketLocalEndpoint(reserve_fd) orelse return error.SkipZigTest;
     const port = endpointPort(reserved);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
     std.posix.close(reserve_fd);
 
     const client_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
@@ -1378,10 +1380,10 @@ test "io_uring backend maps connection refused on connect" {
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
 
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(connect_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.connection_refused, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .connection_refused), completion.err);
+    try testing.expectEqual(connect_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.connect, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.connection_refused, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .connection_refused), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1391,11 +1393,11 @@ test "io_uring backend closes pending accept when listener handle closes" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1413,10 +1415,10 @@ test "io_uring backend closes pending accept when listener handle closes" {
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const listen_rc2 = std.posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1433,12 +1435,12 @@ test "io_uring backend closes pending accept when listener handle closes" {
     backend_impl.notifyHandleClosed(listener_handle);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(accept_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(?types.Handle, null), completion.handle);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(accept_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(?types.Handle, null), completion.handle);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 
     std.posix.close(listen_fd);
 }
@@ -1448,11 +1450,11 @@ test "io_uring backend closes pending stream_write when stream handle closes" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1470,14 +1472,14 @@ test "io_uring backend closes pending stream_write when stream handle closes" {
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const listen_rc2 = std.posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1506,13 +1508,13 @@ test "io_uring backend closes pending stream_write when stream handle closes" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             saw_accept = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         } else if (completion.operation_id == connect_id) {
             saw_connect = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         }
     }
-    try std.testing.expect(saw_accept and saw_connect);
+    try testing.expect(saw_accept and saw_connect);
 
     const server_fd = backend_impl.handle_native[server_stream.handle.index];
     const client_fd = backend_impl.handle_native[client_stream.handle.index];
@@ -1563,11 +1565,11 @@ test "io_uring backend closes pending stream_write when stream handle closes" {
 
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 
     backend_impl.notifyHandleClosed(server_stream.handle);
     std.posix.close(listen_fd);
@@ -1578,11 +1580,11 @@ test "io_uring backend allows multiple in-flight reads on one stream" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1600,14 +1602,14 @@ test "io_uring backend allows multiple in-flight reads on one stream" {
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const listen_rc2 = std.posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1671,7 +1673,7 @@ test "io_uring backend allows multiple in-flight reads on one stream" {
     while (attempts < 8 and pumped_total < 3) : (attempts += 1) {
         pumped_total += try backend_impl.waitForCompletions(3 - pumped_total, std.time.ns_per_s);
     }
-    try std.testing.expect(pumped_total >= 3);
+    try testing.expect(pumped_total >= 3);
 
     var got_write = false;
     var got_read_a = false;
@@ -1681,27 +1683,27 @@ test "io_uring backend allows multiple in-flight reads on one stream" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 2), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 2), completion.bytes_transferred);
         } else if (completion.operation_id == read_a_id) {
             got_read_a = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
         } else if (completion.operation_id == read_b_id) {
             got_read_b = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
         }
     }
-    try std.testing.expect(got_write and got_read_a and got_read_b);
+    try testing.expect(got_write and got_read_a and got_read_b);
 
     const got_first = read_a_bytes[0];
     const got_second = read_b_bytes[0];
     const matches = (got_first == 'a' and got_second == 'b') or (got_first == 'b' and got_second == 'a');
-    try std.testing.expect(matches);
+    try testing.expect(matches);
 
     std.posix.close(listen_fd);
 }
@@ -1711,11 +1713,11 @@ test "io_uring backend maps connection reset on stream read" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1734,14 +1736,14 @@ test "io_uring backend maps connection reset on stream read" {
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const listen_rc2 = std.posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const Server = struct {
         fn run(server_listen_fd: std.posix.fd_t) void {
@@ -1805,10 +1807,10 @@ test "io_uring backend maps connection reset on stream read" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id != connect_id) continue;
         saw_connect = true;
-        try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+        try testing.expectEqual(types.OperationTag.connect, completion.tag);
+        try testing.expectEqual(types.CompletionStatus.success, completion.status);
     }
-    try std.testing.expect(saw_connect);
+    try testing.expect(saw_connect);
 
     var read_bytes: [8]u8 = [_]u8{0} ** 8;
     const read_buf = types.Buffer{ .bytes = &read_bytes };
@@ -1820,10 +1822,10 @@ test "io_uring backend maps connection reset on stream read" {
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
 
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.connection_reset, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .connection_reset), completion.err);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.connection_reset, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .connection_reset), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1833,11 +1835,11 @@ test "io_uring backend maps broken pipe on stream write after shutdown send" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1855,14 +1857,14 @@ test "io_uring backend maps broken pipe on stream write after shutdown send" {
         .port = 0,
     } });
     const bind_rc = std.posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(bind_rc));
 
     const listen_rc2 = std.posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
+    try testing.expectEqual(std.posix.E.SUCCESS, std.posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const client_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1882,13 +1884,13 @@ test "io_uring backend maps broken pipe on stream write after shutdown send" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id != connect_id) continue;
         saw_connect = true;
-        try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+        try testing.expectEqual(types.OperationTag.connect, completion.tag);
+        try testing.expectEqual(types.CompletionStatus.success, completion.status);
     }
-    try std.testing.expect(saw_connect);
+    try testing.expect(saw_connect);
 
     const client_fd = backend_impl.handle_native[client_stream.handle.index];
-    try std.testing.expect(client_fd >= 0);
+    try testing.expect(client_fd >= 0);
     const shutdown_rc = std.posix.system.shutdown(client_fd, linux.SHUT.WR);
     if (std.posix.errno(shutdown_rc) != .SUCCESS) return error.SkipZigTest;
 
@@ -1912,10 +1914,10 @@ test "io_uring backend maps broken pipe on stream write after shutdown send" {
         }
     }
     const completion = completion_opt orelse return error.SkipZigTest;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.broken_pipe, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .broken_pipe), completion.err);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.broken_pipe, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .broken_pipe), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1925,11 +1927,11 @@ test "io_uring backend supports file write/read via adopted handle" {
     cfg.backend_kind = .linux_io_uring;
 
     if (!io_caps.linuxBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IoUringBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IoUringBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = IoUringBackend.init(std.testing.allocator, cfg) catch |err| switch (err) {
+    var backend_impl = IoUringBackend.init(testing.allocator, cfg) catch |err| switch (err) {
         error.Unsupported => return error.SkipZigTest,
         else => return err,
     };
@@ -1965,11 +1967,11 @@ test "io_uring backend supports file write/read via adopted handle" {
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const write_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, write_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_write_at, write_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, write_completion.status);
-    try std.testing.expectEqual(@as(u32, 4), write_completion.bytes_transferred);
-    try std.testing.expectEqual(@as(?types.Handle, file_handle), write_completion.handle);
+    try testing.expectEqual(write_id, write_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_write_at, write_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, write_completion.status);
+    try testing.expectEqual(@as(u32, 4), write_completion.bytes_transferred);
+    try testing.expectEqual(@as(?types.Handle, file_handle), write_completion.handle);
 
     var read_bytes: [8]u8 = [_]u8{0} ** 8;
     const read_buf = types.Buffer{ .bytes = &read_bytes };
@@ -1981,9 +1983,9 @@ test "io_uring backend supports file write/read via adopted handle" {
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const read_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(read_id, read_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_read_at, read_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, read_completion.status);
-    try std.testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
-    try std.testing.expectEqual(@as(?types.Handle, file_handle), read_completion.handle);
+    try testing.expectEqual(read_id, read_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_read_at, read_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, read_completion.status);
+    try testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
+    try testing.expectEqual(@as(?types.Handle, file_handle), read_completion.handle);
 }

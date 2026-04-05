@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -38,7 +39,7 @@ pub fn writeSingleCaseReport(
     output_dir: std.Io.Dir,
     environment_note: []const u8,
 ) !void {
-    std.debug.assert(run_result.case_results.len == 1);
+    assert(run_result.case_results.len == 1);
 
     var stats_storage: [1]bench.stats.BenchmarkStats = undefined;
     var baseline_document_buffer: [1024]u8 = undefined;

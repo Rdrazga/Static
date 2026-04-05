@@ -9,6 +9,8 @@
 //! Thread safety: thread-safe. All functions are pure and stateless.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// Errors returned by bitfield operations.
 pub const BitfieldError = error{
@@ -67,7 +69,7 @@ fn validateRange(comptime T: type, start_bit: u8, bit_count: u8) BitfieldError!v
     const start_u16: u16 = @as(u16, start_bit);
     const count_u16: u16 = @as(u16, bit_count);
     const end_u16: u16 = start_u16 + count_u16;
-    std.debug.assert(end_u16 >= start_u16);
+    assert(end_u16 >= start_u16);
     if (end_u16 > bit_width) return error.InvalidRange;
 }
 
@@ -293,52 +295,52 @@ fn nextDeterministic(state: *u64) u64 {
 test "extract and insert bits preserve outside ranges" {
     const base: u16 = 0b1010_0000_1111_0000;
     const inserted = try insertBits(u16, base, 0b0101, 8, 4);
-    try std.testing.expectEqual(@as(u16, 0b1010_0101_1111_0000), inserted);
-    try std.testing.expectEqual(@as(u16, 0b0101), try extractBits(u16, inserted, 8, 4));
+    try testing.expectEqual(@as(u16, 0b1010_0101_1111_0000), inserted);
+    try testing.expectEqual(@as(u16, 0b0101), try extractBits(u16, inserted, 8, 4));
 }
 
 test "bitfield reports invalid ranges and overflow" {
-    try std.testing.expectError(error.InvalidRange, extractBits(u8, 0xFF, 7, 2));
-    try std.testing.expectError(error.InvalidRange, insertBits(u8, 0, 1, 4, 5));
-    try std.testing.expectError(error.Overflow, insertBits(u8, 0, 0b1_0000, 0, 4));
+    try testing.expectError(error.InvalidRange, extractBits(u8, 0xFF, 7, 2));
+    try testing.expectError(error.InvalidRange, insertBits(u8, 0, 1, 4, 5));
+    try testing.expectError(error.Overflow, insertBits(u8, 0, 0b1_0000, 0, 4));
 }
 
 test "pack2 and unpack2 use compile-time width contracts" {
     const packed_value = try pack2(u16, 0b1010, 4, 0x12, 8);
     const unpacked = try unpack2(u16, packed_value, 4, 8);
-    try std.testing.expectEqual(@as(u16, 0b1010), unpacked.low);
-    try std.testing.expectEqual(@as(u16, 0x12), unpacked.high);
+    try testing.expectEqual(@as(u16, 0b1010), unpacked.low);
+    try testing.expectEqual(@as(u16, 0x12), unpacked.high);
 }
 
 test "pack2 and unpack2 report overlapping fields as invalid range" {
-    try std.testing.expectError(error.InvalidRange, pack2(u8, 0, 5, 0, 5));
-    try std.testing.expectError(error.InvalidRange, unpack2(u8, 0, 5, 5));
-    try std.testing.expectError(error.InvalidRange, pack2(u16, 0, 12, 0, 8));
-    try std.testing.expectError(error.InvalidRange, unpack2(u16, 0, 12, 8));
+    try testing.expectError(error.InvalidRange, pack2(u8, 0, 5, 0, 5));
+    try testing.expectError(error.InvalidRange, unpack2(u8, 0, 5, 5));
+    try testing.expectError(error.InvalidRange, pack2(u16, 0, 12, 0, 8));
+    try testing.expectError(error.InvalidRange, unpack2(u16, 0, 12, 8));
 }
 
 test "comptime bitfield wrappers match runtime wrappers" {
     const base: u16 = 0b1010_0000_1111_0000;
     const runtime_inserted = try insertBits(u16, base, 0b0101, 8, 4);
     const comptime_inserted = try insertBitsCt(u16, base, 0b0101, 8, 4);
-    try std.testing.expectEqual(runtime_inserted, comptime_inserted);
+    try testing.expectEqual(runtime_inserted, comptime_inserted);
 
     const runtime_extracted = try extractBits(u16, runtime_inserted, 8, 4);
     const comptime_extracted = extractBitsCt(u16, runtime_inserted, 8, 4);
-    try std.testing.expectEqual(runtime_extracted, comptime_extracted);
+    try testing.expectEqual(runtime_extracted, comptime_extracted);
 
     const packed_runtime = try pack2(u16, 0b1010, 4, 0x12, 8);
     const packed_comptime = try pack2Ct(u16, 0b1010, 4, 0x12, 8);
-    try std.testing.expectEqual(packed_runtime, packed_comptime);
+    try testing.expectEqual(packed_runtime, packed_comptime);
 
     const unpacked_runtime = try unpack2(u16, packed_runtime, 4, 8);
     const unpacked_comptime = unpack2Ct(u16, packed_runtime, 4, 8);
-    try std.testing.expectEqual(unpacked_runtime.low, unpacked_comptime.low);
-    try std.testing.expectEqual(unpacked_runtime.high, unpacked_comptime.high);
+    try testing.expectEqual(unpacked_runtime.low, unpacked_comptime.low);
+    try testing.expectEqual(unpacked_runtime.high, unpacked_comptime.high);
 }
 
 test "comptime insert wrappers preserve runtime overflow checks" {
-    try std.testing.expectError(error.Overflow, insertBitsCt(u8, 0, 0b1_0000, 0, 4));
+    try testing.expectError(error.Overflow, insertBitsCt(u8, 0, 0b1_0000, 0, 4));
 }
 
 test "deterministic bitfield roundtrip properties" {
@@ -359,35 +361,35 @@ test "deterministic bitfield roundtrip properties" {
 
         const inserted = try insertBits(u32, base, field_value, start, width);
         const extracted = try extractBits(u32, inserted, start, width);
-        try std.testing.expectEqual(field_value, extracted);
+        try testing.expectEqual(field_value, extracted);
 
         const shifted_mask: u32 = if (width == 32)
             std.math.maxInt(u32)
         else
             field_mask << @as(u5, @intCast(start));
-        try std.testing.expectEqual(base & ~shifted_mask, inserted & ~shifted_mask);
+        try testing.expectEqual(base & ~shifted_mask, inserted & ~shifted_mask);
     }
 }
 
 test "zero-width ranges are valid at the type boundary" {
     const bit_width: u8 = @intCast(@bitSizeOf(u8));
-    try std.testing.expectEqual(@as(u8, 0), try extractBits(u8, 0xAA, bit_width, 0));
-    try std.testing.expectEqual(@as(u8, 0xAA), try insertBits(u8, 0xAA, 0, bit_width, 0));
-    try std.testing.expectError(error.Overflow, insertBits(u8, 0xAA, 1, bit_width, 0));
+    try testing.expectEqual(@as(u8, 0), try extractBits(u8, 0xAA, bit_width, 0));
+    try testing.expectEqual(@as(u8, 0xAA), try insertBits(u8, 0xAA, 0, bit_width, 0));
+    try testing.expectError(error.Overflow, insertBits(u8, 0xAA, 1, bit_width, 0));
 }
 
 test "signed full-width operations preserve two's-complement payloads" {
     const value: i8 = -2;
-    try std.testing.expectEqual(value, try extractBits(i8, value, 0, 8));
-    try std.testing.expectEqual(value, extractBitsCt(i8, value, 0, 8));
+    try testing.expectEqual(value, try extractBits(i8, value, 0, 8));
+    try testing.expectEqual(value, extractBitsCt(i8, value, 0, 8));
 
     const inserted = try insertBits(i8, 0, value, 0, 8);
-    try std.testing.expectEqual(value, inserted);
+    try testing.expectEqual(value, inserted);
     const inserted_ct = try insertBitsCt(i8, 0, value, 0, 8);
-    try std.testing.expectEqual(inserted, inserted_ct);
+    try testing.expectEqual(inserted, inserted_ct);
 }
 
 test "signed partial-width inserts reject negative values" {
-    try std.testing.expectError(error.Overflow, insertBits(i8, 0, -1, 0, 4));
-    try std.testing.expectError(error.Overflow, insertBitsCt(i8, 0, -1, 0, 4));
+    try testing.expectError(error.Overflow, insertBits(i8, 0, -1, 0, 4));
+    try testing.expectError(error.Overflow, insertBitsCt(i8, 0, -1, 0, 4));
 }

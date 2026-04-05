@@ -6,6 +6,8 @@
 //! per-step trace cost without improving replay fidelity.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const seed_mod = @import("../seed.zig");
 const trace = @import("../trace.zig");
 
@@ -84,7 +86,7 @@ pub const Scheduler = struct {
         if (self.ready_len >= self.ready_storage.len) return error.NoSpaceLeft;
         self.ready_storage[self.ready_len] = ready_item;
         self.ready_len += 1;
-        std.debug.assert(self.ready_len <= self.ready_storage.len);
+        assert(self.ready_len <= self.ready_storage.len);
     }
 
     /// Report whether at least one ready item is available to schedule.
@@ -99,7 +101,7 @@ pub const Scheduler = struct {
 
     /// Report how many more ready items can be enqueued without overflow.
     pub fn remainingReadyCapacity(self: *const Scheduler) usize {
-        std.debug.assert(self.ready_len <= self.ready_storage.len);
+        assert(self.ready_len <= self.ready_storage.len);
         return self.ready_storage.len - self.ready_len;
     }
 
@@ -203,14 +205,14 @@ fn chooseReadyIndex(
 
             const stream_seed = seed_mod.splitSeed(base_seed, step_index);
             const alternate_len = ready_len - 1;
-            std.debug.assert(alternate_len != 0);
+            assert(alternate_len != 0);
             break :blk 1 + @as(usize, @intCast(stream_seed.value % alternate_len));
         },
     };
 }
 
 fn removeReadyAt(ready_storage: []ReadyItem, ready_len: *usize, chosen_index: usize) void {
-    std.debug.assert(chosen_index < ready_len.*);
+    assert(chosen_index < ready_len.*);
 
     var index = chosen_index;
     while (index + 1 < ready_len.*) : (index += 1) {
@@ -252,7 +254,7 @@ test "scheduler produces deterministic decisions from the same seed" {
 
     const first_a = try scheduler_a.nextDecision();
     const first_b = try scheduler_b.nextDecision();
-    try std.testing.expectEqual(first_a.chosen_id, first_b.chosen_id);
+    try testing.expectEqual(first_a.chosen_id, first_b.chosen_id);
 }
 
 test "scheduler replays recorded decisions against the same ready set" {
@@ -273,8 +275,8 @@ test "scheduler replays recorded decisions against the same ready set" {
     try replayer.enqueueReady(.{ .id = 2, .value = 200 });
 
     const replayed = try replayer.applyRecordedDecision(recorded);
-    try std.testing.expectEqual(recorded.chosen_id, replayed.chosen_id);
-    try std.testing.expectEqual(@as(usize, 1), replayer.readyCount());
+    try testing.expectEqual(recorded.chosen_id, replayed.chosen_id);
+    try testing.expectEqual(@as(usize, 1), replayer.readyCount());
 }
 
 test "scheduler rejects replay mismatches" {
@@ -286,7 +288,7 @@ test "scheduler rejects replay mismatches" {
     try scheduler.enqueueReady(.{ .id = 3, .value = 1 });
     try scheduler.enqueueReady(.{ .id = 4, .value = 2 });
 
-    try std.testing.expectError(error.Mismatch, scheduler.applyRecordedDecision(.{
+    try testing.expectError(error.Mismatch, scheduler.applyRecordedDecision(.{
         .step_index = 0,
         .chosen_index = 1,
         .ready_len = 2,
@@ -303,7 +305,7 @@ test "scheduler rejects replay decisions for the wrong step index" {
     var scheduler = try Scheduler.init(.init(1), &ready_storage, &decision_storage, .{}, null);
     try scheduler.enqueueReady(.{ .id = 7, .value = 1 });
 
-    try std.testing.expectError(error.Mismatch, scheduler.applyRecordedDecision(.{
+    try testing.expectError(error.Mismatch, scheduler.applyRecordedDecision(.{
         .step_index = 1,
         .chosen_index = 0,
         .ready_len = 1,
@@ -328,10 +330,10 @@ test "scheduler trace records only the chosen id" {
     const decision = try scheduler.nextDecision();
     const snapshot = trace_buffer.snapshot();
 
-    try std.testing.expectEqual(@as(u32, 7), decision.chosen_id);
-    try std.testing.expectEqual(@as(usize, 1), snapshot.items.len);
-    try std.testing.expectEqualStrings("scheduler.decision", snapshot.items[0].label);
-    try std.testing.expectEqual(@as(u64, 7), snapshot.items[0].value);
+    try testing.expectEqual(@as(u32, 7), decision.chosen_id);
+    try testing.expectEqual(@as(usize, 1), snapshot.items.len);
+    try testing.expectEqualStrings("scheduler.decision", snapshot.items[0].label);
+    try testing.expectEqual(@as(u64, 7), snapshot.items[0].value);
 }
 
 test "scheduler leaves state unchanged when trace append fails" {
@@ -348,18 +350,18 @@ test "scheduler leaves state unchanged when trace append fails" {
     try scheduler.enqueueReady(.{ .id = 2, .value = 20 });
 
     _ = try scheduler.nextDecision();
-    try std.testing.expectEqual(@as(usize, 1), scheduler.recordedDecisions().len);
-    try std.testing.expectEqual(@as(usize, 1), scheduler.readyCount());
+    try testing.expectEqual(@as(usize, 1), scheduler.recordedDecisions().len);
+    try testing.expectEqual(@as(usize, 1), scheduler.readyCount());
 
-    try std.testing.expectError(error.NoSpaceLeft, scheduler.nextDecision());
-    try std.testing.expectEqual(@as(usize, 1), scheduler.recordedDecisions().len);
-    try std.testing.expectEqual(@as(usize, 1), scheduler.readyCount());
+    try testing.expectError(error.NoSpaceLeft, scheduler.nextDecision());
+    try testing.expectEqual(@as(usize, 1), scheduler.recordedDecisions().len);
+    try testing.expectEqual(@as(usize, 1), scheduler.readyCount());
 
     trace_buffer.reset();
     const replayed = try scheduler.nextDecision();
-    try std.testing.expectEqual(@as(u32, 2), replayed.chosen_id);
-    try std.testing.expectEqual(@as(usize, 2), scheduler.recordedDecisions().len);
-    try std.testing.expectEqual(@as(usize, 0), scheduler.readyCount());
+    try testing.expectEqual(@as(u32, 2), replayed.chosen_id);
+    try testing.expectEqual(@as(usize, 2), scheduler.recordedDecisions().len);
+    try testing.expectEqual(@as(usize, 0), scheduler.readyCount());
 }
 
 test "describeSchedule reports persisted mode metadata" {
@@ -374,14 +376,14 @@ test "describeSchedule reports persisted mode metadata" {
         .pct_preemption_step = 1,
     });
 
-    try std.testing.expectEqualStrings("first", first_metadata.mode_label);
-    try std.testing.expect(first_metadata.schedule_seed == null);
-    try std.testing.expectEqualStrings("seeded", seeded_metadata.mode_label);
-    try std.testing.expect(seeded_metadata.schedule_seed != null);
-    try std.testing.expectEqual(@as(u64, 22), seeded_metadata.schedule_seed.?.value);
-    try std.testing.expectEqualStrings("pct_bias", pct_metadata.mode_label);
-    try std.testing.expect(pct_metadata.schedule_seed != null);
-    try std.testing.expectEqual(@as(u64, 33), pct_metadata.schedule_seed.?.value);
+    try testing.expectEqualStrings("first", first_metadata.mode_label);
+    try testing.expect(first_metadata.schedule_seed == null);
+    try testing.expectEqualStrings("seeded", seeded_metadata.mode_label);
+    try testing.expect(seeded_metadata.schedule_seed != null);
+    try testing.expectEqual(@as(u64, 22), seeded_metadata.schedule_seed.?.value);
+    try testing.expectEqualStrings("pct_bias", pct_metadata.mode_label);
+    try testing.expect(pct_metadata.schedule_seed != null);
+    try testing.expectEqual(@as(u64, 33), pct_metadata.schedule_seed.?.value);
 }
 
 test "pct bias chooses a non-first ready item only on its configured preemption step" {
@@ -398,8 +400,8 @@ test "pct bias chooses a non-first ready item only on its configured preemption 
     const first = try pct_scheduler.nextDecision();
     const second = try pct_scheduler.nextDecision();
 
-    try std.testing.expectEqual(@as(u32, 10), first.chosen_id);
-    try std.testing.expectEqual(@as(u32, 1), second.step_index);
-    try std.testing.expect(second.chosen_index != 0);
-    try std.testing.expect(second.chosen_id != 20);
+    try testing.expectEqual(@as(u32, 10), first.chosen_id);
+    try testing.expectEqual(@as(u32, 1), second.step_index);
+    try testing.expect(second.chosen_index != 0);
+    try testing.expect(second.chosen_id != 20);
 }

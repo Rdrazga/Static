@@ -5,6 +5,8 @@
 //! Single-threaded mode: blocking `wait`/`arriveAndWait` methods are absent;
 //!   `tryWait` and `arrive` remain available for cooperative single-threaded use.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const backoff = @import("backoff.zig");
 const caps = @import("caps.zig");
@@ -18,7 +20,7 @@ pub const supports_blocking_wait = caps.Caps.threads_enabled;
 pub const supports_timed_wait = caps.Caps.threads_enabled;
 
 comptime {
-    std.debug.assert(!supports_parking_wait or supports_blocking_wait);
+    assert(!supports_parking_wait or supports_blocking_wait);
     core.errors.assertVocabularySubset(BarrierError);
     core.errors.assertVocabularySubset(error{WouldBlock});
     core.errors.assertVocabularySubset(error{ Timeout, Unsupported });
@@ -32,11 +34,11 @@ pub const BarrierError = error{InvalidConfig};
 /// the decrement arithmetic is defined exactly once.
 fn computeCountDown(current: usize, decrement_count: usize) usize {
     // Precondition: decrement_count must not exceed the remaining count.
-    std.debug.assert(decrement_count > 0);
-    std.debug.assert(current >= decrement_count);
+    assert(decrement_count > 0);
+    assert(current >= decrement_count);
     const next = current - decrement_count;
     // Postcondition: next is strictly less than current when decrement is positive.
-    std.debug.assert(next < current);
+    assert(next < current);
     return next;
 }
 
@@ -60,15 +62,15 @@ pub const Latch = if (supports_blocking_wait) struct {
     pub fn remaining(self: *const Latch) usize {
         const rem = self.remaining_count.load(.acquire);
         // Postcondition: remaining can never exceed the count at init time.
-        std.debug.assert(rem <= self.initial_count);
+        assert(rem <= self.initial_count);
         // Postcondition: latch counts only go down, never below zero (unsigned).
-        std.debug.assert(rem <= self.initial_count);
+        assert(rem <= self.initial_count);
         return rem;
     }
 
     pub fn countDown(self: *Latch, decrement_count: usize) void {
         if (decrement_count == 0) return;
-        std.debug.assert(decrement_count > 0);
+        assert(decrement_count > 0);
 
         // Bound CAS retries: under correct operation this loop succeeds within a few
         // attempts. Exhaustion indicates livelock, extreme contention, or corruption.
@@ -88,7 +90,7 @@ pub const Latch = if (supports_blocking_wait) struct {
                     defer self.wait_mutex.unlock();
                     self.wait_condvar.broadcast();
                 }
-                std.debug.assert(self.remaining_count.load(.acquire) <= current_remaining);
+                assert(self.remaining_count.load(.acquire) <= current_remaining);
                 return;
             }
             std.atomic.spinLoopHint();
@@ -99,11 +101,11 @@ pub const Latch = if (supports_blocking_wait) struct {
     pub fn tryWait(self: *const Latch) error{WouldBlock}!void {
         const current_remaining = self.remaining_count.load(.acquire);
         if (current_remaining != 0) return error.WouldBlock;
-        std.debug.assert(current_remaining == 0);
+        assert(current_remaining == 0);
     }
 
     pub fn wait(self: *Latch) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
 
         if (supports_parking_wait) {
             if (self.remaining_count.load(.acquire) == 0) return;
@@ -114,7 +116,7 @@ pub const Latch = if (supports_blocking_wait) struct {
             while (self.remaining_count.load(.acquire) != 0) {
                 self.wait_condvar.wait(&self.wait_mutex);
             }
-            std.debug.assert(self.remaining_count.load(.acquire) == 0);
+            assert(self.remaining_count.load(.acquire) == 0);
             return;
         }
 
@@ -122,14 +124,14 @@ pub const Latch = if (supports_blocking_wait) struct {
         while (self.remaining_count.load(.acquire) != 0) {
             spin_backoff.step();
         }
-        std.debug.assert(self.remaining_count.load(.acquire) == 0);
+        assert(self.remaining_count.load(.acquire) == 0);
     }
 
     pub fn timedWait(self: *Latch, timeout_ns: u64) error{ Timeout, Unsupported }!void {
-        std.debug.assert(supports_timed_wait);
+        assert(supports_timed_wait);
 
         if (self.remaining_count.load(.acquire) == 0) {
-            std.debug.assert(self.remaining_count.load(.acquire) == 0);
+            assert(self.remaining_count.load(.acquire) == 0);
             return;
         }
         var timeout_budget = core.time_budget.TimeoutBudget.init(timeout_ns) catch |err| switch (err) {
@@ -145,7 +147,7 @@ pub const Latch = if (supports_blocking_wait) struct {
                     error.Timeout => return error.Timeout,
                     error.Unsupported => return error.Unsupported,
                 };
-                std.debug.assert(remaining_ns > 0);
+                assert(remaining_ns > 0);
                 self.wait_condvar.timedWait(&self.wait_mutex, remaining_ns) catch |err| switch (err) {
                     error.Timeout => {
                         if (self.remaining_count.load(.acquire) == 0) continue;
@@ -156,7 +158,7 @@ pub const Latch = if (supports_blocking_wait) struct {
                     },
                 };
             }
-            std.debug.assert(self.remaining_count.load(.acquire) == 0);
+            assert(self.remaining_count.load(.acquire) == 0);
             return;
         }
 
@@ -168,7 +170,7 @@ pub const Latch = if (supports_blocking_wait) struct {
             };
             spin_backoff.step();
         }
-        std.debug.assert(self.remaining_count.load(.acquire) == 0);
+        assert(self.remaining_count.load(.acquire) == 0);
     }
 } else struct {
     initial_count: usize = 0,
@@ -184,15 +186,15 @@ pub const Latch = if (supports_blocking_wait) struct {
     pub fn remaining(self: *const Latch) usize {
         const rem = self.remaining_count.load(.acquire);
         // Postcondition: remaining can never exceed the count at init time.
-        std.debug.assert(rem <= self.initial_count);
+        assert(rem <= self.initial_count);
         // Postcondition: latch counts only go down, never below zero (unsigned).
-        std.debug.assert(rem <= self.initial_count);
+        assert(rem <= self.initial_count);
         return rem;
     }
 
     pub fn countDown(self: *Latch, decrement_count: usize) void {
         if (decrement_count == 0) return;
-        std.debug.assert(decrement_count > 0);
+        assert(decrement_count > 0);
 
         const max_cas_retries: u32 = 256;
         var cas_attempts: u32 = 0;
@@ -205,7 +207,7 @@ pub const Latch = if (supports_blocking_wait) struct {
                 .acq_rel,
                 .acquire,
             ) == null) {
-                std.debug.assert(self.remaining_count.load(.acquire) <= current_remaining);
+                assert(self.remaining_count.load(.acquire) <= current_remaining);
                 return;
             }
             std.atomic.spinLoopHint();
@@ -216,7 +218,7 @@ pub const Latch = if (supports_blocking_wait) struct {
     pub fn tryWait(self: *const Latch) error{WouldBlock}!void {
         const current_remaining = self.remaining_count.load(.acquire);
         if (current_remaining != 0) return error.WouldBlock;
-        std.debug.assert(current_remaining == 0);
+        assert(current_remaining == 0);
     }
 };
 
@@ -234,17 +236,17 @@ pub const Barrier = if (supports_blocking_wait) struct {
     pub fn init(parties_count: usize) BarrierError!Barrier {
         if (parties_count == 0) return error.InvalidConfig;
         const barrier = Barrier{ .parties_count = parties_count };
-        std.debug.assert(barrier.parties_count > 0);
+        assert(barrier.parties_count > 0);
         return barrier;
     }
 
     pub fn parties(self: *const Barrier) usize {
-        std.debug.assert(self.parties_count > 0);
+        assert(self.parties_count > 0);
         return self.parties_count;
     }
 
     pub fn generationNow(self: *const Barrier) u64 {
-        std.debug.assert(self.parties_count > 0);
+        assert(self.parties_count > 0);
         return self.generation.load(.acquire);
     }
 
@@ -259,13 +261,13 @@ pub const Barrier = if (supports_blocking_wait) struct {
 
     pub fn tryWait(self: *const Barrier, observed_generation: u64) error{WouldBlock}!void {
         const current_generation = self.generation.load(.acquire);
-        std.debug.assert(observed_generation <= current_generation);
+        assert(observed_generation <= current_generation);
         if (current_generation == observed_generation) return error.WouldBlock;
-        std.debug.assert(current_generation > observed_generation);
+        assert(current_generation > observed_generation);
     }
 
     pub fn arriveAndWait(self: *Barrier) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
         self.state_mutex.lock();
 
         const result = self.arriveInner();
@@ -281,7 +283,7 @@ pub const Barrier = if (supports_blocking_wait) struct {
             while (self.generation.load(.acquire) == observed_generation) {
                 self.wait_condvar.wait(&self.state_mutex);
             }
-            std.debug.assert(self.generation.load(.acquire) > observed_generation);
+            assert(self.generation.load(.acquire) > observed_generation);
             self.state_mutex.unlock();
             return;
         }
@@ -299,7 +301,7 @@ pub const Barrier = if (supports_blocking_wait) struct {
         }
         // If the bound was exhausted without the generation advancing, this assertion
         // fires and indicates a stalled or crashed barrier party.
-        std.debug.assert(self.generation.load(.acquire) > observed_generation);
+        assert(self.generation.load(.acquire) > observed_generation);
     }
 
     /// Decrements the arrival counter and returns whether this call was the last
@@ -309,24 +311,24 @@ pub const Barrier = if (supports_blocking_wait) struct {
     /// `arrived_count` when the last party arrives.
     fn arriveInner(self: *Barrier) struct { is_last: bool, observed_generation: u64 } {
         // Precondition: parties_count is always positive (enforced in init).
-        std.debug.assert(self.parties_count > 0);
+        assert(self.parties_count > 0);
         // Precondition: arrived_count has not yet reached parties_count.
-        std.debug.assert(self.arrived_count < self.parties_count);
+        assert(self.arrived_count < self.parties_count);
 
         const observed_generation = self.generation.load(.acquire);
         self.arrived_count += 1;
-        std.debug.assert(self.arrived_count <= self.parties_count);
+        assert(self.arrived_count <= self.parties_count);
 
         if (self.arrived_count != self.parties_count) {
             return .{ .is_last = false, .observed_generation = observed_generation };
         }
 
         // Last arrival: close the phase.
-        std.debug.assert(observed_generation < std.math.maxInt(u64));
+        assert(observed_generation < std.math.maxInt(u64));
         self.arrived_count = 0;
         self.generation.store(observed_generation + 1, .release);
         // Postcondition: generation advanced exactly once.
-        std.debug.assert(self.generation.load(.acquire) == observed_generation + 1);
+        assert(self.generation.load(.acquire) == observed_generation + 1);
         return .{ .is_last = true, .observed_generation = observed_generation };
     }
 } else struct {
@@ -337,17 +339,17 @@ pub const Barrier = if (supports_blocking_wait) struct {
     pub fn init(parties_count: usize) BarrierError!Barrier {
         if (parties_count == 0) return error.InvalidConfig;
         const barrier = Barrier{ .parties_count = parties_count };
-        std.debug.assert(barrier.parties_count > 0);
+        assert(barrier.parties_count > 0);
         return barrier;
     }
 
     pub fn parties(self: *const Barrier) usize {
-        std.debug.assert(self.parties_count > 0);
+        assert(self.parties_count > 0);
         return self.parties_count;
     }
 
     pub fn generationNow(self: *const Barrier) u64 {
-        std.debug.assert(self.parties_count > 0);
+        assert(self.parties_count > 0);
         return self.generation.load(.acquire);
     }
 
@@ -358,9 +360,9 @@ pub const Barrier = if (supports_blocking_wait) struct {
 
     pub fn tryWait(self: *const Barrier, observed_generation: u64) error{WouldBlock}!void {
         const current_generation = self.generation.load(.acquire);
-        std.debug.assert(observed_generation <= current_generation);
+        assert(observed_generation <= current_generation);
         if (current_generation == observed_generation) return error.WouldBlock;
-        std.debug.assert(current_generation > observed_generation);
+        assert(current_generation > observed_generation);
     }
 
     /// Decrements the arrival counter and returns whether this call was the last
@@ -370,24 +372,24 @@ pub const Barrier = if (supports_blocking_wait) struct {
     /// single-threaded access to the barrier.
     fn arriveInner(self: *Barrier) struct { is_last: bool, observed_generation: u64 } {
         // Precondition: parties_count is always positive (enforced in init).
-        std.debug.assert(self.parties_count > 0);
+        assert(self.parties_count > 0);
         // Precondition: arrived_count has not yet reached parties_count.
-        std.debug.assert(self.arrived_count < self.parties_count);
+        assert(self.arrived_count < self.parties_count);
 
         const observed_generation = self.generation.load(.acquire);
         self.arrived_count += 1;
-        std.debug.assert(self.arrived_count <= self.parties_count);
+        assert(self.arrived_count <= self.parties_count);
 
         if (self.arrived_count != self.parties_count) {
             return .{ .is_last = false, .observed_generation = observed_generation };
         }
 
         // Last arrival: close the phase.
-        std.debug.assert(observed_generation < std.math.maxInt(u64));
+        assert(observed_generation < std.math.maxInt(u64));
         self.arrived_count = 0;
         self.generation.store(observed_generation + 1, .release);
         // Postcondition: generation advanced exactly once.
-        std.debug.assert(self.generation.load(.acquire) == observed_generation + 1);
+        assert(self.generation.load(.acquire) == observed_generation + 1);
         return .{ .is_last = true, .observed_generation = observed_generation };
     }
 };
@@ -395,17 +397,17 @@ pub const Barrier = if (supports_blocking_wait) struct {
 test "latch blocking waits are gated by build mode" {
     // Goal: verify compile-time API shape tracks `single_threaded`.
     // Method: query declarations with `@hasDecl`.
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Latch, "wait"));
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Latch, "timedWait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Latch, "wait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Latch, "timedWait"));
 }
 
 test "latch countDown opens latch" {
     // Goal: verify countdown reaches the open state at zero.
     // Method: decrement in two steps and observe `tryWait`.
     var latch = Latch.init(2);
-    try std.testing.expectError(error.WouldBlock, latch.tryWait());
+    try testing.expectError(error.WouldBlock, latch.tryWait());
     latch.countDown(1);
-    try std.testing.expectError(error.WouldBlock, latch.tryWait());
+    try testing.expectError(error.WouldBlock, latch.tryWait());
     latch.countDown(1);
     try latch.tryWait();
 }
@@ -414,9 +416,9 @@ test "latch countDown with zero is a no-op" {
     // Goal: verify a zero decrement does not change latch state.
     // Method: call `countDown(0)` and compare `remaining`.
     var latch = Latch.init(3);
-    try std.testing.expectEqual(@as(usize, 3), latch.remaining());
+    try testing.expectEqual(@as(usize, 3), latch.remaining());
     latch.countDown(0);
-    try std.testing.expectEqual(@as(usize, 3), latch.remaining());
+    try testing.expectEqual(@as(usize, 3), latch.remaining());
 }
 
 test "latch timedWait reports Timeout while pending" {
@@ -425,8 +427,8 @@ test "latch timedWait reports Timeout while pending" {
     if (!supports_timed_wait) return error.SkipZigTest;
 
     var latch = Latch.init(1);
-    try std.testing.expectError(error.Timeout, latch.timedWait(0));
-    try std.testing.expectError(error.Timeout, latch.timedWait(std.time.ns_per_ms));
+    try testing.expectError(error.Timeout, latch.timedWait(0));
+    try testing.expectError(error.Timeout, latch.timedWait(std.time.ns_per_ms));
 }
 
 test "latch timedWait succeeds when already open" {
@@ -487,13 +489,13 @@ test "latch timedWait unblocks after countDown from another thread" {
 test "barrier blocking waits are gated by build mode" {
     // Goal: verify compile-time API gating for blocking waits.
     // Method: query declaration presence with `@hasDecl`.
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Barrier, "arriveAndWait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Barrier, "arriveAndWait"));
 }
 
 test "barrier requires at least one party" {
     // Goal: verify barrier configuration rejects zero parties.
     // Method: call `init(0)` and assert error contract.
-    try std.testing.expectError(error.InvalidConfig, Barrier.init(0));
+    try testing.expectError(error.InvalidConfig, Barrier.init(0));
 }
 
 test "barrier generation changes after required arrivals" {
@@ -501,10 +503,10 @@ test "barrier generation changes after required arrivals" {
     // Method: inspect `tryWait` before and after required arrivals.
     var barrier = try Barrier.init(2);
     const generation_0 = barrier.generationNow();
-    try std.testing.expectError(error.WouldBlock, barrier.tryWait(generation_0));
-    try std.testing.expect(!barrier.arrive());
-    try std.testing.expectError(error.WouldBlock, barrier.tryWait(generation_0));
-    try std.testing.expect(barrier.arrive());
+    try testing.expectError(error.WouldBlock, barrier.tryWait(generation_0));
+    try testing.expect(!barrier.arrive());
+    try testing.expectError(error.WouldBlock, barrier.tryWait(generation_0));
+    try testing.expect(barrier.arrive());
     try barrier.tryWait(generation_0);
 }
 
@@ -542,7 +544,7 @@ test "barrier arriveAndWait is reusable across phases" {
     while (phase_index < iterations) : (phase_index += 1) {
         barrier.arriveAndWait();
         const observed_phases = worker_phase_counter.load(.acquire);
-        try std.testing.expectEqual(phase_index + 1, observed_phases);
+        try testing.expectEqual(phase_index + 1, observed_phases);
         barrier.arriveAndWait();
     }
 }
@@ -574,14 +576,14 @@ test "barrier arriveAndWait keeps non-final arrival blocked until final party ar
     defer thread.join();
 
     const generation_0 = barrier.generationNow();
-    try std.testing.expectEqual(@as(u64, 0), generation_0);
+    try testing.expectEqual(@as(u64, 0), generation_0);
     try waitForBarrierArrival(&barrier, 1, generation_0, 100 * std.time.ns_per_ms);
-    try std.testing.expectError(error.WouldBlock, barrier.tryWait(generation_0));
-    try std.testing.expect(!finished.load(.acquire));
+    try testing.expectError(error.WouldBlock, barrier.tryWait(generation_0));
+    try testing.expect(!finished.load(.acquire));
 
     barrier.arriveAndWait();
     try waitForFlag(&finished, 100 * std.time.ns_per_ms);
-    try std.testing.expectEqual(@as(u64, 1), barrier.generationNow());
+    try testing.expectEqual(@as(u64, 1), barrier.generationNow());
     try barrier.tryWait(generation_0);
 }
 

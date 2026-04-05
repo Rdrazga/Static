@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -24,8 +26,8 @@ fn emitTraceEvent(
     label: []const u8,
     value: u64,
 ) !u32 {
-    std.debug.assert(label.len > 0);
-    std.debug.assert(trace_buffer.freeSlots() > 0);
+    assert(label.len > 0);
+    assert(trace_buffer.freeSlots() > 0);
 
     try trace_buffer.append(.{
         .timestamp_ns = timestamp_ns,
@@ -38,11 +40,11 @@ fn emitTraceEvent(
     });
 
     const snapshot = trace_buffer.snapshot();
-    std.debug.assert(snapshot.items.len > 0);
+    assert(snapshot.items.len > 0);
     const event = snapshot.items[snapshot.items.len - 1];
-    std.debug.assert(std.mem.eql(u8, event.label, label));
-    std.debug.assert(event.value == value);
-    std.debug.assert(event.lineage.surface_label != null);
+    assert(std.mem.eql(u8, event.label, label));
+    assert(event.value == value);
+    assert(event.lineage.surface_label != null);
     return event.sequence_no;
 }
 
@@ -50,13 +52,13 @@ fn compareDecisions(
     expected: []const scheduler.ScheduleDecision,
     actual: []const scheduler.ScheduleDecision,
 ) !void {
-    try std.testing.expectEqual(expected.len, actual.len);
+    try testing.expectEqual(expected.len, actual.len);
     for (expected, actual) |lhs, rhs| {
-        try std.testing.expectEqual(lhs.step_index, rhs.step_index);
-        try std.testing.expectEqual(lhs.chosen_index, rhs.chosen_index);
-        try std.testing.expectEqual(lhs.ready_len, rhs.ready_len);
-        try std.testing.expectEqual(lhs.chosen_id, rhs.chosen_id);
-        try std.testing.expectEqual(lhs.chosen_value, rhs.chosen_value);
+        try testing.expectEqual(lhs.step_index, rhs.step_index);
+        try testing.expectEqual(lhs.chosen_index, rhs.chosen_index);
+        try testing.expectEqual(lhs.ready_len, rhs.ready_len);
+        try testing.expectEqual(lhs.chosen_id, rhs.chosen_id);
+        try testing.expectEqual(lhs.chosen_value, rhs.chosen_value);
     }
 }
 
@@ -92,7 +94,7 @@ const Context = struct {
     fn run(_: *const anyopaque, input: explore.ExplorationScenarioInput) ScenarioError!explore.ExplorationScenarioExecution {
         var fixture: sim.fixture.Fixture(4, 4, 4, 16) = undefined;
         try fixture.init(.{
-            .allocator = std.testing.allocator,
+            .allocator = testing.allocator,
             .timer_queue_config = .{
                 .buckets = 4,
                 .timers_max = 4,
@@ -110,14 +112,14 @@ const Context = struct {
         _ = try fixture.scheduleAfter(.{ .id = 33, .value = 330 }, .init(2));
 
         const first_step = try fixture.step();
-        std.debug.assert(first_step.progress_made);
-        std.debug.assert(first_step.time_advanced);
-        std.debug.assert(first_step.decision == null);
-        std.debug.assert(fixture.sim_clock.now().tick == 1);
+        assert(first_step.progress_made);
+        assert(first_step.time_advanced);
+        assert(first_step.decision == null);
+        assert(fixture.sim_clock.now().tick == 1);
 
         const cancelled = try fixture.timer_queue.cancel(cancel_id);
-        std.debug.assert(cancelled.id == 44);
-        std.debug.assert(cancelled.value == 440);
+        assert(cancelled.id == 44);
+        assert(cancelled.value == 440);
 
         const trace_buffer = fixture.traceBufferPtr().?;
         _ = try emitTraceEvent(
@@ -129,13 +131,13 @@ const Context = struct {
         );
 
         const remainder = try fixture.runForSteps(8);
-        std.debug.assert(remainder.reason == .idle);
-        std.debug.assert(remainder.steps_run == 4);
-        std.debug.assert(fixture.sim_clock.now().tick == 2);
-        std.debug.assert(fixture.recordedDecisions().len == 3);
+        assert(remainder.reason == .idle);
+        assert(remainder.steps_run == 4);
+        assert(fixture.sim_clock.now().tick == 2);
+        assert(fixture.recordedDecisions().len == 3);
 
         const snapshot = fixture.traceSnapshot().?;
-        std.debug.assert(snapshot.items.len == 6);
+        assert(snapshot.items.len == 6);
 
         const cancel_before_second_jump = try temporal.checkHappensBefore(
             snapshot,
@@ -304,10 +306,10 @@ const Context = struct {
 };
 
 test "replay exploration retains and replays timer queue provenance" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -326,16 +328,16 @@ test "replay exploration retains and replays timer queue provenance" {
         .decision_buffer = &failure_storage_decisions,
     });
 
-    try std.testing.expectEqual(@as(u32, 2), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure != null);
+    try testing.expectEqual(@as(u32, 2), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 1), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure != null);
 
     const first_failure = summary.first_failure.?;
-    try std.testing.expectEqualStrings("seeded", first_failure.schedule_mode);
-    try std.testing.expect(first_failure.schedule_seed != null);
-    try std.testing.expectEqual(@as(usize, 3), first_failure.recorded_decisions.len);
-    try std.testing.expect(first_failure.trace_metadata != null);
-    try std.testing.expect(first_failure.trace_provenance_summary != null);
+    try testing.expectEqualStrings("seeded", first_failure.schedule_mode);
+    try testing.expect(first_failure.schedule_seed != null);
+    try testing.expectEqual(@as(usize, 3), first_failure.recorded_decisions.len);
+    try testing.expect(first_failure.trace_metadata != null);
+    try testing.expect(first_failure.trace_provenance_summary != null);
 
     var append_existing_file_buffer: [256]u8 = undefined;
     var append_record_buffer: [2048]u8 = undefined;
@@ -347,7 +349,7 @@ test "replay exploration retains and replays timer queue provenance" {
         .frame_buffer = &append_frame_buffer,
         .output_file_buffer = &append_output_file_buffer,
     }, 4, first_failure);
-    try std.testing.expect(appended_name.len != 0);
+    try testing.expect(appended_name.len != 0);
 
     var read_file_buffer: [4096]u8 = undefined;
     var read_mode_buffer: [64]u8 = undefined;
@@ -359,19 +361,19 @@ test "replay exploration retains and replays timer queue provenance" {
         .decision_buffer = &read_decisions,
     })).?;
 
-    try std.testing.expectEqual(first_failure.schedule_index, retained.schedule_index);
-    try std.testing.expectEqualStrings(first_failure.schedule_mode, retained.schedule_mode);
-    try std.testing.expectEqual(first_failure.schedule_seed.?.value, retained.schedule_seed.?.value);
-    try std.testing.expectEqual(first_failure.recorded_decision_count, retained.recorded_decision_count);
-    try std.testing.expectEqual(first_failure.trace_metadata.?, retained.trace_metadata.?);
-    try std.testing.expectEqual(first_failure.trace_provenance_summary.?, retained.trace_provenance_summary.?);
+    try testing.expectEqual(first_failure.schedule_index, retained.schedule_index);
+    try testing.expectEqualStrings(first_failure.schedule_mode, retained.schedule_mode);
+    try testing.expectEqual(first_failure.schedule_seed.?.value, retained.schedule_seed.?.value);
+    try testing.expectEqual(first_failure.recorded_decision_count, retained.recorded_decision_count);
+    try testing.expectEqual(first_failure.trace_metadata.?, retained.trace_metadata.?);
+    try testing.expectEqual(first_failure.trace_provenance_summary.?, retained.trace_provenance_summary.?);
     try compareDecisions(first_failure.recorded_decisions, retained.recorded_decisions);
 
     const replay_candidate = try candidateFromRecord(retained);
     const replay_execution = try scenario.run(.{ .candidate = replay_candidate });
-    try std.testing.expect(!replay_execution.check_result.passed);
-    try std.testing.expectEqualStrings("static_scheduling.intentional_exploration_failure", replay_execution.check_result.violations[0].code);
+    try testing.expect(!replay_execution.check_result.passed);
+    try testing.expectEqualStrings("static_scheduling.intentional_exploration_failure", replay_execution.check_result.violations[0].code);
     try compareDecisions(retained.recorded_decisions, replay_execution.recorded_decisions);
-    try std.testing.expectEqual(retained.trace_metadata.?, replay_execution.trace_metadata.?);
-    try std.testing.expectEqual(retained.trace_provenance_summary.?, replay_execution.trace_provenance_summary.?);
+    try testing.expectEqual(retained.trace_metadata.?, replay_execution.trace_metadata.?);
+    try testing.expectEqual(retained.trace_provenance_summary.?, replay_execution.trace_provenance_summary.?);
 }

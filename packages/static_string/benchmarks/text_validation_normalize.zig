@@ -1,6 +1,7 @@
 //! `static_string` text validation and normalization baselines.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_string = @import("static_string");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -30,7 +31,7 @@ const AsciiContext = struct {
         const normalized = context.buffer[0..trimmed.len];
         if (!std.mem.eql(u8, normalized, "x-request-id")) unreachable;
         context.sink = bench.case.blackBox(@as(u64, @intCast(normalized.len)));
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 
@@ -41,7 +42,7 @@ const Utf8Context = struct {
         const context: *Utf8Context = @ptrCast(@alignCast(context_ptr));
         if (!static_string.utf8.isValid(utf8_source)) unreachable;
         context.sink = bench.case.blackBox(@as(u64, @intCast(utf8_source.len)));
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 

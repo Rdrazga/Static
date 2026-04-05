@@ -7,6 +7,7 @@
 //! - the already-done `Once.call` fast path.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_sync = @import("static_sync");
 const static_testing = @import("static_testing");
 
@@ -187,22 +188,22 @@ fn validateSemanticPreflight() void {
     event.tryWait() catch unreachable;
     event.reset();
     event.tryWait() catch |err| {
-        std.debug.assert(err == error.WouldBlock);
+        assert(err == error.WouldBlock);
     };
 
     var semaphore = static_sync.semaphore.Semaphore{};
     semaphore.post(1);
     semaphore.tryWait() catch unreachable;
     semaphore.tryWait() catch |err| {
-        std.debug.assert(err == error.WouldBlock);
+        assert(err == error.WouldBlock);
     };
 
     var cancel_source = static_sync.cancel.CancelSource{};
     const token = cancel_source.token();
-    std.debug.assert(!token.isCancelled());
+    assert(!token.isCancelled());
     token.throwIfCancelled() catch unreachable;
     cancel_source.cancel();
-    std.debug.assert(token.isCancelled());
+    assert(token.isCancelled());
 
     var once = static_sync.once.Once{};
     once.call(noop);

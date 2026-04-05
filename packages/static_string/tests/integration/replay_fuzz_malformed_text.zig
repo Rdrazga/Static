@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_string = @import("static_string");
 const static_testing = @import("static_testing");
 
@@ -35,9 +37,9 @@ const ByteCase = struct {
     len: u8 = 0,
 
     fn slice(self: *const @This()) []const u8 {
-        std.debug.assert(self.len <= self.bytes.len);
+        assert(self.len <= self.bytes.len);
         const result = self.bytes[0..self.len];
-        std.debug.assert(result.len == self.len);
+        assert(result.len == self.len);
         return result;
     }
 };
@@ -57,12 +59,12 @@ const BufferCase = struct {
     mode: BufferMode = .append,
 
     fn prefixSlice(self: *const @This()) []const u8 {
-        std.debug.assert(self.prefix_len <= self.capacity);
+        assert(self.prefix_len <= self.capacity);
         return self.prefix[0..self.prefix_len];
     }
 
     fn suffixSlice(self: *const @This()) []const u8 {
-        std.debug.assert(self.suffix_len <= self.suffix.len);
+        assert(self.suffix_len <= self.suffix.len);
         return self.suffix[0..self.suffix_len];
     }
 };
@@ -94,10 +96,10 @@ const Evaluation = struct {
 };
 
 test "static_string deterministic malformed text invariants stay replayable" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -128,14 +130,14 @@ test "static_string deterministic malformed text invariants stay replayable" {
     }).run();
 
     try expectNoFailureOrReplay(io, tmp_dir.dir, summary);
-    try std.testing.expectEqual(invariant_case_count, summary.executed_case_count);
+    try testing.expectEqual(invariant_case_count, summary.executed_case_count);
 }
 
 test "static_string retained invalid utf8 bundles preserve replay metadata" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -165,14 +167,14 @@ test "static_string retained invalid utf8 bundles preserve replay metadata" {
         },
     }).run();
 
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expectEqual(@as(u32, 1), summary.executed_case_count);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     const retained_case = buildRetainedInvalidUtf8Case(failed_case.run_identity.seed.value);
-    try std.testing.expect(!static_string.utf8.isValid(retained_case.byte_case.slice()));
-    try std.testing.expect(!std.unicode.utf8ValidateSlice(retained_case.byte_case.slice()));
+    try testing.expect(!static_string.utf8.isValid(retained_case.byte_case.slice()));
+    try testing.expect(!std.unicode.utf8ValidateSlice(retained_case.byte_case.slice()));
 
     var corpus_buffer: [512]u8 = undefined;
     const entry = try corpus.readCorpusEntry(
@@ -181,7 +183,7 @@ test "static_string retained invalid utf8 bundles preserve replay metadata" {
         failed_case.persisted_entry_name.?,
         &corpus_buffer,
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         failed_case.run_identity.seed.value,
         entry.artifact.identity.seed.value,
     );
@@ -192,7 +194,7 @@ test "static_string retained invalid utf8 bundles preserve replay metadata" {
     }, .{
         .expected_identity_hash = entry.meta.identity_hash,
     });
-    try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, replay_outcome);
+    try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, replay_outcome);
 
     var bundle_entry_name_buffer: [128]u8 = undefined;
     var bundle_artifact_buffer: [512]u8 = undefined;
@@ -229,10 +231,10 @@ test "static_string retained invalid utf8 bundles preserve replay metadata" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("static_string", bundle.manifest_document.package_name);
-    try std.testing.expectEqualStrings("retained_invalid_utf8", bundle.manifest_document.run_name);
-    try std.testing.expectEqualStrings(retained_case.label, bundle.manifest_document.scenario_variant_label.?);
-    try std.testing.expectEqual(
+    try testing.expectEqualStrings("static_string", bundle.manifest_document.package_name);
+    try testing.expectEqualStrings("retained_invalid_utf8", bundle.manifest_document.run_name);
+    try testing.expectEqualStrings(retained_case.label, bundle.manifest_document.scenario_variant_label.?);
+    try testing.expectEqual(
         failed_case.run_identity.seed.value,
         bundle.replay_artifact_view.identity.seed.value,
     );
@@ -306,7 +308,7 @@ fn expectNoFailureOrReplay(
     summary: fuzz_runner.FuzzRunSummary,
 ) !void {
     if (summary.failed_case) |failed_case| {
-        try std.testing.expect(failed_case.persisted_entry_name != null);
+        try testing.expect(failed_case.persisted_entry_name != null);
 
         var read_buffer: [512]u8 = undefined;
         const entry = try corpus.readCorpusEntry(
@@ -321,7 +323,7 @@ fn expectNoFailureOrReplay(
         }, .{
             .expected_identity_hash = entry.meta.identity_hash,
         });
-        try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
+        try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
         return error.TestUnexpectedResult;
     }
 }
@@ -587,13 +589,13 @@ fn buildRetainedInvalidUtf8Case(seed_value: u64) RetainedInvalidUtf8Case {
 
 fn tryExpectBufferOk(result: static_string.BufferError!void) void {
     if (result) |_| {
-        std.debug.assert(true);
+        assert(true);
     } else |_| unreachable;
 }
 
 fn tryExpectBufferNoSpace(result: static_string.BufferError!void) void {
     if (result) |_| unreachable else |err| {
-        std.debug.assert(err == error.NoSpaceLeft);
+        assert(err == error.NoSpaceLeft);
     }
 }
 
@@ -601,7 +603,7 @@ fn referenceIsAscii(bytes: []const u8) bool {
     for (bytes) |byte| {
         if (byte > 0x7f) return false;
     }
-    std.debug.assert(bytes.len == 0 or bytes[0] <= 0xff);
+    assert(bytes.len == 0 or bytes[0] <= 0xff);
     return true;
 }
 

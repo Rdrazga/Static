@@ -3,6 +3,7 @@
 //! All operations are bounds-checked. On failure, no partial write occurs.
 
 const std = @import("std");
+const testing = std.testing;
 const vec4f = @import("vec4f.zig");
 const vec4i = @import("vec4i.zig");
 const masked = @import("masked.zig");
@@ -98,16 +99,16 @@ test "gather4f valid indices" {
     const indices = vec4i.Vec4i.init(.{ 4, 2, 0, 3 });
     const result = try gather4f(&data, indices);
     const arr = result.toArray();
-    try std.testing.expectEqual(@as(f32, 50.0), arr[0]);
-    try std.testing.expectEqual(@as(f32, 30.0), arr[1]);
-    try std.testing.expectEqual(@as(f32, 10.0), arr[2]);
-    try std.testing.expectEqual(@as(f32, 40.0), arr[3]);
+    try testing.expectEqual(@as(f32, 50.0), arr[0]);
+    try testing.expectEqual(@as(f32, 30.0), arr[1]);
+    try testing.expectEqual(@as(f32, 10.0), arr[2]);
+    try testing.expectEqual(@as(f32, 40.0), arr[3]);
 }
 
 test "gather4f out-of-bounds returns error" {
     const data = [_]f32{ 1.0, 2.0, 3.0 };
     const indices = vec4i.Vec4i.init(.{ 0, 1, 2, 3 });
-    try std.testing.expectError(error.IndexOutOfBounds, gather4f(&data, indices));
+    try testing.expectError(error.IndexOutOfBounds, gather4f(&data, indices));
 }
 
 test "scatter4f valid indices" {
@@ -115,21 +116,21 @@ test "scatter4f valid indices" {
     const indices = vec4i.Vec4i.init(.{ 1, 3, 0, 4 });
     const values = vec4f.Vec4f.init(.{ 10.0, 20.0, 30.0, 40.0 });
     try scatter4f(&data, indices, values);
-    try std.testing.expectEqual(@as(f32, 30.0), data[0]);
-    try std.testing.expectEqual(@as(f32, 10.0), data[1]);
-    try std.testing.expectEqual(@as(f32, 20.0), data[3]);
-    try std.testing.expectEqual(@as(f32, 40.0), data[4]);
+    try testing.expectEqual(@as(f32, 30.0), data[0]);
+    try testing.expectEqual(@as(f32, 10.0), data[1]);
+    try testing.expectEqual(@as(f32, 20.0), data[3]);
+    try testing.expectEqual(@as(f32, 40.0), data[4]);
 }
 
 test "scatter4f out-of-bounds: no partial write" {
     var data = [_]f32{ 99.0, 99.0, 99.0 };
     const indices = vec4i.Vec4i.init(.{ 0, 1, 2, 3 });
     const values = vec4f.Vec4f.splat(1.0);
-    try std.testing.expectError(error.IndexOutOfBounds, scatter4f(&data, indices, values));
+    try testing.expectError(error.IndexOutOfBounds, scatter4f(&data, indices, values));
     // No element should have been modified.
-    try std.testing.expectEqual(@as(f32, 99.0), data[0]);
-    try std.testing.expectEqual(@as(f32, 99.0), data[1]);
-    try std.testing.expectEqual(@as(f32, 99.0), data[2]);
+    try testing.expectEqual(@as(f32, 99.0), data[0]);
+    try testing.expectEqual(@as(f32, 99.0), data[1]);
+    try testing.expectEqual(@as(f32, 99.0), data[2]);
 }
 
 test "gatherMasked4f respects mask" {
@@ -140,10 +141,10 @@ test "gatherMasked4f respects mask" {
 
     const result = try gatherMasked4f(&data, indices, mask, pass);
     const arr = result.toArray();
-    try std.testing.expectEqual(@as(f32, 10.0), arr[0]);
-    try std.testing.expectEqual(@as(f32, -1.0), arr[1]);
-    try std.testing.expectEqual(@as(f32, 30.0), arr[2]);
-    try std.testing.expectEqual(@as(f32, -1.0), arr[3]);
+    try testing.expectEqual(@as(f32, 10.0), arr[0]);
+    try testing.expectEqual(@as(f32, -1.0), arr[1]);
+    try testing.expectEqual(@as(f32, 30.0), arr[2]);
+    try testing.expectEqual(@as(f32, -1.0), arr[3]);
 }
 
 test "gatherMasked4f ignores invalid indices in masked-out lanes" {
@@ -154,7 +155,7 @@ test "gatherMasked4f ignores invalid indices in masked-out lanes" {
 
     const result = try gatherMasked4f(&data, indices, mask, pass);
     const arr = result.toArray();
-    try std.testing.expectEqualSlices(f32, &.{ 10.0, -7.0, 30.0, -7.0 }, arr[0..]);
+    try testing.expectEqualSlices(f32, &.{ 10.0, -7.0, 30.0, -7.0 }, arr[0..]);
 }
 
 test "gatherMasked4f active invalid index returns error" {
@@ -163,7 +164,7 @@ test "gatherMasked4f active invalid index returns error" {
     const mask = masked.Mask4.fromBits(0b0010);
     const pass = vec4f.Vec4f.splat(0.0);
 
-    try std.testing.expectError(error.IndexOutOfBounds, gatherMasked4f(&data, indices, mask, pass));
+    try testing.expectError(error.IndexOutOfBounds, gatherMasked4f(&data, indices, mask, pass));
 }
 
 test "scatterMasked4f writes active lanes only" {
@@ -173,7 +174,7 @@ test "scatterMasked4f writes active lanes only" {
     const mask = masked.Mask4.fromBits(0b0101);
 
     try scatterMasked4f(&data, indices, values, mask);
-    try std.testing.expectEqualSlices(f32, &.{ 10.0, 2.0, 30.0, 4.0 }, data[0..]);
+    try testing.expectEqualSlices(f32, &.{ 10.0, 2.0, 30.0, 4.0 }, data[0..]);
 }
 
 test "scatterMasked4f no partial write on active out-of-bounds lane" {
@@ -183,8 +184,8 @@ test "scatterMasked4f no partial write on active out-of-bounds lane" {
     const values = vec4f.Vec4f.init(.{ 10.0, 20.0, 30.0, 40.0 });
     const mask = masked.Mask4.fromBits(0b1001);
 
-    try std.testing.expectError(error.IndexOutOfBounds, scatterMasked4f(&data, indices, values, mask));
-    try std.testing.expectEqualSlices(f32, before[0..], data[0..]);
+    try testing.expectError(error.IndexOutOfBounds, scatterMasked4f(&data, indices, values, mask));
+    try testing.expectEqualSlices(f32, before[0..], data[0..]);
 }
 
 test "scatterMasked4f ignores invalid indices in masked-out lanes" {
@@ -194,5 +195,5 @@ test "scatterMasked4f ignores invalid indices in masked-out lanes" {
     const mask = masked.Mask4.fromBits(0b0101);
 
     try scatterMasked4f(&data, indices, values, mask);
-    try std.testing.expectEqualSlices(f32, &.{ 10.0, 2.0, 30.0, 4.0 }, data[0..]);
+    try testing.expectEqualSlices(f32, &.{ 10.0, 2.0, 30.0, 4.0 }, data[0..]);
 }

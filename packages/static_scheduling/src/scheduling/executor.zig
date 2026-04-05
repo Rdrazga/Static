@@ -1,6 +1,8 @@
 //! Bounded job executor with optional worker pool.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const collections = @import("static_collections");
 const core = @import("static_core");
 const sync = @import("static_sync");
@@ -138,9 +140,9 @@ pub const Executor = struct {
             error.InvalidConfig, error.OutOfMemory, error.NotFound, error.Overflow => unreachable,
         };
         const slot_index = id.index;
-        std.debug.assert(slot_index < self.slots.len);
+        assert(slot_index < self.slots.len);
         var slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .free);
+        assert(slot.state == .free);
         slot.state = .running;
 
         if (self.pool) |*pool| {
@@ -215,7 +217,7 @@ pub const Executor = struct {
                     error.Timeout => return error.Timeout,
                     error.Unsupported => return error.Unsupported,
                 };
-                std.debug.assert(remaining_ns.? > 0);
+                assert(remaining_ns.? > 0);
             }
 
             if (supports_completion_wait) {
@@ -314,7 +316,7 @@ test "executor sequential mode is deterministic and stale ids are rejected" {
     var b = JobCtx{ .state = &state, .value = 2 };
     var c = JobCtx{ .state = &state, .value = 3 };
 
-    var executor = try Executor.init(std.testing.allocator, .{
+    var executor = try Executor.init(testing.allocator, .{
         .jobs_max = 3,
         .worker_count = 0,
         .queue_capacity = 0,
@@ -328,8 +330,8 @@ test "executor sequential mode is deterministic and stale ids are rejected" {
     try executor.tryJoin(id_a);
     try executor.tryJoin(id_b);
     try executor.tryJoin(id_c);
-    try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3 }, state.order[0..3]);
-    try std.testing.expectError(error.NotFound, executor.tryJoin(id_a));
+    try testing.expectEqualSlices(u8, &.{ 1, 2, 3 }, state.order[0..3]);
+    try testing.expectError(error.NotFound, executor.tryJoin(id_a));
 }
 
 test "executor join cancellation and timeout are explicit" {
@@ -349,7 +351,7 @@ test "executor join cancellation and timeout are explicit" {
     var release = std.atomic.Value(bool).init(false);
     var blocker = Blocker{ .release = &release };
 
-    var executor = try Executor.init(std.testing.allocator, .{
+    var executor = try Executor.init(testing.allocator, .{
         .jobs_max = 2,
         .worker_count = 1,
         .queue_capacity = 1,
@@ -360,15 +362,15 @@ test "executor join cancellation and timeout are explicit" {
 
     var source = sync.cancel.CancelSource{};
     source.cancel();
-    try std.testing.expectError(error.Cancelled, executor.join(id, source.token(), std.time.ns_per_ms));
-    try std.testing.expectError(error.Timeout, executor.join(id, null, 0));
+    try testing.expectError(error.Cancelled, executor.join(id, source.token(), std.time.ns_per_ms));
+    try testing.expectError(error.Timeout, executor.join(id, null, 0));
 
     release.store(true, .release);
     try executor.join(id, null, 50 * std.time.ns_per_ms);
 }
 
 test "executor close prevents new spawns" {
-    var executor = try Executor.init(std.testing.allocator, .{
+    var executor = try Executor.init(testing.allocator, .{
         .jobs_max = 1,
         .worker_count = 0,
         .queue_capacity = 0,
@@ -377,7 +379,7 @@ test "executor close prevents new spawns" {
 
     var dummy: u8 = 0;
     executor.close();
-    try std.testing.expectError(error.Closed, executor.trySpawn(.{
+    try testing.expectError(error.Closed, executor.trySpawn(.{
         .ctx = &dummy,
         .run = struct {
             fn run(_: *anyopaque) void {}

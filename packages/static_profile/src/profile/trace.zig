@@ -13,6 +13,8 @@
 //!
 //! Thread safety: none. Use one trace per thread or serialize access externally.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const core = @import("static_core");
 
@@ -70,19 +72,19 @@ pub const EnabledTrace = struct {
 
         try self.events.ensureTotalCapacity(allocator, max_events);
         // Postcondition: capacity meets the requested minimum.
-        std.debug.assert(self.events.capacity >= max_events);
+        assert(self.events.capacity >= max_events);
         // Postcondition: buffer starts empty.
-        std.debug.assert(self.events.items.len == 0);
+        assert(self.events.items.len == 0);
         return self;
     }
 
     pub fn deinit(self: *EnabledTrace) void {
-        std.debug.assert(self.max_events > 0);
+        assert(self.max_events > 0);
         // Postcondition: all opened zones must have been closed before deinit.
         // An unbalanced trace indicates a missing endZone call, which produces a
         // structurally incomplete trace that cannot be meaningfully visualized.
         if (builtin.mode == .Debug) {
-            std.debug.assert(self.zone_depth == 0);
+            assert(self.zone_depth == 0);
         }
         self.events.deinit(self.allocator);
         self.* = undefined;
@@ -96,9 +98,9 @@ pub const EnabledTrace = struct {
     ///
     /// Returns `NoSpaceLeft` if the bounded event buffer is already full.
     pub fn beginZone(self: *EnabledTrace, name: []const u8, ts: u64, tid: u32) Error!zone.ZoneToken {
-        std.debug.assert(self.events.capacity >= self.max_events);
+        assert(self.events.capacity >= self.max_events);
         // Precondition: zone name must be non-empty; empty names are unidentifiable in traces.
-        std.debug.assert(name.len > 0);
+        assert(name.len > 0);
         try self.appendTraceEvent(.{ .zone = .{
             .name = name,
             .ts = ts,
@@ -111,18 +113,18 @@ pub const EnabledTrace = struct {
         if (builtin.mode == .Debug) {
             self.zone_depth += 1;
             // Overflow guard: depth wrapping would silently hide a deeply unbalanced trace.
-            std.debug.assert(self.zone_depth > 0);
+            assert(self.zone_depth > 0);
         }
         return .{ .name = name, .tid = tid };
     }
 
     pub fn endZone(self: *EnabledTrace, tok: zone.ZoneToken, ts: u64) Error!void {
-        std.debug.assert(self.events.capacity >= self.max_events);
+        assert(self.events.capacity >= self.max_events);
         // Precondition: token must carry a non-empty name (matches beginZone contract).
-        std.debug.assert(tok.name.len > 0);
+        assert(tok.name.len > 0);
         if (builtin.mode == .Debug) {
             // Precondition: must have a matching begin zone; zero depth means unbalanced.
-            std.debug.assert(self.zone_depth > 0);
+            assert(self.zone_depth > 0);
         }
         try self.appendTraceEvent(.{ .zone = .{
             .name = tok.name,
@@ -146,9 +148,9 @@ pub const EnabledTrace = struct {
         tid: u32,
         value: i64,
     ) Error!void {
-        std.debug.assert(self.events.capacity >= self.max_events);
+        assert(self.events.capacity >= self.max_events);
         // Precondition: counter name must be non-empty; pairs with writeCounterEventJson assertion.
-        std.debug.assert(name.len > 0);
+        assert(name.len > 0);
         try self.appendTraceEvent(.{ .counter = .{
             .name = name,
             .ts = ts,
@@ -159,17 +161,17 @@ pub const EnabledTrace = struct {
 
     pub fn writeChromeTraceJson(self: *const EnabledTrace, writer: *std.Io.Writer) !void {
         // Precondition: event count is within the configured bound.
-        std.debug.assert(self.events.items.len <= self.max_events);
+        assert(self.events.items.len <= self.max_events);
         try writeChromeTraceJsonImpl(writer, self.events.items);
     }
 
     fn appendTraceEvent(self: *EnabledTrace, ev: TraceEvent) Error!void {
-        std.debug.assert(self.events.capacity >= self.max_events);
+        assert(self.events.capacity >= self.max_events);
         if (self.events.items.len >= self.max_events) return Error.NoSpaceLeft;
         // Capacity is reserved in init(), so this append cannot allocate.
         self.events.appendAssumeCapacity(ev);
         // Postcondition: item was actually appended.
-        std.debug.assert(self.events.items.len > 0);
+        assert(self.events.items.len > 0);
     }
 };
 
@@ -184,18 +186,18 @@ pub const DisabledTrace = struct {
 
     pub fn beginZone(_: *DisabledTrace, name: []const u8, _: u64, tid: u32) Error!zone.ZoneToken {
         // Mirror EnabledTrace assertion: name must be non-empty (pair assertion).
-        std.debug.assert(name.len > 0);
+        assert(name.len > 0);
         return .{ .name = name, .tid = tid };
     }
 
     pub fn endZone(_: *DisabledTrace, tok: zone.ZoneToken, _: u64) Error!void {
         // Mirror EnabledTrace assertion: token name must be non-empty (pair assertion).
-        std.debug.assert(tok.name.len > 0);
+        assert(tok.name.len > 0);
     }
 
     pub fn recordCounter(_: *DisabledTrace, name: []const u8, _: u64, _: u32, _: i64) Error!void {
         // Mirror EnabledTrace assertion: counter name must be non-empty (pair assertion).
-        std.debug.assert(name.len > 0);
+        assert(name.len > 0);
     }
 
     pub fn writeChromeTraceJson(_: *const DisabledTrace, writer: *std.Io.Writer) !void {
@@ -219,7 +221,7 @@ pub fn writeChromeTraceJson(writer: *std.Io.Writer, events: []const Event) !void
 fn writeChromeTraceJsonImpl(writer: *std.Io.Writer, events: []const TraceEvent) !void {
     // Precondition: a reasonable upper bound on the event slice prevents runaway output.
     const max_events_limit: usize = 1 << 20; // 1 Mi events — a generous but finite cap.
-    std.debug.assert(events.len <= max_events_limit);
+    assert(events.len <= max_events_limit);
     try writer.writeAll("[");
     for (events, 0..) |tev, i| {
         if (i != 0) try writer.writeAll(",");
@@ -233,9 +235,9 @@ fn writeChromeTraceJsonImpl(writer: *std.Io.Writer, events: []const TraceEvent) 
 
 fn writeZoneEventJson(writer: *std.Io.Writer, ev: Event) !void {
     // Precondition: zone name must be non-empty; unidentifiable events corrupt traces.
-    std.debug.assert(ev.name.len > 0);
+    assert(ev.name.len > 0);
     // Precondition: phase must be one of the two defined values (Begin/End).
-    comptime std.debug.assert(std.meta.fields(Phase).len == 2);
+    comptime assert(std.meta.fields(Phase).len == 2);
     try writer.writeAll("{\"name\":");
     try writeJsonString(writer, ev.name);
     try writer.writeAll(",\"ph\":");
@@ -252,7 +254,7 @@ fn writeZoneEventJson(writer: *std.Io.Writer, ev: Event) !void {
 fn phaseString(ph: Phase) []const u8 {
     // Comptime assertion: Phase enum must have exactly two fields (begin and end).
     // This guards against accidental extension of Phase that would bypass the switch.
-    comptime std.debug.assert(std.meta.fields(Phase).len == 2);
+    comptime assert(std.meta.fields(Phase).len == 2);
     return switch (ph) {
         .begin => "B",
         .end => "E",
@@ -266,7 +268,7 @@ pub const max_json_string_len: usize = 4096;
 pub fn writeJsonString(writer: *std.Io.Writer, s: []const u8) !void {
     // Precondition: strings exceeding the limit indicate a caller error; production
     // zone names and counter names are always short identifiers.
-    std.debug.assert(s.len <= max_json_string_len);
+    assert(s.len <= max_json_string_len);
     try writer.writeByte('"');
     for (s) |ch| {
         switch (ch) {
@@ -288,7 +290,7 @@ pub fn writeJsonString(writer: *std.Io.Writer, s: []const u8) !void {
 }
 
 test "writeChromeTraceJson is deterministic" {
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
 
     const events = [_]Event{
         .{ .name = "a", .ts = 10, .tid = 1, .ph = .begin },
@@ -297,75 +299,75 @@ test "writeChromeTraceJson is deterministic" {
     try writeChromeTraceJson(&aw.writer, &events);
 
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
     const got = out.items;
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "[{\"name\":\"a\",\"ph\":\"B\",\"ts\":10,\"pid\":0,\"tid\":1},{\"name\":\"a\",\"ph\":\"E\",\"ts\":20,\"pid\":0,\"tid\":1}]",
         got,
     );
 }
 
 test "EnabledTrace init with max_events 0 returns InvalidConfig" {
-    try std.testing.expectError(Error.InvalidConfig, EnabledTrace.init(std.testing.allocator, 0));
+    try testing.expectError(Error.InvalidConfig, EnabledTrace.init(testing.allocator, 0));
 }
 
 test "EnabledTrace bounded buffer returns NoSpaceLeft when full" {
-    var t = try EnabledTrace.init(std.testing.allocator, 2);
+    var t = try EnabledTrace.init(testing.allocator, 2);
     defer t.deinit();
 
     const tok1 = try t.beginZone("a", 1, 1);
     try t.endZone(tok1, 2);
     // Buffer now full (2 events).
-    try std.testing.expectError(Error.NoSpaceLeft, t.beginZone("b", 3, 1));
+    try testing.expectError(Error.NoSpaceLeft, t.beginZone("b", 3, 1));
 }
 
 test "EnabledTrace beginZone and endZone are recorded as a pair" {
-    var t = try EnabledTrace.init(std.testing.allocator, 4);
+    var t = try EnabledTrace.init(testing.allocator, 4);
     defer t.deinit();
 
     const tok = try t.beginZone("work", 100, 7);
     try t.endZone(tok, 200);
 
-    try std.testing.expectEqual(@as(usize, 2), t.events.items.len);
-    try std.testing.expectEqual(Phase.begin, t.events.items[0].zone.ph);
-    try std.testing.expectEqual(Phase.end, t.events.items[1].zone.ph);
-    try std.testing.expectEqualStrings("work", t.events.items[0].zone.name);
-    try std.testing.expectEqual(@as(u32, 7), t.events.items[0].zone.tid);
+    try testing.expectEqual(@as(usize, 2), t.events.items.len);
+    try testing.expectEqual(Phase.begin, t.events.items[0].zone.ph);
+    try testing.expectEqual(Phase.end, t.events.items[1].zone.ph);
+    try testing.expectEqualStrings("work", t.events.items[0].zone.name);
+    try testing.expectEqual(@as(u32, 7), t.events.items[0].zone.tid);
 }
 
 test "DisabledTrace beginZone and endZone are no-ops" {
-    var t = try DisabledTrace.init(std.testing.allocator, 8);
+    var t = try DisabledTrace.init(testing.allocator, 8);
     defer t.deinit();
 
     const tok = try t.beginZone("noop", 1, 1);
     try t.endZone(tok, 2);
     // DisabledTrace has no events field; just verify the calls do not error.
-    try std.testing.expectEqualStrings("noop", tok.name);
+    try testing.expectEqualStrings("noop", tok.name);
 }
 
 test "DisabledTrace writeChromeTraceJson writes empty array" {
-    var t = try DisabledTrace.init(std.testing.allocator, 4);
+    var t = try DisabledTrace.init(testing.allocator, 4);
     defer t.deinit();
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try t.writeChromeTraceJson(&aw.writer);
 
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("[]", out.items);
+    defer out.deinit(testing.allocator);
+    try testing.expectEqualStrings("[]", out.items);
 }
 
 test "writeChromeTraceJson with zero events writes empty array" {
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeChromeTraceJson(&aw.writer, &.{});
 
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("[]", out.items);
+    defer out.deinit(testing.allocator);
+    try testing.expectEqualStrings("[]", out.items);
 }
 
 test "writeChromeTraceJson escapes special characters in zone name" {
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
 
     const events = [_]Event{
         .{ .name = "a\"b\\c", .ts = 1, .tid = 0, .ph = .begin },
@@ -373,93 +375,93 @@ test "writeChromeTraceJson escapes special characters in zone name" {
     try writeChromeTraceJson(&aw.writer, &events);
 
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
     // The name a"b\c must be JSON-escaped to a\"b\\c inside the JSON string.
     const expected = "[{\"name\":\"a\\\"b\\\\c\",\"ph\":\"B\",\"ts\":1,\"pid\":0,\"tid\":0}]";
-    try std.testing.expectEqualStrings(expected, out.items);
+    try testing.expectEqualStrings(expected, out.items);
 }
 
 test "EnabledTrace recordCounter is stored and exported with ph C" {
-    var t = try EnabledTrace.init(std.testing.allocator, 4);
+    var t = try EnabledTrace.init(testing.allocator, 4);
     defer t.deinit();
 
     try t.recordCounter("fps", 1000, 2, 60);
 
-    try std.testing.expectEqual(@as(usize, 1), t.events.items.len);
+    try testing.expectEqual(@as(usize, 1), t.events.items.len);
 
     // Export must contain the "C" phase marker.
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try t.writeChromeTraceJson(&aw.writer);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expect(std.mem.indexOf(u8, out.items, "\"ph\":\"C\"") != null);
+    try testing.expect(std.mem.indexOf(u8, out.items, "\"ph\":\"C\"") != null);
 }
 
 test "DisabledTrace recordCounter is a no-op and export is still []" {
-    var t = try DisabledTrace.init(std.testing.allocator, 4);
+    var t = try DisabledTrace.init(testing.allocator, 4);
     defer t.deinit();
 
     // recordCounter on DisabledTrace must not error.
     try t.recordCounter("fps", 1000, 1, 60);
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try t.writeChromeTraceJson(&aw.writer);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings("[]", out.items);
+    try testing.expectEqualStrings("[]", out.items);
 }
 
 test "EnabledTrace mixed zone and counter events export correct JSON array" {
-    var t = try EnabledTrace.init(std.testing.allocator, 4);
+    var t = try EnabledTrace.init(testing.allocator, 4);
     defer t.deinit();
 
     const tok = try t.beginZone("frame", 0, 1);
     try t.recordCounter("triangles", 50, 1, 42_000);
     try t.endZone(tok, 100);
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try t.writeChromeTraceJson(&aw.writer);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
     const json = out.items;
 
-    try std.testing.expect(json.len >= 2);
-    try std.testing.expectEqual('[', json[0]);
-    try std.testing.expectEqual(']', json[json.len - 1]);
+    try testing.expect(json.len >= 2);
+    try testing.expectEqual('[', json[0]);
+    try testing.expectEqual(']', json[json.len - 1]);
 
     // All three event kinds must appear in the output.
-    try std.testing.expect(std.mem.indexOf(u8, json, "\"ph\":\"B\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, json, "\"ph\":\"C\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, json, "\"ph\":\"E\"") != null);
+    try testing.expect(std.mem.indexOf(u8, json, "\"ph\":\"B\"") != null);
+    try testing.expect(std.mem.indexOf(u8, json, "\"ph\":\"C\"") != null);
+    try testing.expect(std.mem.indexOf(u8, json, "\"ph\":\"E\"") != null);
 }
 
 test "EnabledTrace zone pairing: balanced begin/end does not assert at deinit" {
     // Goal: verify that a correctly paired begin/end sequence leaves zone_depth at zero,
     // so that deinit's balance assertion does not fire.
     // Method: call beginZone then endZone and let defer run deinit.
-    var t = try EnabledTrace.init(std.testing.allocator, 16);
+    var t = try EnabledTrace.init(testing.allocator, 16);
     defer t.deinit();
 
     const tok = try t.beginZone("work", 100, 1);
     try t.endZone(tok, 200);
     // Postcondition: depth is back to zero after the matching end.
-    try std.testing.expectEqual(@as(u32, 0), t.zone_depth);
+    try testing.expectEqual(@as(u32, 0), t.zone_depth);
 }
 
 test "EnabledTrace zone pairing: multiple nested zones balance correctly" {
     // Goal: verify that nested begin/end pairs each decrement depth exactly once.
     // Method: open two zones, close both, assert depth returns to zero.
-    var t = try EnabledTrace.init(std.testing.allocator, 16);
+    var t = try EnabledTrace.init(testing.allocator, 16);
     defer t.deinit();
 
     const tok_outer = try t.beginZone("outer", 0, 1);
     const tok_inner = try t.beginZone("inner", 10, 1);
     try t.endZone(tok_inner, 20);
     try t.endZone(tok_outer, 30);
-    try std.testing.expectEqual(@as(u32, 0), t.zone_depth);
+    try testing.expectEqual(@as(u32, 0), t.zone_depth);
 }
 
 test "EnabledTrace stress: random event sequences produce valid JSON and do not crash" {
@@ -467,7 +469,7 @@ test "EnabledTrace stress: random event sequences produce valid JSON and do not 
     // Invariants under test:
     //   1. Export never crashes regardless of event sequence or buffer fill level.
     //   2. JSON output always starts with '[' and ends with ']' (structurally valid).
-    const a = std.testing.allocator;
+    const a = testing.allocator;
 
     var prng = std.Random.DefaultPrng.init(0xc0ffee00_baadf00d);
     const random = prng.random();
@@ -502,10 +504,10 @@ test "EnabledTrace stress: random event sequences produce valid JSON and do not 
         const json = out.items;
 
         // Invariant 1: output is at minimum "[]" — two bytes.
-        try std.testing.expect(json.len >= 2);
+        try testing.expect(json.len >= 2);
 
         // Invariant 2: structural JSON array delimiters present.
-        try std.testing.expectEqual('[', json[0]);
-        try std.testing.expectEqual(']', json[json.len - 1]);
+        try testing.expectEqual('[', json[0]);
+        try testing.expectEqual(']', json[json.len - 1]);
     }
 }

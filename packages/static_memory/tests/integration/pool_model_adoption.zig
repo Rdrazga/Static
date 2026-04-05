@@ -1,4 +1,7 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
+const testing = std.testing;
 const static_memory = @import("static_memory");
 const static_testing = @import("static_testing");
 
@@ -88,7 +91,7 @@ const Context = struct {
         self.pool.deinit();
         try static_memory.pool.Pool.init(
             &self.pool,
-            std.testing.allocator,
+            testing.allocator,
             PoolBlockSize,
             PoolBlockAlign,
             PoolCapacity,
@@ -105,8 +108,8 @@ const Context = struct {
         self.expected_high_water = 0;
         self.expected_overflow_count = 0;
 
-        std.debug.assert(self.pool.available() == PoolCapacity);
-        std.debug.assert(self.pool.used() == 0);
+        assert(self.pool.available() == PoolCapacity);
+        assert(self.pool.used() == 0);
     }
 
     fn nextAction(
@@ -115,8 +118,8 @@ const Context = struct {
         action_index: u32,
         _: seed.Seed,
     ) ModelError!model.RecordedAction {
-        std.debug.assert(run_identity.case_index < ScenarioCount);
-        std.debug.assert(action_index < ActionCount);
+        assert(run_identity.case_index < ScenarioCount);
+        assert(action_index < ActionCount);
         return action_table[run_identity.case_index][action_index];
     }
 
@@ -139,7 +142,7 @@ const Context = struct {
             8 => self.freeStaleSlot1(),
             9 => self.allocAfterReset(),
             10 => self.freeAfterReset(),
-            else => std.debug.panic("unexpected pool model action", .{}),
+            else => panic("unexpected pool model action", .{}),
         }
 
         self.expectState();
@@ -151,25 +154,25 @@ const Context = struct {
 
     fn finish(context_ptr: *anyopaque, _: identity.RunIdentity, _: u32) ModelError!checker.CheckResult {
         const self: *@This() = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(self.saw_exhaustion);
-        std.debug.assert(self.saw_reuse);
-        std.debug.assert(self.saw_reset);
-        std.debug.assert(self.saw_stale_free_rejection);
+        assert(self.saw_exhaustion);
+        assert(self.saw_reuse);
+        assert(self.saw_reset);
+        assert(self.saw_stale_free_rejection);
 
         inline for (self.allocations) |allocation| {
-            std.debug.assert(allocation == null);
+            assert(allocation == null);
         }
-        std.debug.assert(self.pool.available() == PoolCapacity);
-        std.debug.assert(self.pool.used() == 0);
-        std.debug.assert(self.pool.highWaterUsed() == PoolCapacity);
-        std.debug.assert(self.pool.overflowCount() == 1);
+        assert(self.pool.available() == PoolCapacity);
+        assert(self.pool.used() == 0);
+        assert(self.pool.highWaterUsed() == PoolCapacity);
+        assert(self.pool.overflowCount() == 1);
 
         const report = self.pool.report();
-        std.debug.assert(report.unit == .blocks);
-        std.debug.assert(report.used == 0);
-        std.debug.assert(report.high_water == @as(u64, PoolCapacity));
-        std.debug.assert(report.capacity == @as(u64, PoolCapacity));
-        std.debug.assert(report.overflow_count == 1);
+        assert(report.unit == .blocks);
+        assert(report.used == 0);
+        assert(report.high_water == @as(u64, PoolCapacity));
+        assert(report.capacity == @as(u64, PoolCapacity));
+        assert(report.overflow_count == 1);
 
         return checker.CheckResult.pass(null);
     }
@@ -194,49 +197,49 @@ const Context = struct {
     }
 
     fn expectState(self: *const @This()) void {
-        std.debug.assert(self.pool.available() == PoolCapacity - self.expected_live_count);
-        std.debug.assert(self.pool.used() == self.expected_live_count);
-        std.debug.assert(self.pool.highWaterUsed() == self.expected_high_water);
-        std.debug.assert(self.pool.overflowCount() == self.expected_overflow_count);
+        assert(self.pool.available() == PoolCapacity - self.expected_live_count);
+        assert(self.pool.used() == self.expected_live_count);
+        assert(self.pool.highWaterUsed() == self.expected_high_water);
+        assert(self.pool.overflowCount() == self.expected_overflow_count);
     }
 
     fn allocSlot(self: *@This(), slot: u32) void {
-        std.debug.assert(slot < PoolCapacity);
+        assert(slot < PoolCapacity);
         const slot_index: usize = @intCast(slot);
-        std.debug.assert(self.allocations[slot_index] == null);
+        assert(self.allocations[slot_index] == null);
 
         const block = self.pool.allocBlock() catch {
-            std.debug.panic("unexpected pool allocation failure", .{});
+            panic("unexpected pool allocation failure", .{});
         };
-        std.debug.assert(block.len == PoolBlockSize);
+        assert(block.len == PoolBlockSize);
         self.allocations[slot_index] = block;
         self.expected_live_count += 1;
         if (self.expected_live_count > self.expected_high_water) {
             self.expected_high_water = self.expected_live_count;
         }
         if (self.first_allocation == null) {
-            std.debug.assert(self.first_allocation == null);
+            assert(self.first_allocation == null);
             self.first_allocation = block;
         }
     }
 
     fn expectExhaustion(self: *@This()) void {
         _ = self.pool.allocBlock() catch |err| {
-            std.debug.assert(err == error.NoSpaceLeft);
+            assert(err == error.NoSpaceLeft);
             self.saw_exhaustion = true;
             self.expected_overflow_count = 1;
             return;
         };
-        std.debug.panic("expected pool exhaustion", .{});
+        panic("expected pool exhaustion", .{});
     }
 
     fn freeSlot1(self: *@This()) void {
         const block = self.allocations[1] orelse {
-            std.debug.panic("slot 1 was not allocated", .{});
+            panic("slot 1 was not allocated", .{});
         };
         self.freed_slot1_ptr = @intFromPtr(block.ptr);
         self.pool.freeBlock(block) catch {
-            std.debug.panic("unexpected pool release failure", .{});
+            panic("unexpected pool release failure", .{});
         };
         self.allocations[1] = null;
         self.expected_live_count -= 1;
@@ -244,10 +247,10 @@ const Context = struct {
 
     fn allocReuseSlot1(self: *@This()) void {
         const block = self.pool.allocBlock() catch {
-            std.debug.panic("unexpected pool allocation failure", .{});
+            panic("unexpected pool allocation failure", .{});
         };
-        std.debug.assert(self.freed_slot1_ptr != 0);
-        std.debug.assert(@intFromPtr(block.ptr) == self.freed_slot1_ptr);
+        assert(self.freed_slot1_ptr != 0);
+        assert(@intFromPtr(block.ptr) == self.freed_slot1_ptr);
         self.allocations[1] = block;
         self.stale_free_block = block;
         self.saw_reuse = true;
@@ -255,7 +258,7 @@ const Context = struct {
     }
 
     fn resetPool(self: *@This()) void {
-        std.debug.assert(self.allocations[1] != null);
+        assert(self.allocations[1] != null);
         self.stale_free_block = self.allocations[1];
         self.pool.reset();
         self.allocations = .{null} ** PoolCapacity;
@@ -265,35 +268,35 @@ const Context = struct {
 
     fn freeStaleSlot1(self: *@This()) void {
         const block = self.stale_free_block orelse {
-            std.debug.panic("stale block was not captured before reset", .{});
+            panic("stale block was not captured before reset", .{});
         };
         self.pool.freeBlock(block) catch |err| {
-            std.debug.assert(err == error.InvalidBlock);
+            assert(err == error.InvalidBlock);
             self.saw_stale_free_rejection = true;
             return;
         };
-        std.debug.panic("expected stale block release to fail", .{});
+        panic("expected stale block release to fail", .{});
     }
 
     fn allocAfterReset(self: *@This()) void {
         const block = self.pool.allocBlock() catch {
-            std.debug.panic("unexpected pool allocation failure", .{});
+            panic("unexpected pool allocation failure", .{});
         };
         const first_allocation = self.first_allocation orelse {
-            std.debug.panic("first allocation was not captured", .{});
+            panic("first allocation was not captured", .{});
         };
-        std.debug.assert(@intFromPtr(block.ptr) == @intFromPtr(first_allocation.ptr));
-        std.debug.assert(self.allocations[0] == null);
+        assert(@intFromPtr(block.ptr) == @intFromPtr(first_allocation.ptr));
+        assert(self.allocations[0] == null);
         self.allocations[0] = block;
         self.expected_live_count += 1;
     }
 
     fn freeAfterReset(self: *@This()) void {
         const block = self.allocations[0] orelse {
-            std.debug.panic("slot 0 was not allocated after reset", .{});
+            panic("slot 0 was not allocated after reset", .{});
         };
         self.pool.freeBlock(block) catch {
-            std.debug.panic("unexpected pool release failure", .{});
+            panic("unexpected pool release failure", .{});
         };
         self.allocations[0] = null;
         self.expected_live_count -= 1;
@@ -306,7 +309,7 @@ test "pool model covers allocation reuse reset and exhaustion" {
     };
     try static_memory.pool.Pool.init(
         &context.pool,
-        std.testing.allocator,
+        testing.allocator,
         PoolBlockSize,
         PoolBlockAlign,
         PoolCapacity,
@@ -339,8 +342,8 @@ test "pool model covers allocation reuse reset and exhaustion" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expect(summary.failed_case == null);
-    try std.testing.expectEqual(@as(u32, ScenarioCount), summary.executed_case_count);
-    try std.testing.expectEqual(@as(u32, 4), context.pool.available());
-    try std.testing.expectEqual(@as(u32, 0), context.pool.used());
+    try testing.expect(summary.failed_case == null);
+    try testing.expectEqual(@as(u32, ScenarioCount), summary.executed_case_count);
+    try testing.expectEqual(@as(u32, 4), context.pool.available());
+    try testing.expectEqual(@as(u32, 0), context.pool.used());
 }

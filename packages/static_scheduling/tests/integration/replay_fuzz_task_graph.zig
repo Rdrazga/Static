@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_scheduling = @import("static_scheduling");
 const static_testing = @import("static_testing");
 
@@ -84,10 +86,10 @@ const TaskGraphTargetContext = struct {
 };
 
 test "task graph replay-backed campaigns preserve deterministic plan invariants" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -128,7 +130,7 @@ test "task graph replay-backed campaigns preserve deterministic plan invariants"
         &target_context,
         TaskGraphTargetContext.replay,
     );
-    try std.testing.expectEqual(config.case_count_max, summary.executed_case_count);
+    try testing.expectEqual(config.case_count_max, summary.executed_case_count);
 }
 
 fn buildGraphCase(seed_value: u64) GraphCase {
@@ -206,7 +208,7 @@ const PlanResult = struct {
 };
 
 fn planGraph(graph_case: GraphCase, shuffle_edges: bool) topo.TopoError!PlanResult {
-    var graph = static_scheduling.task_graph.TaskGraph.init(std.testing.allocator, graph_case.node_count);
+    var graph = static_scheduling.task_graph.TaskGraph.init(testing.allocator, graph_case.node_count);
     defer graph.deinit();
 
     var edges: [24]topo.Edge = undefined;
@@ -218,7 +220,7 @@ fn planGraph(graph_case: GraphCase, shuffle_edges: bool) topo.TopoError!PlanResu
     }
 
     return .{
-        .plan = try graph.planDeterministic(std.testing.allocator),
+        .plan = try graph.planDeterministic(testing.allocator),
     };
 }
 
@@ -241,7 +243,7 @@ fn shuffleEdges(edges: []topo.Edge, graph_case: GraphCase) void {
 fn respectsEdges(graph_case: GraphCase, order: []const usize) bool {
     if (order.len != graph_case.node_count) return false;
     var positions: [8]usize = [_]usize{0} ** 8;
-    std.debug.assert(graph_case.node_count <= positions.len);
+    assert(graph_case.node_count <= positions.len);
     for (order, 0..) |node, position| {
         positions[node] = position;
     }
@@ -295,7 +297,7 @@ fn expectNoFailureOrReplay(
     ) error{}!replay_runner.ReplayExecution,
 ) !void {
     if (summary.failed_case) |failed_case| {
-        try std.testing.expect(failed_case.persisted_entry_name != null);
+        try testing.expect(failed_case.persisted_entry_name != null);
 
         var read_buffer: [512]u8 = undefined;
         const entry = try corpus.readCorpusEntry(
@@ -316,7 +318,7 @@ fn expectNoFailureOrReplay(
                 .expected_identity_hash = entry.meta.identity_hash,
             },
         );
-        try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
+        try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
 
         std.debug.print("static_scheduling task graph regression persisted at {s}\n", .{
             failed_case.persisted_entry_name.?,

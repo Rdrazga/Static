@@ -29,6 +29,8 @@
 //! ```
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const primitives = @import("primitives.zig");
 const AABB3 = primitives.AABB3;
 const GridConfig3D = primitives.GridConfig3D;
@@ -44,7 +46,7 @@ pub const UniformGrid3DError = error{ CellFull, OutOfBounds };
 pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
     comptime {
         if (max_per_cell == 0) @compileError("UniformGrid3D max_per_cell must be > 0");
-        std.debug.assert(@sizeOf(T) > 0);
+        assert(@sizeOf(T) > 0);
     }
 
     return struct {
@@ -63,9 +65,9 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
         /// Allocates: O(cells_x * cells_y * cells_z * max_per_cell).
         /// Thread-safety: single-threaded.
         pub fn init(allocator: std.mem.Allocator, cfg: GridConfig3D) !Self {
-            std.debug.assert(cfg.cells_x > 0);
-            std.debug.assert(cfg.cells_y > 0);
-            std.debug.assert(cfg.cells_z > 0);
+            assert(cfg.cells_x > 0);
+            assert(cfg.cells_y > 0);
+            assert(cfg.cells_z > 0);
             const cell_count: usize = @as(usize, cfg.cells_x) *
                 @as(usize, cfg.cells_y) *
                 @as(usize, cfg.cells_z);
@@ -102,8 +104,8 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             const expected_cells: usize = @as(usize, self.cfg.cells_x) *
                 @as(usize, self.cfg.cells_y) *
                 @as(usize, self.cfg.cells_z);
-            std.debug.assert(self.cell_counts.len == expected_cells);
-            std.debug.assert(self.items.len == expected_cells * @as(usize, max_per_cell));
+            assert(self.cell_counts.len == expected_cells);
+            assert(self.items.len == expected_cells * @as(usize, max_per_cell));
             self.allocator.free(self.items);
             self.allocator.free(self.cell_counts);
             self.* = undefined;
@@ -127,7 +129,7 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             const idx = self.cfg.cellIndex(x, y, z) orelse return error.OutOfBounds;
             const linear = self.cfg.linearIndex(idx.cx, idx.cy, idx.cz);
             // Precondition: linear index must be within the allocated counts array.
-            std.debug.assert(@as(usize, linear) < self.cell_counts.len);
+            assert(@as(usize, linear) < self.cell_counts.len);
             try self.insertCell(linear, item);
         }
 
@@ -149,9 +151,9 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
         /// Thread-safety: single-threaded.
         pub fn insertAABB(self: *Self, aabb: AABB3, item: T) UniformGrid3DError!void {
             // Precondition: AABB must not be inverted.
-            std.debug.assert(aabb.min_x <= aabb.max_x);
-            std.debug.assert(aabb.min_y <= aabb.max_y);
-            std.debug.assert(aabb.min_z <= aabb.max_z);
+            assert(aabb.min_x <= aabb.max_x);
+            assert(aabb.min_y <= aabb.max_y);
+            assert(aabb.min_z <= aabb.max_z);
             const r = self.cellRangeForAABB(aabb) orelse return error.OutOfBounds;
 
             // Pre-check: verify all cells have space before mutating any state.
@@ -187,7 +189,7 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             const idx = self.cfg.cellIndex(x, y, z) orelse return &[_]T{};
             const linear = self.cfg.linearIndex(idx.cx, idx.cy, idx.cz);
             // Precondition: linear index must be within the allocated counts array.
-            std.debug.assert(@as(usize, linear) < self.cell_counts.len);
+            assert(@as(usize, linear) < self.cell_counts.len);
             return self.cellSlice(linear);
         }
 
@@ -207,9 +209,9 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
         /// Thread-safety: safe for concurrent reads (grid contents must not be mutating).
         pub fn queryAABB(self: *const Self, aabb: AABB3, out: []T) u32 {
             // Precondition: query AABB must not be inverted.
-            std.debug.assert(aabb.min_x <= aabb.max_x);
-            std.debug.assert(aabb.min_y <= aabb.max_y);
-            std.debug.assert(aabb.min_z <= aabb.max_z);
+            assert(aabb.min_x <= aabb.max_x);
+            assert(aabb.min_y <= aabb.max_y);
+            assert(aabb.min_z <= aabb.max_z);
             const r = self.cellRangeForAABB(aabb) orelse return 0;
             var out_len: u32 = 0;
 
@@ -247,10 +249,10 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             const expected_cells: usize = @as(usize, self.cfg.cells_x) *
                 @as(usize, self.cfg.cells_y) *
                 @as(usize, self.cfg.cells_z);
-            std.debug.assert(self.cell_counts.len == expected_cells);
+            assert(self.cell_counts.len == expected_cells);
             @memset(self.cell_counts, 0);
             // Postcondition: at least the first cell is cleared (representative sample).
-            std.debug.assert(self.cell_counts[0] == 0);
+            assert(self.cell_counts[0] == 0);
         }
 
         /// Remove the first occurrence of `item` from the cell containing point `(x, y, z)`.
@@ -272,11 +274,11 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             const linear = self.cfg.linearIndex(idx.cx, idx.cy, idx.cz);
 
             const cell_index: usize = @intCast(linear);
-            std.debug.assert(cell_index < self.cell_counts.len);
+            assert(cell_index < self.cell_counts.len);
 
             const count_u32 = self.cell_counts[cell_index];
             // Precondition: per-cell count must not exceed the per-cell capacity.
-            std.debug.assert(count_u32 <= max_per_cell);
+            assert(count_u32 <= max_per_cell);
             const count: usize = @intCast(count_u32);
             const base: usize = cell_index * @as(usize, max_per_cell);
 
@@ -299,7 +301,7 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
 
         fn insertCell(self: *Self, linear: u32, item: T) UniformGrid3DError!void {
             const cell_index: usize = @intCast(linear);
-            std.debug.assert(cell_index < self.cell_counts.len);
+            assert(cell_index < self.cell_counts.len);
 
             const count = self.cell_counts[cell_index];
             if (count >= max_per_cell) return error.CellFull;
@@ -308,16 +310,16 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             self.items[base + @as(usize, count)] = item;
             self.cell_counts[cell_index] = count + 1;
             // Postcondition: cell count must have incremented by exactly one.
-            std.debug.assert(self.cell_counts[cell_index] == count + 1);
+            assert(self.cell_counts[cell_index] == count + 1);
         }
 
         fn cellSlice(self: *const Self, linear: u32) []const T {
             const cell_index: usize = @intCast(linear);
-            std.debug.assert(cell_index < self.cell_counts.len);
+            assert(cell_index < self.cell_counts.len);
 
             const count_u32 = self.cell_counts[cell_index];
             // Precondition: per-cell count must not exceed the per-cell capacity.
-            std.debug.assert(count_u32 <= max_per_cell);
+            assert(count_u32 <= max_per_cell);
             const count: usize = @intCast(count_u32);
             const base: usize = cell_index * @as(usize, max_per_cell);
             return self.items[base .. base + count];
@@ -337,9 +339,9 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
             const max_idx = self.cfg.cellIndex(aabb.max_x, aabb.max_y, aabb.max_z) orelse return null;
 
             if (std.debug.runtime_safety) {
-                std.debug.assert(min_idx.cx <= max_idx.cx);
-                std.debug.assert(min_idx.cy <= max_idx.cy);
-                std.debug.assert(min_idx.cz <= max_idx.cz);
+                assert(min_idx.cx <= max_idx.cx);
+                assert(min_idx.cy <= max_idx.cy);
+                assert(min_idx.cz <= max_idx.cz);
             }
 
             return .{
@@ -375,7 +377,7 @@ pub fn UniformGrid3D(comptime T: type, comptime max_per_cell: u32) type {
 
 test "UniformGrid3D insertPoint and queryPoint" {
     const Grid = UniformGrid3D(u32, 4);
-    var grid = try Grid.init(std.testing.allocator, .{
+    var grid = try Grid.init(testing.allocator, .{
         .min_x = 0,
         .min_y = 0,
         .min_z = 0,
@@ -392,33 +394,33 @@ test "UniformGrid3D insertPoint and queryPoint" {
     try grid.insertPoint(1, 1, 1, 99);
 
     const result = grid.queryPoint(1, 1, 1);
-    try std.testing.expectEqual(@as(usize, 2), result.len);
-    try std.testing.expectEqual(@as(u32, 42), result[0]);
-    try std.testing.expectEqual(@as(u32, 99), result[1]);
+    try testing.expectEqual(@as(usize, 2), result.len);
+    try testing.expectEqual(@as(u32, 42), result[0]);
+    try testing.expectEqual(@as(u32, 99), result[1]);
 
     // Point in a different cell returns empty.
     const empty = grid.queryPoint(9, 9, 9);
-    try std.testing.expectEqual(@as(usize, 0), empty.len);
+    try testing.expectEqual(@as(usize, 0), empty.len);
 
     // Exact max boundary maps to the last cell.
     try grid.insertPoint(10, 10, 10, 77);
     const edge = grid.queryPoint(10, 10, 10);
-    try std.testing.expectEqual(@as(usize, 1), edge.len);
-    try std.testing.expectEqual(@as(u32, 77), edge[0]);
+    try testing.expectEqual(@as(usize, 1), edge.len);
+    try testing.expectEqual(@as(u32, 77), edge[0]);
 
     // Remove and verify.
-    try std.testing.expect(grid.remove(1, 1, 1, 42));
+    try testing.expect(grid.remove(1, 1, 1, 42));
     const after_remove = grid.queryPoint(1, 1, 1);
-    try std.testing.expectEqual(@as(usize, 1), after_remove.len);
-    try std.testing.expectEqual(@as(u32, 99), after_remove[0]);
+    try testing.expectEqual(@as(usize, 1), after_remove.len);
+    try testing.expectEqual(@as(u32, 99), after_remove[0]);
 
     // Remove non-existent returns false.
-    try std.testing.expect(!grid.remove(1, 1, 1, 42));
+    try testing.expect(!grid.remove(1, 1, 1, 42));
 }
 
 test "UniformGrid3D insertAABB" {
     const Grid = UniformGrid3D(u32, 8);
-    var grid = try Grid.init(std.testing.allocator, .{
+    var grid = try Grid.init(testing.allocator, .{
         .min_x = 0,
         .min_y = 0,
         .min_z = 0,
@@ -437,20 +439,20 @@ test "UniformGrid3D insertAABB" {
     var out: [64]u32 = undefined;
     const count = grid.queryAABB(AABB3.init(0, 0, 0, 10, 10, 10), out[0..]);
     // 2x2x2 = 8 cells, value duplicated into each.
-    try std.testing.expectEqual(@as(u32, 8), count);
+    try testing.expectEqual(@as(u32, 8), count);
     for (out[0..@intCast(count)]) |v| {
-        try std.testing.expectEqual(@as(u32, 7), v);
+        try testing.expectEqual(@as(u32, 7), v);
     }
 
     // Query a sub-region covering only 1 cell.
     const sub_count = grid.queryAABB(AABB3.init(0, 0, 0, 4, 4, 4), out[0..]);
-    try std.testing.expectEqual(@as(u32, 1), sub_count);
-    try std.testing.expectEqual(@as(u32, 7), out[0]);
+    try testing.expectEqual(@as(u32, 1), sub_count);
+    try testing.expectEqual(@as(u32, 7), out[0]);
 }
 
 test "UniformGrid3D clear" {
     const Grid = UniformGrid3D(u32, 4);
-    var grid = try Grid.init(std.testing.allocator, .{
+    var grid = try Grid.init(testing.allocator, .{
         .min_x = 0,
         .min_y = 0,
         .min_z = 0,
@@ -467,23 +469,23 @@ test "UniformGrid3D clear" {
     try grid.insertPoint(9, 9, 9, 99);
 
     // Verify items are present.
-    try std.testing.expectEqual(@as(usize, 1), grid.queryPoint(1, 1, 1).len);
-    try std.testing.expectEqual(@as(usize, 1), grid.queryPoint(9, 9, 9).len);
+    try testing.expectEqual(@as(usize, 1), grid.queryPoint(1, 1, 1).len);
+    try testing.expectEqual(@as(usize, 1), grid.queryPoint(9, 9, 9).len);
 
     grid.clear();
 
     // All cells should be empty after clear.
-    try std.testing.expectEqual(@as(usize, 0), grid.queryPoint(1, 1, 1).len);
-    try std.testing.expectEqual(@as(usize, 0), grid.queryPoint(9, 9, 9).len);
+    try testing.expectEqual(@as(usize, 0), grid.queryPoint(1, 1, 1).len);
+    try testing.expectEqual(@as(usize, 0), grid.queryPoint(9, 9, 9).len);
 
     // Grid is still usable after clear.
     try grid.insertPoint(5, 5, 5, 123);
-    try std.testing.expectEqual(@as(usize, 1), grid.queryPoint(5, 5, 5).len);
+    try testing.expectEqual(@as(usize, 1), grid.queryPoint(5, 5, 5).len);
 }
 
 test "UniformGrid3D capacity overflow" {
     const Grid = UniformGrid3D(u8, 2);
-    var grid = try Grid.init(std.testing.allocator, .{
+    var grid = try Grid.init(testing.allocator, .{
         .min_x = 0,
         .min_y = 0,
         .min_z = 0,
@@ -500,18 +502,18 @@ test "UniformGrid3D capacity overflow" {
     try grid.insertPoint(2, 2, 2, 2);
 
     // Third insert into the same cell exceeds capacity.
-    try std.testing.expectError(error.CellFull, grid.insertPoint(3, 3, 3, 3));
+    try testing.expectError(error.CellFull, grid.insertPoint(3, 3, 3, 3));
 
     // Existing items are still intact (no partial mutation).
     const result = grid.queryPoint(1, 1, 1);
-    try std.testing.expectEqual(@as(usize, 2), result.len);
-    try std.testing.expectEqual(@as(u8, 1), result[0]);
-    try std.testing.expectEqual(@as(u8, 2), result[1]);
+    try testing.expectEqual(@as(usize, 2), result.len);
+    try testing.expectEqual(@as(u8, 1), result[0]);
+    try testing.expectEqual(@as(u8, 2), result[1]);
 
     // insertAABB also respects capacity: no partial insertion.
-    try std.testing.expectError(error.CellFull, grid.insertAABB(AABB3.init(0, 0, 0, 10, 10, 10), 4));
-    try std.testing.expectEqual(@as(usize, 2), grid.queryPoint(1, 1, 1).len);
+    try testing.expectError(error.CellFull, grid.insertAABB(AABB3.init(0, 0, 0, 10, 10, 10), 4));
+    try testing.expectEqual(@as(usize, 2), grid.queryPoint(1, 1, 1).len);
 
     // OutOfBounds for points outside the grid.
-    try std.testing.expectError(error.OutOfBounds, grid.insertPoint(-1, 0, 0, 5));
+    try testing.expectError(error.OutOfBounds, grid.insertPoint(-1, 0, 0, 5));
 }

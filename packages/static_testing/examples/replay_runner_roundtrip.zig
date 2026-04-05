@@ -1,6 +1,7 @@
 //! Demonstrates high-level replay execution over a stored replay artifact.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -41,7 +42,7 @@ pub fn main() !void {
         },
     );
 
-    std.debug.assert(outcome == .matched);
+    assert(outcome == .matched);
 }
 
 const ReplayContext = struct {

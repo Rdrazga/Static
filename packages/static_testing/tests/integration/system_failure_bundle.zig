@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const system = static_testing.testing.system;
@@ -6,7 +7,7 @@ const system = static_testing.testing.system;
 test "system harness persists a retained failure bundle with provenance" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 16) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -18,10 +19,10 @@ test "system harness persists a retained failure bundle with provenance" {
     });
     defer sim_fixture.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -54,9 +55,9 @@ test "system harness persists a retained failure bundle with provenance" {
 
     const Context = struct {
         fn run(_: *void, context: *system.SystemContext(@TypeOf(sim_fixture))) anyerror!static_testing.testing.checker.CheckResult {
-            try std.testing.expect(context.hasComponent("network_link"));
-            try std.testing.expect(context.hasComponent("storage_lane"));
-            try std.testing.expect(context.hasComponent("retry_queue"));
+            try testing.expect(context.hasComponent("network_link"));
+            try testing.expect(context.hasComponent("storage_lane"));
+            try testing.expect(context.hasComponent("retry_queue"));
 
             var next_sequence_no: u32 = 0;
             const start_seq = try context.appendTraceEvent(
@@ -100,8 +101,8 @@ test "system harness persists a retained failure bundle with provenance" {
         },
     }, &user_context, Context.run);
 
-    try std.testing.expect(!execution.check_result.passed);
-    try std.testing.expect(execution.retained_bundle != null);
+    try testing.expect(!execution.check_result.passed);
+    try testing.expect(execution.retained_bundle != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [static_testing.testing.failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -136,10 +137,10 @@ test "system harness persists a retained failure bundle with provenance" {
         },
     );
 
-    try std.testing.expectEqualStrings("system_failure_bundle_integration", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expect(bundle.trace_document.?.has_provenance);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqual(@as(usize, 2), bundle.retained_trace.?.items.len);
-    try std.testing.expectEqualStrings("system_temporal_failure", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_failure_bundle_integration", bundle.manifest_document.run_name);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expect(bundle.trace_document.?.has_provenance);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqual(@as(usize, 2), bundle.retained_trace.?.items.len);
+    try testing.expectEqualStrings("system_temporal_failure", bundle.violations_document.violations[0].code);
 }

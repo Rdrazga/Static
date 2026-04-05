@@ -24,6 +24,7 @@
 //! All operations: no allocation (stack/register only).
 
 const std = @import("std");
+const testing = std.testing;
 
 // Algorithm modules.
 pub const fnv1a = @import("hash/fnv1a.zig");
@@ -77,32 +78,32 @@ test "root convenience re-exports match underlying modules" {
     const bytes = "static-hash";
 
     const pair: Pair64 = .{ .left = 11, .right = 17 };
-    try std.testing.expectEqual(combine.combineOrdered64(pair), combineOrdered64(pair));
-    try std.testing.expectEqual(
+    try testing.expectEqual(combine.combineOrdered64(pair), combineOrdered64(pair));
+    try testing.expectEqual(
         combine.combineUnordered64(pair),
         combineUnordered64(pair),
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         combine.combineUnorderedMultiset64(11, 3),
         combineUnorderedMultiset64(11, 3),
     );
 
-    try std.testing.expectEqual(fingerprint.fingerprint64(bytes), fingerprint64(bytes));
-    try std.testing.expectEqual(
+    try testing.expectEqual(fingerprint.fingerprint64(bytes), fingerprint64(bytes));
+    try testing.expectEqual(
         fingerprint.fingerprint64Seeded(99, bytes),
         fingerprint64Seeded(99, bytes),
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         fingerprint.fingerprint128(bytes),
         fingerprint128(bytes),
     );
 
-    try std.testing.expectEqual(stable.stableHashAny(@as(u32, 7)), stableHashAny(@as(u32, 7)));
-    try std.testing.expectEqual(
+    try testing.expectEqual(stable.stableHashAny(@as(u32, 7)), stableHashAny(@as(u32, 7)));
+    try testing.expectEqual(
         stable.stableHashAnySeeded(123, @as(u32, 7)),
         stableHashAnySeeded(123, @as(u32, 7)),
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         stable.stableFingerprint64(bytes),
         stableFingerprint64(bytes),
     );

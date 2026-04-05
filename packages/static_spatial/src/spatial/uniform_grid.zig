@@ -10,6 +10,8 @@
 //! - `init`: O(cells_x * cells_y * max_per_cell) allocation.
 //! - All operations after init are allocation-free.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const primitives = @import("primitives.zig");
 const AABB2 = primitives.AABB2;
 const GridConfig = primitives.GridConfig;
@@ -19,7 +21,7 @@ pub const UniformGridError = error{ CellFull, OutOfBounds };
 pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
     comptime {
         if (max_per_cell == 0) @compileError("UniformGrid max_per_cell must be > 0");
-        std.debug.assert(@sizeOf(T) > 0);
+        assert(@sizeOf(T) > 0);
     }
     return struct {
         const Self = @This();
@@ -33,8 +35,8 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
             allocator: std.mem.Allocator,
             config: GridConfig,
         ) !Self {
-            std.debug.assert(config.cells_x > 0);
-            std.debug.assert(config.cells_y > 0);
+            assert(config.cells_x > 0);
+            assert(config.cells_y > 0);
             const total = config.totalCells();
             const items = try allocator.alloc(
                 T,
@@ -53,8 +55,8 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
 
         pub fn deinit(self: *Self) void {
             // Precondition: items slice must have the expected size.
-            std.debug.assert(self.items.len == self.config.totalCells() * max_per_cell);
-            std.debug.assert(self.counts.len == self.config.totalCells());
+            assert(self.items.len == self.config.totalCells() * max_per_cell);
+            assert(self.counts.len == self.config.totalCells());
             self.allocator.free(self.items);
             self.allocator.free(self.counts);
             self.* = undefined;
@@ -74,13 +76,13 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
             );
             const count = self.counts[idx];
             // Precondition: cell index must be within bounds.
-            std.debug.assert(idx < self.counts.len);
+            assert(idx < self.counts.len);
             if (count >= max_per_cell)
                 return UniformGridError.CellFull;
             self.items[idx * max_per_cell + count] = item;
             self.counts[idx] = count + 1;
             // Postcondition: cell count must have increased by one.
-            std.debug.assert(self.counts[idx] == count + 1);
+            assert(self.counts[idx] == count + 1);
         }
 
         pub fn insertAABB(
@@ -92,8 +94,8 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
 
             // Pre-check: verify all target cells have capacity before
             // mutating any, so the function is atomic on CellFull error.
-            std.debug.assert(r.max_cx < self.config.cells_x);
-            std.debug.assert(r.max_cy < self.config.cells_y);
+            assert(r.max_cx < self.config.cells_x);
+            assert(r.max_cy < self.config.cells_y);
             var check_cy = r.min_cy;
             while (check_cy <= r.max_cy) : (check_cy += 1) {
                 var check_cx = r.min_cx;
@@ -111,7 +113,7 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
                     const idx = self.config.linearIndex(cx, cy);
                     const count = self.counts[idx];
                     // Capacity guaranteed by pre-check above.
-                    std.debug.assert(count < max_per_cell);
+                    assert(count < max_per_cell);
                     self.items[idx * max_per_cell + count] = item;
                     self.counts[idx] = count + 1;
                 }
@@ -130,10 +132,10 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
                 cell.cy,
             );
             // Precondition: cell index is within the allocated counts array.
-            std.debug.assert(idx < self.counts.len);
+            assert(idx < self.counts.len);
             const count = self.counts[idx];
             // Precondition: per-cell item count must not exceed the per-cell capacity.
-            std.debug.assert(count <= max_per_cell);
+            assert(count <= max_per_cell);
             const base = idx * max_per_cell;
             return self.items[base..base + count];
         }
@@ -171,10 +173,10 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
 
         pub fn clear(self: *Self) void {
             // Precondition: counts slice must match the grid's total cell count.
-            std.debug.assert(self.counts.len == self.config.totalCells());
+            assert(self.counts.len == self.config.totalCells());
             @memset(self.counts, 0);
             // Postcondition: all cells are empty.
-            std.debug.assert(self.counts[0] == 0);
+            assert(self.counts[0] == 0);
         }
 
         pub fn remove(
@@ -190,10 +192,10 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
                 cell.cy,
             );
             // Precondition: cell index is within the allocated counts array.
-            std.debug.assert(idx < self.counts.len);
+            assert(idx < self.counts.len);
             const count = self.counts[idx];
             // Precondition: per-cell count must not exceed capacity.
-            std.debug.assert(count <= max_per_cell);
+            assert(count <= max_per_cell);
             const base = idx * max_per_cell;
             for (0..count) |i| {
                 if (std.meta.eql(
@@ -227,8 +229,8 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
         /// duplicated range-computation code.
         fn cellRangeForAABB(self: *const Self, aabb: AABB2) CellRange {
             // Precondition: AABB must not be inverted.
-            std.debug.assert(aabb.min_x <= aabb.max_x);
-            std.debug.assert(aabb.min_y <= aabb.max_y);
+            assert(aabb.min_x <= aabb.max_x);
+            assert(aabb.min_y <= aabb.max_y);
             const cw = self.config.cellWidth();
             const ch = self.config.cellHeight();
             const min_cx: u32 = @intFromFloat(
@@ -250,8 +252,8 @@ pub fn UniformGrid(comptime T: type, comptime max_per_cell: u32) type {
                 ),
             );
             // Postcondition: outputs are within grid bounds.
-            std.debug.assert(max_cx < self.config.cells_x);
-            std.debug.assert(max_cy < self.config.cells_y);
+            assert(max_cx < self.config.cells_x);
+            assert(max_cy < self.config.cells_y);
             return .{
                 .min_cx = min_cx,
                 .max_cx = max_cx,
@@ -280,7 +282,7 @@ fn testConfig() GridConfig {
 test "UniformGrid insertPoint and queryPoint" {
     const Grid = UniformGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -289,18 +291,18 @@ test "UniformGrid insertPoint and queryPoint" {
     try grid.insertPoint(5.0, 5.0, 99);
 
     const results = grid.queryPoint(5.0, 5.0);
-    try std.testing.expectEqual(@as(usize, 2), results.len);
-    try std.testing.expectEqual(@as(u32, 42), results[0]);
-    try std.testing.expectEqual(@as(u32, 99), results[1]);
+    try testing.expectEqual(@as(usize, 2), results.len);
+    try testing.expectEqual(@as(u32, 42), results[0]);
+    try testing.expectEqual(@as(u32, 99), results[1]);
 
     const empty = grid.queryPoint(55.0, 55.0);
-    try std.testing.expectEqual(@as(usize, 0), empty.len);
+    try testing.expectEqual(@as(usize, 0), empty.len);
 }
 
 test "UniformGrid insertAABB" {
     const Grid = UniformGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -317,23 +319,23 @@ test "UniformGrid insertAABB" {
 
     // All four cells should contain item 7.
     const r00 = grid.queryPoint(5.0, 5.0);
-    try std.testing.expectEqual(@as(usize, 1), r00.len);
-    try std.testing.expectEqual(@as(u32, 7), r00[0]);
+    try testing.expectEqual(@as(usize, 1), r00.len);
+    try testing.expectEqual(@as(u32, 7), r00[0]);
 
     const r10 = grid.queryPoint(15.0, 5.0);
-    try std.testing.expectEqual(@as(usize, 1), r10.len);
+    try testing.expectEqual(@as(usize, 1), r10.len);
 
     const r01 = grid.queryPoint(5.0, 15.0);
-    try std.testing.expectEqual(@as(usize, 1), r01.len);
+    try testing.expectEqual(@as(usize, 1), r01.len);
 
     const r11 = grid.queryPoint(15.0, 15.0);
-    try std.testing.expectEqual(@as(usize, 1), r11.len);
+    try testing.expectEqual(@as(usize, 1), r11.len);
 }
 
 test "UniformGrid queryAABB" {
     const Grid = UniformGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -350,13 +352,13 @@ test "UniformGrid queryAABB" {
         .max_y = 20.0,
     };
     const n = grid.queryAABB(query, &buf);
-    try std.testing.expectEqual(@as(u32, 2), n);
+    try testing.expectEqual(@as(u32, 2), n);
 }
 
 test "UniformGrid clear" {
     const Grid = UniformGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -365,13 +367,13 @@ test "UniformGrid clear" {
     grid.clear();
 
     const results = grid.queryPoint(5.0, 5.0);
-    try std.testing.expectEqual(@as(usize, 0), results.len);
+    try testing.expectEqual(@as(usize, 0), results.len);
 }
 
 test "UniformGrid remove" {
     const Grid = UniformGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -381,25 +383,25 @@ test "UniformGrid remove" {
     try grid.insertPoint(5.0, 5.0, 30);
 
     const removed = grid.remove(5.0, 5.0, 20);
-    try std.testing.expect(removed);
+    try testing.expect(removed);
 
     const results = grid.queryPoint(5.0, 5.0);
-    try std.testing.expectEqual(@as(usize, 2), results.len);
+    try testing.expectEqual(@as(usize, 2), results.len);
 
     // Item 20 should no longer be present.
     for (results) |v| {
-        try std.testing.expect(v != 20);
+        try testing.expect(v != 20);
     }
 
     // Removing a non-existent item returns false.
     const not_found = grid.remove(5.0, 5.0, 999);
-    try std.testing.expect(!not_found);
+    try testing.expect(!not_found);
 }
 
 test "UniformGrid capacity overflow" {
     const Grid = UniformGrid(u32, 2);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -408,7 +410,7 @@ test "UniformGrid capacity overflow" {
     try grid.insertPoint(5.0, 5.0, 2);
 
     const result = grid.insertPoint(5.0, 5.0, 3);
-    try std.testing.expectError(
+    try testing.expectError(
         UniformGridError.CellFull,
         result,
     );
@@ -417,19 +419,19 @@ test "UniformGrid capacity overflow" {
 test "UniformGrid out of bounds" {
     const Grid = UniformGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
 
     const result = grid.insertPoint(-1.0, -1.0, 1);
-    try std.testing.expectError(
+    try testing.expectError(
         UniformGridError.OutOfBounds,
         result,
     );
 
     const result2 = grid.insertPoint(200.0, 200.0, 2);
-    try std.testing.expectError(
+    try testing.expectError(
         UniformGridError.OutOfBounds,
         result2,
     );

@@ -10,6 +10,8 @@
 //! Blocking behavior: non-blocking; returns `error.WouldBlock` when full or empty.
 //! Note: `update`/`remove` require a Context that provides `setIndex`.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const collections = @import("static_collections");
 const memory = @import("static_memory");
 const ring = @import("ring_buffer.zig");
@@ -50,8 +52,8 @@ pub fn PriorityQueueDefault(comptime T: type) type {
 
 pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -86,7 +88,7 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
                 error.Overflow => return error.Overflow,
             };
             const self: Self = .{ .heap = heap };
-            std.debug.assert(self.heap.len() == 0);
+            assert(self.heap.len() == 0);
             return self;
         }
 
@@ -124,7 +126,7 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
 
         pub fn tryPush(self: *Self, value: T) PushError!void {
             self.heap.push(value) catch return error.WouldBlock;
-            std.debug.assert(!self.heap.isEmpty());
+            assert(!self.heap.isEmpty());
         }
 
         pub fn tryPop(self: *Self) PopError!T {
@@ -163,7 +165,7 @@ test "priority queue basic semantics" {
             return a < b;
         }
     };
-    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = 5, .budget = null }, .{});
+    var pq = try PriorityQueue(u32, Ctx).init(testing.allocator, .{ .capacity = 5, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(5);
@@ -171,11 +173,11 @@ test "priority queue basic semantics" {
     try pq.tryPush(8);
     try pq.tryPush(1);
 
-    try std.testing.expectEqual(@as(u32, 1), try pq.tryPop());
-    try std.testing.expectEqual(@as(u32, 2), try pq.tryPop());
-    try std.testing.expectEqual(@as(u32, 5), try pq.tryPop());
-    try std.testing.expectEqual(@as(u32, 8), try pq.tryPop());
-    try std.testing.expectError(error.WouldBlock, pq.tryPop());
+    try testing.expectEqual(@as(u32, 1), try pq.tryPop());
+    try testing.expectEqual(@as(u32, 2), try pq.tryPop());
+    try testing.expectEqual(@as(u32, 5), try pq.tryPop());
+    try testing.expectEqual(@as(u32, 8), try pq.tryPop());
+    try testing.expectError(error.WouldBlock, pq.tryPop());
 }
 
 test "priority queue decrease-key via update" {
@@ -196,7 +198,7 @@ test "priority queue decrease-key via update" {
             item.index = index;
         }
     };
-    var pq = try PriorityQueue(Item, Ctx).init(std.testing.allocator, .{ .capacity = 5, .budget = null }, .{});
+    var pq = try PriorityQueue(Item, Ctx).init(testing.allocator, .{ .capacity = 5, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(.{ .id = 1, .val = 10 });
@@ -205,17 +207,17 @@ test "priority queue decrease-key via update" {
 
     var target_index: ?usize = null;
     for (pq.heap.items[0..pq.heap.len_value], 0..) |item, i| {
-        std.debug.assert(item.index == i);
-        try std.testing.expectEqual(i, item.index);
+        assert(item.index == i);
+        try testing.expectEqual(i, item.index);
         if (item.id == 3) target_index = i;
     }
-    try std.testing.expect(target_index != null);
+    try testing.expect(target_index != null);
 
     pq.update(target_index.?, .{ .id = 3, .val = 5, .index = target_index.? });
 
     const popped = try pq.tryPop();
-    try std.testing.expectEqual(@as(u32, 3), popped.id);
-    try std.testing.expectEqual(@as(u32, 5), popped.val);
+    try testing.expectEqual(@as(u32, 3), popped.id);
+    try testing.expectEqual(@as(u32, 5), popped.val);
 }
 
 test "priority queue remove preserves queue order" {
@@ -236,7 +238,7 @@ test "priority queue remove preserves queue order" {
             item.index = index;
         }
     };
-    var pq = try PriorityQueue(Item, Ctx).init(std.testing.allocator, .{ .capacity = 5, .budget = null }, .{});
+    var pq = try PriorityQueue(Item, Ctx).init(testing.allocator, .{ .capacity = 5, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(.{ .id = 1, .val = 10 });
@@ -245,17 +247,17 @@ test "priority queue remove preserves queue order" {
 
     var remove_index: ?usize = null;
     for (pq.heap.items[0..pq.heap.len_value], 0..) |item, i| {
-        std.debug.assert(item.index == i);
-        try std.testing.expectEqual(i, item.index);
+        assert(item.index == i);
+        try testing.expectEqual(i, item.index);
         if (item.id == 2) remove_index = i;
     }
-    try std.testing.expect(remove_index != null);
+    try testing.expect(remove_index != null);
 
     const removed = pq.remove(remove_index.?);
-    try std.testing.expectEqual(@as(u32, 2), removed.id);
-    try std.testing.expectEqual(@as(u32, 3), (try pq.tryPop()).id);
-    try std.testing.expectEqual(@as(u32, 1), (try pq.tryPop()).id);
-    try std.testing.expectError(error.WouldBlock, pq.tryPop());
+    try testing.expectEqual(@as(u32, 2), removed.id);
+    try testing.expectEqual(@as(u32, 3), (try pq.tryPop()).id);
+    try testing.expectEqual(@as(u32, 1), (try pq.tryPop()).id);
+    try testing.expectError(error.WouldBlock, pq.tryPop());
 }
 
 test "priority queue peek and introspection methods reflect queue state" {
@@ -265,44 +267,44 @@ test "priority queue peek and introspection methods reflect queue state" {
             return a < b;
         }
     };
-    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = 3, .budget = null }, .{});
+    var pq = try PriorityQueue(u32, Ctx).init(testing.allocator, .{ .capacity = 3, .budget = null }, .{});
     defer pq.deinit();
 
-    try std.testing.expectEqual(@as(usize, 3), pq.capacity());
-    try std.testing.expectEqual(@as(usize, 0), pq.len());
-    try std.testing.expect(pq.isEmpty());
-    try std.testing.expect(!pq.isFull());
-    try std.testing.expectEqual(@as(?u32, null), pq.peek());
+    try testing.expectEqual(@as(usize, 3), pq.capacity());
+    try testing.expectEqual(@as(usize, 0), pq.len());
+    try testing.expect(pq.isEmpty());
+    try testing.expect(!pq.isFull());
+    try testing.expectEqual(@as(?u32, null), pq.peek());
 
     try pq.tryPush(4);
     try pq.tryPush(2);
-    try std.testing.expectEqual(@as(usize, 2), pq.len());
-    try std.testing.expect(!pq.isEmpty());
-    try std.testing.expect(!pq.isFull());
-    try std.testing.expectEqual(@as(?u32, 2), pq.peek());
+    try testing.expectEqual(@as(usize, 2), pq.len());
+    try testing.expect(!pq.isEmpty());
+    try testing.expect(!pq.isFull());
+    try testing.expectEqual(@as(?u32, 2), pq.peek());
     try pq.tryPush(1);
-    try std.testing.expect(pq.isFull());
+    try testing.expect(pq.isFull());
 
     pq.clear();
-    try std.testing.expectEqual(@as(usize, 0), pq.len());
-    try std.testing.expect(pq.isEmpty());
-    try std.testing.expectEqual(@as(?u32, null), pq.peek());
+    try testing.expectEqual(@as(usize, 0), pq.len());
+    try testing.expect(pq.isEmpty());
+    try testing.expectEqual(@as(?u32, null), pq.peek());
 }
 
 test "priority queue default context supports integer types" {
-    var pq = try PriorityQueueDefault(u32).init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
+    var pq = try PriorityQueueDefault(u32).init(testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer pq.deinit();
 
     try pq.tryPush(10);
     try pq.tryPush(3);
     try pq.tryPush(7);
-    try std.testing.expectEqual(@as(u32, 3), try pq.tryPop());
+    try testing.expectEqual(@as(u32, 3), try pq.tryPop());
 }
 
 test "priority queue default context support detection is explicit" {
     const Unsupported = struct { value: u32 };
-    try std.testing.expect(supportsDefaultPriorityContext(u16));
-    try std.testing.expect(!supportsDefaultPriorityContext(Unsupported));
+    try testing.expect(supportsDefaultPriorityContext(u16));
+    try testing.expect(!supportsDefaultPriorityContext(Unsupported));
 }
 
 test "priority queue randomized ordering is monotonic under stress" {
@@ -311,7 +313,7 @@ test "priority queue randomized ordering is monotonic under stress" {
     const sample_count: usize = 128;
     const Ctx = DefaultPriorityContext(u32);
 
-    var pq = try PriorityQueue(u32, Ctx).init(std.testing.allocator, .{ .capacity = sample_count, .budget = null }, .{});
+    var pq = try PriorityQueue(u32, Ctx).init(testing.allocator, .{ .capacity = sample_count, .budget = null }, .{});
     defer pq.deinit();
 
     var samples: [sample_count]u32 = undefined;
@@ -326,7 +328,7 @@ test "priority queue randomized ordering is monotonic under stress" {
 
     sample_index = 0;
     while (sample_index < sample_count) : (sample_index += 1) {
-        try std.testing.expectEqual(samples[sample_index], try pq.tryPop());
+        try testing.expectEqual(samples[sample_index], try pq.tryPop());
     }
-    try std.testing.expectError(error.WouldBlock, pq.tryPop());
+    try testing.expectError(error.WouldBlock, pq.tryPop());
 }

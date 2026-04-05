@@ -1,6 +1,8 @@
 //! Bounded benchmark group registry with stable iteration order.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const config_mod = @import("config.zig");
 const case_mod = @import("case.zig");
 
@@ -30,7 +32,7 @@ pub const BenchmarkGroup = struct {
         storage: []case_mod.BenchmarkCase,
         options: BenchmarkGroupInitOptions,
     ) BenchmarkGroupError!BenchmarkGroup {
-        std.debug.assert(options.name.len > 0);
+        assert(options.name.len > 0);
         if (storage.len == 0) return error.InvalidConfig;
 
         config_mod.validateConfig(options.config) catch |err| return switch (err) {
@@ -47,18 +49,18 @@ pub const BenchmarkGroup = struct {
 
     /// Append one case while preserving insertion order.
     pub fn addCase(self: *BenchmarkGroup, benchmark_case: case_mod.BenchmarkCase) BenchmarkGroupError!void {
-        std.debug.assert(benchmark_case.name.len > 0);
+        assert(benchmark_case.name.len > 0);
         if (self.findCase(benchmark_case.name) != null) return error.AlreadyExists;
         if (self.case_count >= self.storage.len) return error.NoSpaceLeft;
 
         self.storage[self.case_count] = benchmark_case;
         self.case_count += 1;
-        std.debug.assert(self.case_count <= self.storage.len);
+        assert(self.case_count <= self.storage.len);
     }
 
     /// Look up one case by name.
     pub fn findCase(self: *const BenchmarkGroup, name: []const u8) ?*const case_mod.BenchmarkCase {
-        std.debug.assert(name.len > 0);
+        assert(name.len > 0);
         for (self.iter()) |*benchmark_case| {
             if (std.mem.eql(u8, benchmark_case.name, name)) return benchmark_case;
         }
@@ -67,7 +69,7 @@ pub const BenchmarkGroup = struct {
 
     /// Return the first case carrying the requested tag.
     pub fn findFirstByTag(self: *const BenchmarkGroup, tag: []const u8) ?*const case_mod.BenchmarkCase {
-        std.debug.assert(tag.len > 0);
+        assert(tag.len > 0);
         for (self.iter()) |*benchmark_case| {
             if (caseHasTag(benchmark_case.*, tag)) return benchmark_case;
         }
@@ -76,7 +78,7 @@ pub const BenchmarkGroup = struct {
 
     /// Iterate over the active case slice in insertion order.
     pub fn iter(self: *const BenchmarkGroup) []const case_mod.BenchmarkCase {
-        std.debug.assert(self.case_count <= self.storage.len);
+        assert(self.case_count <= self.storage.len);
         return self.storage[0..self.case_count];
     }
 };
@@ -116,10 +118,10 @@ test "benchmark group add and find preserve order" {
     try group.addCase(first_case);
     try group.addCase(second_case);
 
-    try std.testing.expectEqualStrings("first", group.iter()[0].name);
-    try std.testing.expectEqualStrings("second", group.iter()[1].name);
-    try std.testing.expect(group.findCase("second") != null);
-    try std.testing.expect(group.findFirstByTag("tagged") != null);
+    try testing.expectEqualStrings("first", group.iter()[0].name);
+    try testing.expectEqualStrings("second", group.iter()[1].name);
+    try testing.expect(group.findCase("second") != null);
+    try testing.expect(group.findFirstByTag("tagged") != null);
 }
 
 test "benchmark group rejects duplicate names and capacity overflow" {
@@ -142,6 +144,6 @@ test "benchmark group rejects duplicate names and capacity overflow" {
         .config = config_mod.BenchmarkConfig.smokeDefaults(),
     });
     try group.addCase(benchmark_case);
-    try std.testing.expectError(error.AlreadyExists, group.addCase(benchmark_case));
-    try std.testing.expectEqual(@as(usize, 1), group.iter().len);
+    try testing.expectError(error.AlreadyExists, group.addCase(benchmark_case));
+    try testing.expectEqual(@as(usize, 1), group.iter().len);
 }

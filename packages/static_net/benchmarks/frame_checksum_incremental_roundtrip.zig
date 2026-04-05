@@ -1,6 +1,7 @@
 //! `static_net` checksum-enabled incremental roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_net = @import("static_net");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -53,7 +54,7 @@ const IncrementalContext = struct {
 
         context.payload[0] +%= 1;
         context.sink = bench.case.blackBox(@as(u64, second.status.frame.payload_len) ^ written);
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 

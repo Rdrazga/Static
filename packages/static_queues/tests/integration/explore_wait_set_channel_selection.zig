@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_queues = @import("static_queues");
 const static_testing = @import("static_testing");
 
@@ -18,9 +19,9 @@ const violations = [_]checker.Violation{
 test "wait set exploration keeps selection rotation and close semantics stable" {
     const Context = struct {
         fn run(_: *const anyopaque, input: explore.ExplorationScenarioInput) !explore.ExplorationScenarioExecution {
-            var channel_a = try Channel.init(std.testing.allocator, .{ .capacity = 2 });
+            var channel_a = try Channel.init(testing.allocator, .{ .capacity = 2 });
             defer channel_a.deinit();
-            var channel_b = try Channel.init(std.testing.allocator, .{ .capacity = 2 });
+            var channel_b = try Channel.init(testing.allocator, .{ .capacity = 2 });
             defer channel_b.deinit();
 
             var wait_set = WaitSet.init(.{});
@@ -191,7 +192,7 @@ test "wait set exploration keeps selection rotation and close semantics stable" 
         .schedules_max = 4,
     }, scenario, null);
 
-    try std.testing.expectEqual(@as(u32, 4), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure == null);
+    try testing.expectEqual(@as(u32, 4), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure == null);
 }

@@ -6,6 +6,8 @@
 //! - explicit timeout and cancellation inputs
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const builtin = @import("builtin");
 const caps = @import("caps.zig");
@@ -51,7 +53,7 @@ pub fn waitValue(
     options: WaitOptions,
 ) WaitError!void {
     comptime {
-        std.debug.assert(@sizeOf(T) == @sizeOf(u32));
+        assert(@sizeOf(T) == @sizeOf(u32));
     }
     if (!supports_wait_queue) return error.Unsupported;
 
@@ -104,7 +106,7 @@ pub fn wakeValue(
     max_waiters: u32,
 ) void {
     comptime {
-        std.debug.assert(@sizeOf(T) == @sizeOf(u32));
+        assert(@sizeOf(T) == @sizeOf(u32));
     }
     if (!supports_wait_queue) return;
     if (max_waiters == 0) return;
@@ -130,7 +132,7 @@ test "wait queue unsupported without os backends" {
     if (supports_wait_queue) return error.SkipZigTest;
 
     var state: u32 = 0;
-    try std.testing.expectError(error.Unsupported, waitValue(u32, &state, 0, .{}));
+    try testing.expectError(error.Unsupported, waitValue(u32, &state, 0, .{}));
     wakeValue(u32, &state, 1);
 }
 
@@ -138,8 +140,8 @@ test "wait queue timeout semantics" {
     if (!supports_wait_queue) return error.SkipZigTest;
 
     var state: u32 = 0;
-    try std.testing.expectError(error.Timeout, waitValue(u32, &state, 0, .{ .timeout_ns = 0 }));
-    try std.testing.expectError(error.Timeout, waitValue(u32, &state, 0, .{ .timeout_ns = std.time.ns_per_ms }));
+    try testing.expectError(error.Timeout, waitValue(u32, &state, 0, .{ .timeout_ns = 0 }));
+    try testing.expectError(error.Timeout, waitValue(u32, &state, 0, .{ .timeout_ns = std.time.ns_per_ms }));
 }
 
 test "wait queue wake before wait returns immediately" {
@@ -186,7 +188,7 @@ test "wait queue tolerates spurious wakeups" {
     wakeValue(u32, &state, 1);
 
     thread.join();
-    try std.testing.expectEqual(@as(?WaitError, error.Timeout), result.err);
+    try testing.expectEqual(@as(?WaitError, error.Timeout), result.err);
 }
 
 test "wait queue wake one then wake all" {
@@ -240,7 +242,7 @@ test "wait queue wake one then wake all" {
         if ((elapsedSince(first_start) orelse std.math.maxInt(u64)) >= 100 * std.time.ns_per_ms) return error.Timeout;
         std.Thread.yield() catch {};
     }
-    try std.testing.expect(done_count.load(.acquire) >= 1);
+    try testing.expect(done_count.load(.acquire) >= 1);
 
     wakeValue(u32, &state, std.math.maxInt(u32));
     const all_start = std.time.Instant.now() catch return error.SkipZigTest;
@@ -258,7 +260,7 @@ test "wait queue cancellation is cooperative and explicit" {
     const token = cancel_source.token();
 
     cancel_source.cancel();
-    try std.testing.expectError(error.Cancelled, waitValue(u32, &state, 0, .{ .cancel = token }));
+    try testing.expectError(error.Cancelled, waitValue(u32, &state, 0, .{ .cancel = token }));
 }
 
 test "wait queue cancellation wins over pending timeout after wait starts" {
@@ -326,7 +328,7 @@ test "wait queue cancellation wins over pending timeout after wait starts" {
         std.Thread.yield() catch {};
     }
 
-    try std.testing.expectEqual(@as(?WaitError, error.Cancelled), result.err);
+    try testing.expectEqual(@as(?WaitError, error.Cancelled), result.err);
 }
 
 fn sleepBusy(duration_ns: u64) void {

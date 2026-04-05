@@ -8,6 +8,8 @@
 //! Thread safety: unrestricted — all functions are pure and read-only.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const Utf8Error = error{
     InvalidInput,
@@ -19,10 +21,10 @@ pub const Utf8Error = error{
 /// (remaining bytes >= 1) before calling this function.
 fn decodeSingleCodepoint(bytes: []const u8, pos: usize) ?usize {
     // Precondition: pos must be within the slice.
-    std.debug.assert(pos < bytes.len);
+    assert(pos < bytes.len);
     const b0 = bytes[pos];
     const remaining = bytes.len - pos;
-    std.debug.assert(remaining > 0);
+    assert(remaining > 0);
 
     if (b0 <= 0x7f) return 1;
 
@@ -96,9 +98,9 @@ pub fn isValid(bytes: []const u8) bool {
         const consumed = decodeSingleCodepoint(bytes, index) orelse return false;
         // Postcondition of the helper: consumed must be 1..4 bytes and must not
         // advance index beyond the slice boundary.
-        std.debug.assert(consumed >= 1);
-        std.debug.assert(consumed <= 4);
-        std.debug.assert(index + consumed <= bytes.len);
+        assert(consumed >= 1);
+        assert(consumed <= 4);
+        assert(index + consumed <= bytes.len);
         index += consumed;
     }
     return true;
@@ -113,31 +115,31 @@ fn isContinuation(value: u8) bool {
 }
 
 test "utf8 validates ascii and multibyte utf8" {
-    try std.testing.expect(isValid("ascii"));
-    try std.testing.expect(isValid("caf\xc3\xa9"));
+    try testing.expect(isValid("ascii"));
+    try testing.expect(isValid("caf\xc3\xa9"));
     try validate("Hello");
 }
 
 test "utf8 rejects truncated and invalid continuation sequences" {
-    try std.testing.expect(!isValid("\xc3"));
-    try std.testing.expect(!isValid("\xe2\x28\xa1"));
-    try std.testing.expectError(error.InvalidInput, validate("\xf0\x28\x8c\xbc"));
+    try testing.expect(!isValid("\xc3"));
+    try testing.expect(!isValid("\xe2\x28\xa1"));
+    try testing.expectError(error.InvalidInput, validate("\xf0\x28\x8c\xbc"));
 }
 
 test "utf8 rejects surrogate range encoding" {
     // U+D800 encoded as UTF-8 should be rejected.
-    try std.testing.expect(!isValid("\xed\xa0\x80"));
+    try testing.expect(!isValid("\xed\xa0\x80"));
 }
 
 test "utf8 rejects overlong and out-of-range encodings" {
-    try std.testing.expect(!isValid("\x80"));
-    try std.testing.expect(!isValid("\xc0\x80"));
-    try std.testing.expect(!isValid("\xe0\x80\x80"));
-    try std.testing.expect(!isValid("\xf0\x80\x80\x80"));
-    try std.testing.expect(!isValid("\xf4\x90\x80\x80"));
+    try testing.expect(!isValid("\x80"));
+    try testing.expect(!isValid("\xc0\x80"));
+    try testing.expect(!isValid("\xe0\x80\x80"));
+    try testing.expect(!isValid("\xf0\x80\x80\x80"));
+    try testing.expect(!isValid("\xf4\x90\x80\x80"));
 }
 
 test "utf8 accepts the maximum scalar value encoding" {
     // U+10FFFF encoded as UTF-8.
-    try std.testing.expect(isValid("\xf4\x8f\xbf\xbf"));
+    try testing.expect(isValid("\xf4\x8f\xbf\xbf"));
 }

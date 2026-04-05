@@ -21,6 +21,7 @@
 //! Thread safety: `insert`/`remove`/`refit` mutate; queries are read-only. External
 //! synchronization required.
 const std = @import("std");
+const assert = std.debug.assert;
 const primitives = @import("primitives.zig");
 const AABB3 = primitives.AABB3;
 const Ray3 = primitives.Ray3;
@@ -37,7 +38,7 @@ pub fn IncrementalBVH(comptime T: type) type {
 
         comptime {
             // NodeIndex must be able to represent INVALID without wrapping.
-            std.debug.assert(@bitSizeOf(NodeIndex) == 32);
+            assert(@bitSizeOf(NodeIndex) == 32);
         }
 
         pub const Node = struct {
@@ -64,16 +65,16 @@ pub fn IncrementalBVH(comptime T: type) type {
                 .allocator = allocator,
             };
             // Postcondition: tree starts empty with no root.
-            std.debug.assert(self.root == INVALID);
-            std.debug.assert(self.leaf_count == 0);
+            assert(self.root == INVALID);
+            assert(self.leaf_count == 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: free list cannot exceed the total node count.
-            std.debug.assert(self.free_list.items.len <= self.nodes.items.len);
+            assert(self.free_list.items.len <= self.nodes.items.len);
             // Precondition: leaf_count must be consistent (non-negative is guaranteed by u32).
-            std.debug.assert(self.leaf_count <= self.nodes.items.len);
+            assert(self.leaf_count <= self.nodes.items.len);
             self.free_list.deinit(self.allocator);
             self.nodes.deinit(self.allocator);
             self.* = undefined;
@@ -89,9 +90,9 @@ pub fn IncrementalBVH(comptime T: type) type {
             // Precondition: AABB must not be inverted. AABB3.init already
             // asserts this, but we verify here as a pair assertion since
             // `bounds` may arrive via the raw struct form in internal callers.
-            std.debug.assert(bounds.min_x <= bounds.max_x);
-            std.debug.assert(bounds.min_y <= bounds.max_y);
-            std.debug.assert(bounds.min_z <= bounds.max_z);
+            assert(bounds.min_x <= bounds.max_x);
+            assert(bounds.min_y <= bounds.max_y);
+            assert(bounds.min_z <= bounds.max_z);
             const leaf_count_before = self.leaf_count;
             const leaf_idx = try self.allocNode(.{
                 .bounds = bounds,
@@ -104,13 +105,13 @@ pub fn IncrementalBVH(comptime T: type) type {
 
             self.leaf_count += 1;
             // Postcondition: leaf count increased by exactly one.
-            std.debug.assert(self.leaf_count == leaf_count_before + 1);
+            assert(self.leaf_count == leaf_count_before + 1);
 
             // If the tree is empty, the new leaf becomes the root.
             if (self.root == INVALID) {
                 self.root = leaf_idx;
                 // Postcondition: root is now valid after first insert.
-                std.debug.assert(self.root != INVALID);
+                assert(self.root != INVALID);
                 return leaf_idx;
             }
 
@@ -140,7 +141,7 @@ pub fn IncrementalBVH(comptime T: type) type {
                 if (self.nodes.items[old_parent].left == best_sibling) {
                     self.nodes.items[old_parent].left = new_parent_idx;
                 } else {
-                    std.debug.assert(self.nodes.items[old_parent].right == best_sibling);
+                    assert(self.nodes.items[old_parent].right == best_sibling);
                     self.nodes.items[old_parent].right = new_parent_idx;
                 }
                 self.refitAncestors(old_parent);
@@ -150,22 +151,22 @@ pub fn IncrementalBVH(comptime T: type) type {
             }
 
             // Postcondition: root is always valid after insert.
-            std.debug.assert(self.root != INVALID);
+            assert(self.root != INVALID);
             return leaf_idx;
         }
 
         /// Remove a leaf by its handle. The leaf's parent internal node is
         /// also removed and the sibling is promoted.
         pub fn remove(self: *Self, handle: NodeIndex) void {
-            std.debug.assert(handle < self.nodes.items.len);
-            std.debug.assert(self.nodes.items[handle].is_leaf);
+            assert(handle < self.nodes.items.len);
+            assert(self.nodes.items[handle].is_leaf);
             // Precondition: at least one leaf must exist to remove.
-            std.debug.assert(self.leaf_count > 0);
+            assert(self.leaf_count > 0);
             const leaf_count_before = self.leaf_count;
 
             self.leaf_count -= 1;
             // Postcondition: leaf count decreased by exactly one.
-            std.debug.assert(self.leaf_count == leaf_count_before - 1);
+            assert(self.leaf_count == leaf_count_before - 1);
 
             // If the leaf is the root, just clear the tree.
             if (handle == self.root) {
@@ -175,7 +176,7 @@ pub fn IncrementalBVH(comptime T: type) type {
             }
 
             const parent = self.nodes.items[handle].parent;
-            std.debug.assert(parent != INVALID);
+            assert(parent != INVALID);
 
             // Determine the sibling.
             const sibling = if (self.nodes.items[parent].left == handle)
@@ -206,12 +207,12 @@ pub fn IncrementalBVH(comptime T: type) type {
 
         /// Update the bounds of a leaf and refit ancestor bounds up to the root.
         pub fn refit(self: *Self, handle: NodeIndex, new_bounds: AABB3) void {
-            std.debug.assert(handle < self.nodes.items.len);
-            std.debug.assert(self.nodes.items[handle].is_leaf);
+            assert(handle < self.nodes.items.len);
+            assert(self.nodes.items[handle].is_leaf);
             // Precondition: new bounds must be non-inverted.
-            std.debug.assert(new_bounds.min_x <= new_bounds.max_x);
-            std.debug.assert(new_bounds.min_y <= new_bounds.max_y);
-            std.debug.assert(new_bounds.min_z <= new_bounds.max_z);
+            assert(new_bounds.min_x <= new_bounds.max_x);
+            assert(new_bounds.min_y <= new_bounds.max_y);
+            assert(new_bounds.min_z <= new_bounds.max_z);
 
             self.nodes.items[handle].bounds = new_bounds;
 
@@ -230,7 +231,7 @@ pub fn IncrementalBVH(comptime T: type) type {
         pub fn queryRay(self: *const Self, ray: Ray3, out: []T) u32 {
             // Precondition: ray direction must be non-zero (Ray3.init enforces unit length).
             const dir_len_sq = ray.dir_x * ray.dir_x + ray.dir_y * ray.dir_y + ray.dir_z * ray.dir_z;
-            std.debug.assert(dir_len_sq > 0.0);
+            assert(dir_len_sq > 0.0);
             if (self.root == INVALID) return 0;
 
             var hit_count: u32 = 0;
@@ -254,12 +255,12 @@ pub fn IncrementalBVH(comptime T: type) type {
                     hit_count += 1;
                 } else {
                     if (node.left != INVALID) {
-                        std.debug.assert(sp < stack.len);
+                        assert(sp < stack.len);
                         stack[sp] = node.left;
                         sp += 1;
                     }
                     if (node.right != INVALID) {
-                        std.debug.assert(sp < stack.len);
+                        assert(sp < stack.len);
                         stack[sp] = node.right;
                         sp += 1;
                     }
@@ -267,7 +268,7 @@ pub fn IncrementalBVH(comptime T: type) type {
             }
 
             // Postcondition: traversal stack must be fully consumed on exit.
-            std.debug.assert(sp == 0);
+            assert(sp == 0);
             return hit_count;
         }
 
@@ -279,9 +280,9 @@ pub fn IncrementalBVH(comptime T: type) type {
         /// output buffer length.
         pub fn queryAABB(self: *const Self, aabb: AABB3, out: []T) u32 {
             // Precondition: query AABB must not be inverted.
-            std.debug.assert(aabb.min_x <= aabb.max_x);
-            std.debug.assert(aabb.min_y <= aabb.max_y);
-            std.debug.assert(aabb.min_z <= aabb.max_z);
+            assert(aabb.min_x <= aabb.max_x);
+            assert(aabb.min_y <= aabb.max_y);
+            assert(aabb.min_z <= aabb.max_z);
             if (self.root == INVALID) return 0;
 
             var hit_count: u32 = 0;
@@ -305,12 +306,12 @@ pub fn IncrementalBVH(comptime T: type) type {
                     hit_count += 1;
                 } else {
                     if (node.left != INVALID) {
-                        std.debug.assert(sp < stack.len);
+                        assert(sp < stack.len);
                         stack[sp] = node.left;
                         sp += 1;
                     }
                     if (node.right != INVALID) {
-                        std.debug.assert(sp < stack.len);
+                        assert(sp < stack.len);
                         stack[sp] = node.right;
                         sp += 1;
                     }
@@ -318,7 +319,7 @@ pub fn IncrementalBVH(comptime T: type) type {
             }
 
             // Postcondition: traversal stack must be fully consumed on exit.
-            std.debug.assert(sp == 0);
+            assert(sp == 0);
             return hit_count;
         }
 
@@ -357,12 +358,12 @@ pub fn IncrementalBVH(comptime T: type) type {
                     const inherited_cost = cost - node.bounds.surfaceArea();
                     if (inherited_cost < best_cost) {
                         if (node.left != INVALID) {
-                            std.debug.assert(sp < stack.len);
+                            assert(sp < stack.len);
                             stack[sp] = node.left;
                             sp += 1;
                         }
                         if (node.right != INVALID) {
-                            std.debug.assert(sp < stack.len);
+                            assert(sp < stack.len);
                             stack[sp] = node.right;
                             sp += 1;
                         }
@@ -379,7 +380,7 @@ pub fn IncrementalBVH(comptime T: type) type {
             // parent chain from any node to the root visits at most
             // nodes.items.len ancestors before reaching INVALID.
             const max_depth: u32 = @intCast(self.nodes.items.len);
-            std.debug.assert(max_depth > 0);
+            assert(max_depth > 0);
             var idx = start;
             var depth: u32 = 0;
             while (idx != INVALID and depth < max_depth) : (depth += 1) {
@@ -393,7 +394,7 @@ pub fn IncrementalBVH(comptime T: type) type {
             }
             // If idx != INVALID here, the loop exhausted max_depth, indicating
             // a cycle or corrupted parent chain.
-            std.debug.assert(idx == INVALID);
+            assert(idx == INVALID);
         }
 
         /// Allocate a node, reusing one from the free list if available.

@@ -11,6 +11,7 @@
 //!
 //! Thread safety: all types are value types with no shared state.
 const std = @import("std");
+const assert = std.debug.assert;
 
 const epsilon: f32 = 1.0e-6;
 
@@ -28,8 +29,8 @@ pub const AABB2 = extern struct {
     max_y: f32,
 
     pub inline fn init(min_x: f32, min_y: f32, max_x: f32, max_y: f32) AABB2 {
-        std.debug.assert(min_x <= max_x);
-        std.debug.assert(min_y <= max_y);
+        assert(min_x <= max_x);
+        assert(min_y <= max_y);
         return .{ .min_x = min_x, .min_y = min_y, .max_x = max_x, .max_y = max_y };
     }
 
@@ -42,8 +43,8 @@ pub const AABB2 = extern struct {
     }
 
     pub inline fn fromCenterExtent(cx: f32, cy: f32, half_w: f32, half_h: f32) AABB2 {
-        std.debug.assert(half_w >= 0.0);
-        std.debug.assert(half_h >= 0.0);
+        assert(half_w >= 0.0);
+        assert(half_h >= 0.0);
         return .{
             .min_x = cx - half_w,
             .min_y = cy - half_h,
@@ -67,7 +68,7 @@ pub const AABB2 = extern struct {
     /// Compute the minimal enclosing AABB for a set of points.
     /// Precondition: `points` must be non-empty.
     pub inline fn fromPoints(points: []const Point2) AABB2 {
-        std.debug.assert(points.len > 0);
+        assert(points.len > 0);
         var result = AABB2{
             .min_x = points[0].x,
             .min_y = points[0].y,
@@ -80,8 +81,8 @@ pub const AABB2 = extern struct {
             result.max_x = @max(result.max_x, p.x);
             result.max_y = @max(result.max_y, p.y);
         }
-        std.debug.assert(result.min_x <= result.max_x);
-        std.debug.assert(result.min_y <= result.max_y);
+        assert(result.min_x <= result.max_x);
+        assert(result.min_y <= result.max_y);
         return result;
     }
 
@@ -186,9 +187,9 @@ pub const AABB3 = extern struct {
         max_y: f32,
         max_z: f32,
     ) AABB3 {
-        std.debug.assert(min_x <= max_x);
-        std.debug.assert(min_y <= max_y);
-        std.debug.assert(min_z <= max_z);
+        assert(min_x <= max_x);
+        assert(min_y <= max_y);
+        assert(min_z <= max_z);
         return .{
             .min_x = min_x, .min_y = min_y, .min_z = min_z,
             .max_x = max_x, .max_y = max_y, .max_z = max_z,
@@ -220,9 +221,9 @@ pub const AABB3 = extern struct {
         hy: f32,
         hz: f32,
     ) AABB3 {
-        std.debug.assert(hx >= 0.0);
-        std.debug.assert(hy >= 0.0);
-        std.debug.assert(hz >= 0.0);
+        assert(hx >= 0.0);
+        assert(hy >= 0.0);
+        assert(hz >= 0.0);
         return .{
             .min_x = cx - hx, .min_y = cy - hy, .min_z = cz - hz,
             .max_x = cx + hx, .max_y = cy + hy, .max_z = cz + hz,
@@ -249,7 +250,7 @@ pub const AABB3 = extern struct {
     /// Compute the minimal enclosing AABB for a set of points.
     /// Precondition: `points` must be non-empty.
     pub inline fn fromPoints(points: []const Point3) AABB3 {
-        std.debug.assert(points.len > 0);
+        assert(points.len > 0);
         var result = AABB3{
             .min_x = points[0].x, .min_y = points[0].y, .min_z = points[0].z,
             .max_x = points[0].x, .max_y = points[0].y, .max_z = points[0].z,
@@ -262,15 +263,15 @@ pub const AABB3 = extern struct {
             result.max_y = @max(result.max_y, p.y);
             result.max_z = @max(result.max_z, p.z);
         }
-        std.debug.assert(result.min_x <= result.max_x);
-        std.debug.assert(result.min_y <= result.max_y);
-        std.debug.assert(result.min_z <= result.max_z);
+        assert(result.min_x <= result.max_x);
+        assert(result.min_y <= result.max_y);
+        assert(result.min_z <= result.max_z);
         return result;
     }
 
     /// Construct an AABB enclosing a sphere.
     pub inline fn fromSphere(s: Sphere) AABB3 {
-        std.debug.assert(s.radius >= 0.0);
+        assert(s.radius >= 0.0);
         return .{
             .min_x = s.center_x - s.radius,
             .min_y = s.center_y - s.radius,
@@ -283,9 +284,9 @@ pub const AABB3 = extern struct {
 
     /// Construct from min/max as 3-element arrays (Vec3 convenience).
     pub inline fn fromMinMax(min_v: [3]f32, max_v: [3]f32) AABB3 {
-        std.debug.assert(min_v[0] <= max_v[0]);
-        std.debug.assert(min_v[1] <= max_v[1]);
-        std.debug.assert(min_v[2] <= max_v[2]);
+        assert(min_v[0] <= max_v[0]);
+        assert(min_v[1] <= max_v[1]);
+        assert(min_v[2] <= max_v[2]);
         return .{
             .min_x = min_v[0], .min_y = min_v[1], .min_z = min_v[2],
             .max_x = max_v[0], .max_y = max_v[1], .max_z = max_v[2],
@@ -320,9 +321,9 @@ pub const AABB3 = extern struct {
             .min_x = new_min[0], .min_y = new_min[1], .min_z = new_min[2],
             .max_x = new_max[0], .max_y = new_max[1], .max_z = new_max[2],
         };
-        std.debug.assert(result.min_x <= result.max_x);
-        std.debug.assert(result.min_y <= result.max_y);
-        std.debug.assert(result.min_z <= result.max_z);
+        assert(result.min_x <= result.max_x);
+        assert(result.min_y <= result.max_y);
+        assert(result.min_z <= result.max_z);
         return result;
     }
 
@@ -455,7 +456,7 @@ pub const Sphere = extern struct {
     radius: f32,
 
     pub inline fn init(cx: f32, cy: f32, cz: f32, r: f32) Sphere {
-        std.debug.assert(r >= 0.0);
+        assert(r >= 0.0);
         return .{ .center_x = cx, .center_y = cy, .center_z = cz, .radius = r };
     }
 
@@ -523,7 +524,7 @@ pub const Ray3 = extern struct {
         dz: f32,
     ) Ray3 {
         const len_sq = dx * dx + dy * dy + dz * dz;
-        std.debug.assert(@abs(len_sq - 1.0) < 1.0e-3);
+        assert(@abs(len_sq - 1.0) < 1.0e-3);
         return .{
             .origin_x = ox, .origin_y = oy, .origin_z = oz,
             .dir_x = dx, .dir_y = dy, .dir_z = dz,
@@ -707,7 +708,7 @@ pub const Plane = extern struct {
         nz: f32,
     ) Plane {
         const len_sq = nx * nx + ny * ny + nz * nz;
-        std.debug.assert(@abs(len_sq - 1.0) < 1.0e-3);
+        assert(@abs(len_sq - 1.0) < 1.0e-3);
         return .{
             .normal_x = nx,
             .normal_y = ny,
@@ -741,7 +742,7 @@ pub const Plane = extern struct {
         const ny = e1z * e2x - e1x * e2z;
         const nz = e1x * e2y - e1y * e2x;
         const len = @sqrt(nx * nx + ny * ny + nz * nz);
-        std.debug.assert(len > epsilon);
+        assert(len > epsilon);
         const inv = 1.0 / len;
         const nnx = nx * inv;
         const nny = ny * inv;
@@ -753,7 +754,7 @@ pub const Plane = extern struct {
             .d = -(nnx * p0x + nny * p0y + nnz * p0z),
         };
         const n_len = nnx * nnx + nny * nny + nnz * nnz;
-        std.debug.assert(@abs(n_len - 1.0) < 1.0e-3);
+        assert(@abs(n_len - 1.0) < 1.0e-3);
         return result;
     }
 
@@ -875,7 +876,7 @@ pub const Frustum = struct {
     fn normalizePlane(p: Plane) Plane {
         const len = @sqrt(p.normal_x * p.normal_x + p.normal_y * p.normal_y +
             p.normal_z * p.normal_z);
-        std.debug.assert(len > epsilon);
+        assert(len > epsilon);
         const inv = 1.0 / len;
         return .{
             .normal_x = p.normal_x * inv,
@@ -987,8 +988,8 @@ pub const GridConfig = extern struct {
     }
 
     pub inline fn linearIndex(self: GridConfig, cx: u32, cy: u32) u32 {
-        std.debug.assert(cx < self.cells_x);
-        std.debug.assert(cy < self.cells_y);
+        assert(cx < self.cells_x);
+        assert(cy < self.cells_y);
         return cy * self.cells_x + cx;
     }
 };
@@ -1054,9 +1055,9 @@ pub const GridConfig3D = extern struct {
     }
 
     pub inline fn linearIndex(self: GridConfig3D, cx: u32, cy: u32, cz: u32) u32 {
-        std.debug.assert(cx < self.cells_x);
-        std.debug.assert(cy < self.cells_y);
-        std.debug.assert(cz < self.cells_z);
+        assert(cx < self.cells_x);
+        assert(cy < self.cells_y);
+        assert(cz < self.cells_z);
         return (cz * self.cells_y + cy) * self.cells_x + cx;
     }
 };

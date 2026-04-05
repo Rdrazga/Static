@@ -1,6 +1,7 @@
 //! Demonstrates checkpoint and rewind semantics for speculative parsing.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const bits = @import("static_bits");
 
 pub fn main() !void {
@@ -10,9 +11,9 @@ pub fn main() !void {
 
     const checkpoint = reader.mark();
     const second = try reader.readByte();
-    std.debug.assert(second == 0xBB);
+    assert(second == 0xBB);
 
     try reader.rewind(checkpoint);
-    std.debug.assert(reader.position() == 1);
-    std.debug.assert((try reader.readByte()) == 0xBB);
+    assert(reader.position() == 1);
+    assert((try reader.readByte()) == 0xBB);
 }

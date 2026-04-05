@@ -9,6 +9,8 @@
 //! Thread safety: not thread-safe — external synchronization required for concurrent use.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const type_id = @import("type_id.zig");
 const type_name = @import("type_name.zig");
 const type_fingerprint = @import("type_fingerprint.zig");
@@ -47,9 +49,9 @@ pub const TypeRegistry = struct {
             .len_used = 0,
         };
         // Postcondition: registry starts empty.
-        std.debug.assert(result.len_used == 0);
+        assert(result.len_used == 0);
         // Postcondition: capacity matches the provided slice.
-        std.debug.assert(result.entries.len == entries.len);
+        assert(result.entries.len == entries.len);
         return result;
     }
 
@@ -58,7 +60,7 @@ pub const TypeRegistry = struct {
     /// Postconditions: result <= capacity().
     pub fn len(self: *const TypeRegistry) usize {
         // Invariant: used count never exceeds the backing slice.
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
         return self.len_used;
     }
 
@@ -66,7 +68,7 @@ pub const TypeRegistry = struct {
     ///
     /// Postconditions: result >= len().
     pub fn capacity(self: *const TypeRegistry) usize {
-        std.debug.assert(self.entries.len >= self.len_used);
+        assert(self.entries.len >= self.len_used);
         return self.entries.len;
     }
 
@@ -74,22 +76,22 @@ pub const TypeRegistry = struct {
     ///
     /// Postconditions: returned slice length == len().
     pub fn list(self: *const TypeRegistry) []const Entry {
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
         const result = self.entries[0..self.len_used];
         // Postcondition: returned slice length matches internal count.
-        std.debug.assert(result.len == self.len_used);
+        assert(result.len == self.len_used);
         return result;
     }
 
     pub fn register(self: *TypeRegistry, entry: Entry) RegistryError!void {
-        std.debug.assert(entry.runtime_name.len > 0);
+        assert(entry.runtime_name.len > 0);
         if (entry.stable_name) |stable_name| {
-            std.debug.assert(stable_name.len > 0);
-            std.debug.assert(entry.stable_version != null);
-            std.debug.assert(entry.stable_fingerprint64 != null);
+            assert(stable_name.len > 0);
+            assert(entry.stable_version != null);
+            assert(entry.stable_fingerprint64 != null);
         } else {
-            std.debug.assert(entry.stable_version == null);
-            std.debug.assert(entry.stable_fingerprint64 == null);
+            assert(entry.stable_version == null);
+            assert(entry.stable_fingerprint64 == null);
         }
 
         if (self.contains(entry.type_id)) return error.AlreadyExists;
@@ -97,7 +99,7 @@ pub const TypeRegistry = struct {
 
         self.entries[self.len_used] = entry;
         self.len_used += 1;
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
     }
 
     /// Register all metadata for a comptime-known type T.
@@ -105,7 +107,7 @@ pub const TypeRegistry = struct {
     /// Postconditions: on success, contains(fromType(T)) is true.
     pub fn registerType(self: *TypeRegistry, comptime T: type) RegistryError!void {
         // Precondition: type name is always non-empty for valid Zig types.
-        comptime std.debug.assert(@typeName(T).len > 0);
+        comptime assert(@typeName(T).len > 0);
         const len_before = self.len_used;
         const runtime_name = type_name.runtimeTypeName(T);
         const runtime_fp = type_fingerprint.runtime64(T);
@@ -122,13 +124,13 @@ pub const TypeRegistry = struct {
         };
         try self.register(entry);
         // Postcondition: len increased by exactly one.
-        std.debug.assert(self.len_used == len_before + 1);
+        assert(self.len_used == len_before + 1);
     }
 
     /// Return true if a type with the given id has been registered.
     pub fn contains(self: *const TypeRegistry, id: TypeId) bool {
         // Invariant: used count is always within capacity.
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
         return self.findIndex(id) != null;
     }
 
@@ -139,12 +141,12 @@ pub const TypeRegistry = struct {
         const index = self.findIndex(id) orelse return error.NotFound;
         const result = self.entries[index];
         // Postcondition: returned entry matches the queried id.
-        std.debug.assert(result.type_id == id);
+        assert(result.type_id == id);
         return result;
     }
 
     fn findIndex(self: *const TypeRegistry, id: TypeId) ?usize {
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
         var index: usize = 0;
         while (index < self.len_used) : (index += 1) {
             if (self.entries[index].type_id == id) return index;
@@ -155,7 +157,7 @@ pub const TypeRegistry = struct {
 
 test "init rejects zero capacity storage" {
     var empty: [0]Entry = .{};
-    try std.testing.expectError(error.InvalidConfig, TypeRegistry.init(empty[0..]));
+    try testing.expectError(error.InvalidConfig, TypeRegistry.init(empty[0..]));
 }
 
 test "registerType inserts entry and lookup works" {
@@ -169,11 +171,11 @@ test "registerType inserts entry and lookup works" {
     try registry.registerType(First);
 
     const id = type_id.fromType(First);
-    try std.testing.expect(registry.contains(id));
+    try testing.expect(registry.contains(id));
     const entry = try registry.get(id);
-    try std.testing.expectEqualStrings(@typeName(First), entry.runtime_name);
-    try std.testing.expectEqualStrings("tests/first", entry.stable_name.?);
-    try std.testing.expectEqual(@as(u32, 1), entry.stable_version.?);
+    try testing.expectEqualStrings(@typeName(First), entry.runtime_name);
+    try testing.expectEqualStrings("tests/first", entry.stable_name.?);
+    try testing.expectEqual(@as(u32, 1), entry.stable_version.?);
 }
 
 test "registerType returns AlreadyExists for duplicate registration" {
@@ -182,7 +184,7 @@ test "registerType returns AlreadyExists for duplicate registration" {
     var storage: [2]Entry = undefined;
     var registry = try TypeRegistry.init(storage[0..]);
     try registry.registerType(Item);
-    try std.testing.expectError(error.AlreadyExists, registry.registerType(Item));
+    try testing.expectError(error.AlreadyExists, registry.registerType(Item));
 }
 
 test "registerType returns NoSpaceLeft when full" {
@@ -192,7 +194,7 @@ test "registerType returns NoSpaceLeft when full" {
     var storage: [1]Entry = undefined;
     var registry = try TypeRegistry.init(storage[0..]);
     try registry.registerType(A);
-    try std.testing.expectError(error.NoSpaceLeft, registry.registerType(B));
+    try testing.expectError(error.NoSpaceLeft, registry.registerType(B));
 }
 
 test "get returns NotFound for missing type id" {
@@ -202,7 +204,7 @@ test "get returns NotFound for missing type id" {
     var registry = try TypeRegistry.init(storage[0..]);
     try registry.registerType(Known);
 
-    try std.testing.expectError(error.NotFound, registry.get(type_id.fromName("tests/missing")));
+    try testing.expectError(error.NotFound, registry.get(type_id.fromName("tests/missing")));
 }
 
 test "list preserves insertion order" {
@@ -217,10 +219,10 @@ test "list preserves insertion order" {
     try registry.registerType(C);
 
     const entries = registry.list();
-    try std.testing.expectEqual(@as(usize, 3), entries.len);
-    try std.testing.expectEqual(type_id.fromType(A), entries[0].type_id);
-    try std.testing.expectEqual(type_id.fromType(B), entries[1].type_id);
-    try std.testing.expectEqual(type_id.fromType(C), entries[2].type_id);
+    try testing.expectEqual(@as(usize, 3), entries.len);
+    try testing.expectEqual(type_id.fromType(A), entries[0].type_id);
+    try testing.expectEqual(type_id.fromType(B), entries[1].type_id);
+    try testing.expectEqual(type_id.fromType(C), entries[2].type_id);
 }
 
 test "registry remains append only and linear by construction" {
@@ -229,7 +231,7 @@ test "registry remains append only and linear by construction" {
 
     // This package intentionally keeps a single ordered storage slice rather than
     // hidden secondary indexes so callers can reason about capacity and order directly.
-    try std.testing.expectEqual(@as(usize, 0), registry.len());
-    try std.testing.expectEqual(@as(usize, 2), registry.capacity());
-    try std.testing.expectEqual(@as(usize, 0), registry.list().len);
+    try testing.expectEqual(@as(usize, 0), registry.len());
+    try testing.expectEqual(@as(usize, 2), registry.capacity());
+    try testing.expectEqual(@as(usize, 0), registry.list().len);
 }

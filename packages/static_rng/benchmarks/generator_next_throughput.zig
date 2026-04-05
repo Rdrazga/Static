@@ -1,6 +1,7 @@
 //! `static_rng` generator throughput benchmarks.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_rng = @import("static_rng");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -29,9 +30,9 @@ const ThroughputContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *ThroughputContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.name.len > 0);
-        std.debug.assert((context.pcg.inc & 1) == 1);
-        std.debug.assert(context.xoroshiro.s0 != 0 or context.xoroshiro.s1 != 0);
+        assert(context.name.len > 0);
+        assert((context.pcg.inc & 1) == 1);
+        assert(context.xoroshiro.s0 != 0 or context.xoroshiro.s1 != 0);
 
         const value = switch (context.op) {
             .pcg32_next_u32 => @as(u64, context.pcg.nextU32()),
@@ -40,9 +41,9 @@ const ThroughputContext = struct {
         };
         const consumed = bench.case.blackBox(value);
         context.sink +%= consumed | 1;
-        std.debug.assert(context.sink != 0);
-        std.debug.assert((context.pcg.inc & 1) == 1);
-        std.debug.assert(context.xoroshiro.s0 != 0 or context.xoroshiro.s1 != 0);
+        assert(context.sink != 0);
+        assert((context.pcg.inc & 1) == 1);
+        assert(context.xoroshiro.s0 != 0 or context.xoroshiro.s1 != 0);
     }
 };
 
@@ -108,18 +109,18 @@ pub fn main() !void {
 fn validateSemanticPreflight() void {
     var pcg_a = static_rng.Pcg32.init(0x6e47_6e61_7469_1001, 0x6e47_6e61_7469_1002);
     var pcg_b = static_rng.Pcg32.init(0x6e47_6e61_7469_1001, 0x6e47_6e61_7469_1002);
-    std.debug.assert(pcg_a.nextU32() == pcg_b.nextU32());
-    std.debug.assert(pcg_a.nextU64() == pcg_b.nextU64());
+    assert(pcg_a.nextU32() == pcg_b.nextU32());
+    assert(pcg_a.nextU64() == pcg_b.nextU64());
 
     var xoroshiro_a = static_rng.Xoroshiro128Plus.init(0x6e47_6e61_7469_1003);
     var xoroshiro_b = static_rng.Xoroshiro128Plus.init(0x6e47_6e61_7469_1003);
-    std.debug.assert(xoroshiro_a.nextU64() == xoroshiro_b.nextU64());
-    std.debug.assert(xoroshiro_a.nextU64() == xoroshiro_b.nextU64());
+    assert(xoroshiro_a.nextU64() == xoroshiro_b.nextU64());
+    assert(xoroshiro_a.nextU64() == xoroshiro_b.nextU64());
 
     var parent_a = static_rng.Xoroshiro128Plus.init(0x6e47_6e61_7469_1004);
     var parent_b = static_rng.Xoroshiro128Plus.init(0x6e47_6e61_7469_1004);
     const child_a = parent_a.split();
     const child_b = parent_b.split();
-    std.debug.assert(child_a.s0 == child_b.s0);
-    std.debug.assert(child_a.s1 == child_b.s1);
+    assert(child_a.s0 == child_b.s0);
+    assert(child_a.s1 == child_b.s1);
 }

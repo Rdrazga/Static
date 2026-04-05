@@ -13,6 +13,8 @@
 //! owned by a single thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const DistributionError = error{
     InvalidConfig,
@@ -77,8 +79,8 @@ pub fn f32Unit(rng: anytype) f32 {
     const value = @as(f32, @floatFromInt(bits));
     const result = value / 16777216.0;
     // Postcondition: the result must lie in the half-open interval [0.0, 1.0).
-    std.debug.assert(result >= 0.0);
-    std.debug.assert(result < 1.0);
+    assert(result >= 0.0);
+    assert(result < 1.0);
     return result;
 }
 
@@ -88,8 +90,8 @@ pub fn f64Unit(rng: anytype) f64 {
     const value = @as(f64, @floatFromInt(bits));
     const result = value / 9007199254740992.0;
     // Postcondition: the result must lie in the half-open interval [0.0, 1.0).
-    std.debug.assert(result >= 0.0);
-    std.debug.assert(result < 1.0);
+    assert(result >= 0.0);
+    assert(result < 1.0);
     return result;
 }
 
@@ -100,14 +102,14 @@ test "uintBelow enforces upper bound" {
     var index: usize = 0;
     while (index < 200) : (index += 1) {
         const value = try uintBelow(&rng, 17);
-        try std.testing.expect(value < 17);
+        try testing.expect(value < 17);
     }
 }
 
 test "uintBelow rejects zero upper bound" {
     const pcg = @import("pcg32.zig");
     var rng = pcg.Pcg32.init(1, 1);
-    try std.testing.expectError(error.InvalidConfig, uintBelow(&rng, 0));
+    try testing.expectError(error.InvalidConfig, uintBelow(&rng, 0));
 }
 
 test "uintInRange returns values in requested closed interval" {
@@ -117,15 +119,15 @@ test "uintInRange returns values in requested closed interval" {
     var index: usize = 0;
     while (index < 200) : (index += 1) {
         const value = try uintInRange(&rng, 10, 20);
-        try std.testing.expect(value >= 10);
-        try std.testing.expect(value <= 20);
+        try testing.expect(value >= 10);
+        try testing.expect(value <= 20);
     }
 }
 
 test "uintInRange rejects inverted range" {
     const pcg = @import("pcg32.zig");
     var rng = pcg.Pcg32.init(1, 3);
-    try std.testing.expectError(error.InvalidConfig, uintInRange(&rng, 20, 10));
+    try testing.expectError(error.InvalidConfig, uintInRange(&rng, 20, 10));
 }
 
 test "f32Unit and f64Unit produce [0, 1) values" {
@@ -136,8 +138,8 @@ test "f32Unit and f64Unit produce [0, 1) values" {
     while (index < 128) : (index += 1) {
         const value32 = f32Unit(&rng);
         const value64 = f64Unit(&rng);
-        try std.testing.expect(value32 >= 0.0 and value32 < 1.0);
-        try std.testing.expect(value64 >= 0.0 and value64 < 1.0);
+        try testing.expect(value32 >= 0.0 and value32 < 1.0);
+        try testing.expect(value64 >= 0.0 and value64 < 1.0);
     }
 }
 
@@ -149,7 +151,7 @@ test "uintBelow with bound=1 always returns 0" {
     var i: u32 = 0;
     while (i < 100) : (i += 1) {
         const v = try uintBelow(&rng, 1);
-        try std.testing.expectEqual(@as(u64, 0), v);
+        try testing.expectEqual(@as(u64, 0), v);
     }
 }
 
@@ -160,7 +162,7 @@ test "uintBelow with nearly-full range" {
     var rng = pcg.Pcg32.init(42, 7);
     const bound: u64 = std.math.maxInt(u32); // Large but not u64 max.
     const v = try uintBelow(&rng, bound);
-    try std.testing.expect(v < bound);
+    try testing.expect(v < bound);
 }
 
 test "uintBelow rejects pathological engines after a bounded attempt budget" {
@@ -176,8 +178,8 @@ test "uintBelow rejects pathological engines after a bounded attempt budget" {
     };
 
     var rng = PathologicalRng{};
-    try std.testing.expectError(error.PathologicalEngine, uintBelowWithPathologicalEngine(&rng, 17));
-    try std.testing.expectEqual(rejection_attempt_limit, rng.calls);
+    try testing.expectError(error.PathologicalEngine, uintBelowWithPathologicalEngine(&rng, 17));
+    try testing.expectEqual(rejection_attempt_limit, rng.calls);
 }
 
 test "uintBelow panics on pathological engines through the public wrapper" {
@@ -193,30 +195,30 @@ test "uintBelow panics on pathological engines through the public wrapper" {
         return;
     }
 
-    var env_map = try std.process.Environ.createMap(std.testing.environ, std.testing.allocator);
+    var env_map = try std.process.Environ.createMap(testing.environ, testing.allocator);
     defer env_map.deinit();
     try env_map.put("STATIC_RNG_UINT_BELOW_PATHOLOGICAL_CHILD", "1");
 
-    const exe_path = try std.process.executablePathAlloc(std.testing.io, std.testing.allocator);
-    defer std.testing.allocator.free(exe_path);
+    const exe_path = try std.process.executablePathAlloc(testing.io, testing.allocator);
+    defer testing.allocator.free(exe_path);
 
     const argv = [_][]const u8{exe_path};
-    const result = try std.process.run(std.testing.allocator, std.testing.io, .{
+    const result = try std.process.run(testing.allocator, testing.io, .{
         .argv = &argv,
         .environ_map = &env_map,
     });
-    defer std.testing.allocator.free(result.stdout);
-    defer std.testing.allocator.free(result.stderr);
+    defer testing.allocator.free(result.stdout);
+    defer testing.allocator.free(result.stderr);
 
     switch (result.term) {
-        .exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try testing.expect(code != 0),
         else => {},
     }
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "uintBelow: pathological engine") != null);
+    try testing.expect(std.mem.indexOf(u8, result.stderr, "uintBelow: pathological engine") != null);
 }
 
 fn isPathologicalChild() bool {
-    var env_map = std.process.Environ.createMap(std.testing.environ, std.testing.allocator) catch return false;
+    var env_map = std.process.Environ.createMap(testing.environ, testing.allocator) catch return false;
     defer env_map.deinit();
     return env_map.get("STATIC_RNG_UINT_BELOW_PATHOLOGICAL_CHILD") != null;
 }

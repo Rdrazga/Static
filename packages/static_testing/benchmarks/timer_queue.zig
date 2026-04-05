@@ -4,6 +4,8 @@
 //! - `zig build bench -Doptimize=ReleaseFast` (from `packages/static_testing`).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 const static_scheduling = @import("static_scheduling");
 const static_testing = @import("static_testing");
 
@@ -26,17 +28,17 @@ const QueueContext = struct {
         var value: u32 = 0;
         while (value < context.schedule_count) : (value += 1) {
             _ = context.queue.scheduleAfter(value, .init(1)) catch |err| {
-                std.debug.panic("TimerQueue.scheduleAfter failed: {s}", .{@errorName(err)});
+                panic("TimerQueue.scheduleAfter failed: {s}", .{@errorName(err)});
             };
         }
 
         _ = context.sim_clock.advance(.init(1)) catch |err| {
-            std.debug.panic("SimClock.advance failed: {s}", .{@errorName(err)});
+            panic("SimClock.advance failed: {s}", .{@errorName(err)});
         };
         const drained = context.queue.drainDue(context.out) catch |err| {
-            std.debug.panic("TimerQueue.drainDue failed: {s}", .{@errorName(err)});
+            panic("TimerQueue.drainDue failed: {s}", .{@errorName(err)});
         };
-        std.debug.assert(drained == context.schedule_count);
+        assert(drained == context.schedule_count);
 
         context.sink +%= drained;
         _ = bench.case.blackBox(context.sink);
@@ -55,14 +57,14 @@ const WheelContext = struct {
         var value: u32 = 0;
         while (value < context.schedule_count) : (value += 1) {
             _ = context.wheel.schedule(value, 0) catch |err| {
-                std.debug.panic("TimerWheel.schedule failed: {s}", .{@errorName(err)});
+                panic("TimerWheel.schedule failed: {s}", .{@errorName(err)});
             };
         }
 
         const drained = context.wheel.tick(context.out) catch |err| {
-            std.debug.panic("TimerWheel.tick failed: {s}", .{@errorName(err)});
+            panic("TimerWheel.tick failed: {s}", .{@errorName(err)});
         };
-        std.debug.assert(drained == context.schedule_count);
+        assert(drained == context.schedule_count);
 
         context.sink +%= drained;
         _ = bench.case.blackBox(context.sink);
@@ -96,9 +98,9 @@ fn observeValues(values: []const u32) struct { sum: u64, xor: u32 } {
 
 fn assertDeliveredSchedule(values: []const u32, schedule_count: u32) void {
     const observed = observeValues(values);
-    std.debug.assert(values.len == @as(usize, schedule_count));
-    std.debug.assert(observed.sum == expectedValueSum(schedule_count));
-    std.debug.assert(observed.xor == expectedValueXor(schedule_count));
+    assert(values.len == @as(usize, schedule_count));
+    assert(observed.sum == expectedValueSum(schedule_count));
+    assert(observed.xor == expectedValueXor(schedule_count));
 }
 
 fn verifyQueueBenchmarkSemantics() !void {
@@ -123,8 +125,8 @@ fn verifyQueueBenchmarkSemantics() !void {
     const drained = try queue.drainDue(&out);
 
     assertDeliveredSchedule(out[0..@as(usize, drained)], timers_max);
-    std.debug.assert(queue.nextDueTime() == null);
-    std.debug.assert(queue.dueCountUpTo(sim_clock.now()) == 0);
+    assert(queue.nextDueTime() == null);
+    assert(queue.dueCountUpTo(sim_clock.now()) == 0);
 }
 
 fn verifyWheelBenchmarkSemantics() !void {

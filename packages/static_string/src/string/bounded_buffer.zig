@@ -8,6 +8,8 @@
 //! Thread safety: not thread-safe — a single instance must be owned by one thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const BufferError = error{
     NoSpaceLeft,
@@ -25,7 +27,7 @@ pub const BoundedBuffer = struct {
     }
 
     pub fn len(self: *const BoundedBuffer) usize {
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
         return self.len_used;
     }
 
@@ -34,52 +36,52 @@ pub const BoundedBuffer = struct {
     }
 
     pub fn bytes(self: *const BoundedBuffer) []const u8 {
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
         return self.storage[0..self.len_used];
     }
 
     pub fn clear(self: *BoundedBuffer) void {
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
         self.len_used = 0;
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
     }
 
     pub fn truncate(self: *BoundedBuffer, new_len: usize) void {
-        std.debug.assert(self.len_used <= self.storage.len);
-        std.debug.assert(new_len <= self.storage.len);
-        std.debug.assert(new_len <= self.len_used);
+        assert(self.len_used <= self.storage.len);
+        assert(new_len <= self.storage.len);
+        assert(new_len <= self.len_used);
         self.len_used = new_len;
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
     }
 
     pub fn appendByte(self: *BoundedBuffer, value: u8) BufferError!void {
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
         if (self.len_used >= self.storage.len) return error.NoSpaceLeft;
         self.storage[self.len_used] = value;
         self.len_used += 1;
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
     }
 
     pub fn append(self: *BoundedBuffer, value: []const u8) BufferError!void {
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
 
         const remaining_len = self.storage.len - self.len_used;
         if (remaining_len < value.len) return error.NoSpaceLeft;
         const end = self.len_used + value.len;
-        std.debug.assert(end <= self.storage.len);
+        assert(end <= self.storage.len);
         @memcpy(self.storage[self.len_used..end], value);
         self.len_used = end;
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
     }
 
     pub fn appendFmt(self: *BoundedBuffer, comptime fmt: []const u8, args: anytype) BufferError!void {
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
         const remaining = self.storage[self.len_used..];
         const rendered = std.fmt.bufPrint(remaining, fmt, args) catch |err| switch (err) {
             error.NoSpaceLeft => return error.NoSpaceLeft,
         };
         self.len_used += rendered.len;
-        std.debug.assert(self.len_used <= self.storage.len);
+        assert(self.len_used <= self.storage.len);
     }
 };
 
@@ -88,7 +90,7 @@ test "BoundedBuffer append and bytes roundtrip" {
     var buffer = BoundedBuffer.init(storage[0..]);
     try buffer.append("abc");
     try buffer.appendByte('d');
-    try std.testing.expectEqualStrings("abcd", buffer.bytes());
+    try testing.expectEqualStrings("abcd", buffer.bytes());
 }
 
 test "BoundedBuffer append returns NoSpaceLeft without partial write" {
@@ -97,9 +99,9 @@ test "BoundedBuffer append returns NoSpaceLeft without partial write" {
     try buffer.append("abcd");
 
     const before = buffer.len();
-    try std.testing.expectError(error.NoSpaceLeft, buffer.appendByte('e'));
-    try std.testing.expectEqual(before, buffer.len());
-    try std.testing.expectEqualStrings("abcd", buffer.bytes());
+    try testing.expectError(error.NoSpaceLeft, buffer.appendByte('e'));
+    try testing.expectEqual(before, buffer.len());
+    try testing.expectEqualStrings("abcd", buffer.bytes());
 }
 
 test "BoundedBuffer append returns NoSpaceLeft without partial write (slice)" {
@@ -108,9 +110,9 @@ test "BoundedBuffer append returns NoSpaceLeft without partial write (slice)" {
     try buffer.append("ab");
 
     const before = buffer.len();
-    try std.testing.expectError(error.NoSpaceLeft, buffer.append("cde"));
-    try std.testing.expectEqual(before, buffer.len());
-    try std.testing.expectEqualStrings("ab", buffer.bytes());
+    try testing.expectError(error.NoSpaceLeft, buffer.append("cde"));
+    try testing.expectEqual(before, buffer.len());
+    try testing.expectEqualStrings("ab", buffer.bytes());
 }
 
 test "BoundedBuffer appendFmt returns NoSpaceLeft without partial write" {
@@ -119,9 +121,9 @@ test "BoundedBuffer appendFmt returns NoSpaceLeft without partial write" {
     try buffer.append("ab");
 
     const before = buffer.len();
-    try std.testing.expectError(error.NoSpaceLeft, buffer.appendFmt("{s}", .{"cde"}));
-    try std.testing.expectEqual(before, buffer.len());
-    try std.testing.expectEqualStrings("ab", buffer.bytes());
+    try testing.expectError(error.NoSpaceLeft, buffer.appendFmt("{s}", .{"cde"}));
+    try testing.expectEqual(before, buffer.len());
+    try testing.expectEqualStrings("ab", buffer.bytes());
 }
 
 test "BoundedBuffer truncate and clear" {
@@ -129,14 +131,14 @@ test "BoundedBuffer truncate and clear" {
     var buffer = BoundedBuffer.init(storage[0..]);
     try buffer.append("hello");
     buffer.truncate(2);
-    try std.testing.expectEqualStrings("he", buffer.bytes());
+    try testing.expectEqualStrings("he", buffer.bytes());
     buffer.clear();
-    try std.testing.expectEqual(@as(usize, 0), buffer.len());
+    try testing.expectEqual(@as(usize, 0), buffer.len());
 }
 
 test "BoundedBuffer appendFmt writes formatted text" {
     var storage: [32]u8 = undefined;
     var buffer = BoundedBuffer.init(storage[0..]);
     try buffer.appendFmt("{s}-{d}", .{ "value", 42 });
-    try std.testing.expectEqualStrings("value-42", buffer.bytes());
+    try testing.expectEqualStrings("value-42", buffer.bytes());
 }

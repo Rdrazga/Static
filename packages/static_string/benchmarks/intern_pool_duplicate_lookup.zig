@@ -1,6 +1,7 @@
 //! `static_string` intern-pool duplicate and resolve baselines.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_string = @import("static_string");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -26,7 +27,7 @@ const DuplicateContext = struct {
         _ = self.pool.intern("header-name") catch unreachable;
         self.target_symbol = self.pool.intern("content-type") catch unreachable;
         _ = self.pool.intern("caf\xc3\xa9") catch unreachable;
-        std.debug.assert(self.pool.len() == 3);
+        assert(self.pool.len() == 3);
     }
 
     fn run(context_ptr: *anyopaque) void {
@@ -34,7 +35,7 @@ const DuplicateContext = struct {
         const symbol = context.pool.intern("content-type") catch unreachable;
         if (symbol != context.target_symbol) unreachable;
         context.sink = bench.case.blackBox(@as(u64, symbol));
-        std.debug.assert(context.sink == context.target_symbol);
+        assert(context.sink == context.target_symbol);
     }
 };
 
@@ -50,7 +51,7 @@ const ResolveContext = struct {
         _ = self.pool.intern("alpha") catch unreachable;
         self.target_symbol = self.pool.intern("x-request-id") catch unreachable;
         _ = self.pool.intern("emoji-\xf0\x9f\x98\x80") catch unreachable;
-        std.debug.assert(self.pool.len() == 3);
+        assert(self.pool.len() == 3);
     }
 
     fn run(context_ptr: *anyopaque) void {
@@ -58,7 +59,7 @@ const ResolveContext = struct {
         const resolved = context.pool.resolve(context.target_symbol) catch unreachable;
         if (!std.mem.eql(u8, resolved, "x-request-id")) unreachable;
         context.sink = bench.case.blackBox(@as(u64, @intCast(resolved.len)));
-        std.debug.assert(context.sink == "x-request-id".len);
+        assert(context.sink == "x-request-id".len);
     }
 };
 

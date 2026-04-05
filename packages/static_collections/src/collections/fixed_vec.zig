@@ -11,6 +11,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const assert = std.debug.assert;
 
 pub fn FixedVec(comptime T: type, comptime N: usize) type {
@@ -98,7 +99,7 @@ test "fixed vec enforces capacity" {
     var v = FixedVec(u8, 2){};
     try v.append(1);
     try v.append(2);
-    try std.testing.expectError(error.NoSpaceLeft, v.append(3));
+    try testing.expectError(error.NoSpaceLeft, v.append(3));
 }
 
 test "fixed vec clear resets logical length" {
@@ -107,10 +108,10 @@ test "fixed vec clear resets logical length" {
     var v = FixedVec(u8, 3){};
     try v.append(4);
     try v.append(5);
-    try std.testing.expectEqual(@as(usize, 2), v.len());
+    try testing.expectEqual(@as(usize, 2), v.len());
     v.clear();
-    try std.testing.expectEqual(@as(usize, 0), v.len());
-    try std.testing.expectEqual(@as(usize, 3), v.capacity());
+    try testing.expectEqual(@as(usize, 0), v.len());
+    try testing.expectEqual(@as(usize, 3), v.capacity());
 }
 
 test "fixed vec items reflects append order" {
@@ -120,20 +121,20 @@ test "fixed vec items reflects append order" {
     try v.append(11);
     try v.append(22);
     const values = v.items();
-    try std.testing.expectEqual(@as(usize, 2), values.len);
-    try std.testing.expectEqual(@as(u16, 11), values[0]);
-    try std.testing.expectEqual(@as(u16, 22), values[1]);
+    try testing.expectEqual(@as(usize, 2), values.len);
+    try testing.expectEqual(@as(u16, 11), values[0]);
+    try testing.expectEqual(@as(u16, 22), values[1]);
 }
 
 test "fixed vec pop returns last element or null when empty" {
     // Goal: validate LIFO pop semantics and empty-vector behavior.
     // Method: pop from empty, then append/pop values back to empty.
     var v = FixedVec(u8, 3){};
-    try std.testing.expect(v.pop() == null);
+    try testing.expect(v.pop() == null);
     try v.append(10);
     try v.append(20);
-    try std.testing.expectEqual(@as(u8, 20), v.pop().?);
-    try std.testing.expectEqual(@as(u8, 10), v.pop().?);
-    try std.testing.expect(v.pop() == null);
-    try std.testing.expectEqual(@as(usize, 0), v.len());
+    try testing.expectEqual(@as(u8, 20), v.pop().?);
+    try testing.expectEqual(@as(u8, 10), v.pop().?);
+    try testing.expect(v.pop() == null);
+    try testing.expectEqual(@as(usize, 0), v.len());
 }

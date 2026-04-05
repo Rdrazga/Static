@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -48,15 +50,15 @@ const FlowRunner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("retry_policy"));
-        std.debug.assert(context.traceBufferPtr() != null);
-        std.debug.assert(self.pool.capacity() >= 2);
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("retry_policy"));
+        assert(context.traceBufferPtr() != null);
+        assert(self.pool.capacity() >= 2);
 
         const stream = try support.connectStream(self.runtime, endpoint, context, &self.next_sequence_no);
         defer self.runtime.closeHandle(stream.handle) catch |err| {
-            std.debug.assert(err == error.Closed);
+            assert(err == error.Closed);
         };
 
         const timeout_buffer = try self.pool.acquire();
@@ -73,8 +75,8 @@ const FlowRunner = struct {
         const timeout_id = try self.runtime.submitStreamRead(stream, timeout_buffer, 0);
         _ = try self.runtime.pump(1);
         const timeout_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(timeout_id, timeout_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
+        try testing.expectEqual(timeout_id, timeout_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
 
         const timeout_seq = try support.appendEvent(
             context,
@@ -131,8 +133,8 @@ const FlowRunner = struct {
         const write_id = try self.runtime.submitStreamWrite(stream, write_buffer, null);
         _ = try self.runtime.pump(1);
         const write_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(write_id, write_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
+        try testing.expectEqual(write_id, write_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
 
         const write_seq = try support.appendEvent(
             context,
@@ -168,9 +170,9 @@ const FlowRunner = struct {
         const read_id = try self.runtime.submitStreamRead(stream, read_buffer, null);
         _ = try self.runtime.pump(1);
         const read_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(read_id, read_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
-        try std.testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
+        try testing.expectEqual(read_id, read_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
+        try testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
 
         const read_seq = try support.appendEvent(
             context,
@@ -229,7 +231,7 @@ const FlowRunner = struct {
 
 fn initFixture(fixture: *Fixture) !void {
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(41),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -242,14 +244,14 @@ test "static_io runtime flow runs under testing.system with bounded retry and te
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 3,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
@@ -270,10 +272,10 @@ test "static_io runtime flow runs under testing.system with bounded retry and te
         .components = &components,
     }, &runner, FlowRunner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(usize, components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 8);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(usize, components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 8);
+    try testing.expect(execution.retained_bundle == null);
 }
 
 test "static_io system flow persists failure bundles with retained provenance" {
@@ -281,24 +283,24 @@ test "static_io system flow persists failure bundles with retained provenance" {
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 2,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
     var entry_name_buffer: [128]u8 = undefined;
@@ -339,8 +341,8 @@ test "static_io system flow persists failure bundles with retained provenance" {
         },
     }, &runner, FlowRunner.run);
 
-    try std.testing.expect(!execution.check_result.passed);
-    try std.testing.expect(execution.retained_bundle != null);
+    try testing.expect(!execution.check_result.passed);
+    try testing.expect(execution.retained_bundle != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -370,10 +372,10 @@ test "static_io system flow persists failure bundles with retained provenance" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("system_runtime_retry_flow_failure", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expect(bundle.trace_document.?.has_provenance);
-    try std.testing.expect(bundle.trace_document.?.caused_event_count > 0);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqualStrings("temporal_eventually", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_runtime_retry_flow_failure", bundle.manifest_document.run_name);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expect(bundle.trace_document.?.has_provenance);
+    try testing.expect(bundle.trace_document.?.caused_event_count > 0);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqualStrings("temporal_eventually", bundle.violations_document.violations[0].code);
 }

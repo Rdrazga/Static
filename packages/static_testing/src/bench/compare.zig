@@ -1,6 +1,8 @@
 //! Benchmark statistics comparison for A/B regression checks.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const stats = @import("stats.zig");
 
@@ -36,7 +38,7 @@ pub const CompareStatsOptions = struct {
 
 comptime {
     core.errors.assertVocabularySubset(BenchmarkCompareError);
-    std.debug.assert(std.meta.fields(ComparisonKind).len == 3);
+    assert(std.meta.fields(ComparisonKind).len == 3);
 }
 
 /// Compare two derived benchmark summaries for the same case.
@@ -46,7 +48,7 @@ pub fn compareStats(options: CompareStatsOptions) BenchmarkCompareError!Comparis
     if (!std.mem.eql(u8, options.baseline.case_name, options.candidate.case_name)) {
         return error.InvalidInput;
     }
-    std.debug.assert(options.threshold_ratio_ppm <= std.math.maxInt(i64));
+    assert(options.threshold_ratio_ppm <= std.math.maxInt(i64));
 
     const delta_elapsed_ns = try deltaElapsedNs(
         options.baseline.median_elapsed_ns,
@@ -92,8 +94,8 @@ fn validateStatsSummary(summary: stats.BenchmarkStats) BenchmarkCompareError!voi
     if (summary.median_elapsed_ns > summary.p90_elapsed_ns) return error.InvalidInput;
     if (summary.p90_elapsed_ns > summary.p95_elapsed_ns) return error.InvalidInput;
 
-    std.debug.assert(summary.case_name.len > 0);
-    std.debug.assert(summary.sample_count > 0);
+    assert(summary.case_name.len > 0);
+    assert(summary.sample_count > 0);
 }
 
 fn deltaElapsedNs(baseline_elapsed_ns: u64, candidate_elapsed_ns: u64) BenchmarkCompareError!i64 {
@@ -191,9 +193,9 @@ test "compareStats classifies improvements and regressions by threshold" {
         .candidate = regressed_candidate,
     });
 
-    try std.testing.expectEqual(ComparisonKind.improved, improved.kind);
-    try std.testing.expectEqual(ComparisonKind.unchanged, unchanged.kind);
-    try std.testing.expectEqual(ComparisonKind.regressed, regressed.kind);
+    try testing.expectEqual(ComparisonKind.improved, improved.kind);
+    try testing.expectEqual(ComparisonKind.unchanged, unchanged.kind);
+    try testing.expectEqual(ComparisonKind.regressed, regressed.kind);
 }
 
 test "compareStats rejects mismatched benchmark identities" {
@@ -220,7 +222,7 @@ test "compareStats rejects mismatched benchmark identities" {
         .p95_elapsed_ns = 3,
     };
 
-    try std.testing.expectError(error.InvalidInput, compareStats(.{
+    try testing.expectError(error.InvalidInput, compareStats(.{
         .baseline = baseline,
         .candidate = candidate,
     }));
@@ -250,12 +252,12 @@ test "compareStats rejects internally inconsistent stats summaries" {
         .p95_elapsed_ns = 19,
     };
 
-    try std.testing.expectError(error.InvalidInput, compareStats(.{
+    try testing.expectError(error.InvalidInput, compareStats(.{
         .baseline = invalid_baseline,
         .candidate = candidate,
     }));
 
-    try std.testing.expectError(error.InvalidInput, compareStats(.{
+    try testing.expectError(error.InvalidInput, compareStats(.{
         .baseline = candidate,
         .candidate = .{
             .case_name = "case_invalid",
@@ -304,9 +306,9 @@ test "compareStats saturates zero-baseline regressions" {
         .candidate = non_zero_candidate,
     });
 
-    try std.testing.expectEqual(@as(i64, 0), equal_zero.delta_ratio_ppm);
-    try std.testing.expectEqual(std.math.maxInt(i64), saturated.delta_ratio_ppm);
-    try std.testing.expectEqual(ComparisonKind.regressed, saturated.kind);
+    try testing.expectEqual(@as(i64, 0), equal_zero.delta_ratio_ppm);
+    try testing.expectEqual(std.math.maxInt(i64), saturated.delta_ratio_ppm);
+    try testing.expectEqual(ComparisonKind.regressed, saturated.kind);
 }
 
 test "compareStats rejects elapsed deltas that exceed i64 range" {
@@ -333,7 +335,7 @@ test "compareStats rejects elapsed deltas that exceed i64 range" {
         .p95_elapsed_ns = std.math.maxInt(u64),
     };
 
-    try std.testing.expectError(error.Overflow, compareStats(.{
+    try testing.expectError(error.Overflow, compareStats(.{
         .baseline = baseline,
         .candidate = candidate,
     }));

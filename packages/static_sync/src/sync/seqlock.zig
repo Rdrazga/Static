@@ -3,6 +3,8 @@
 //! Thread safety: one writer at a time (guarded by an internal mutex); concurrent readers detect torn reads via the sequence counter and retry.
 //! Single-threaded mode: safe to use; the mutex degrades to a no-op.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const mutex = std.Thread;
 const padded_atomic = @import("padded_atomic.zig");
 
@@ -10,7 +12,7 @@ pub const SeqLock = struct {
     pub const max_read_spins_default: u32 = 64;
 
     comptime {
-        std.debug.assert(max_read_spins_default > 0);
+        assert(max_read_spins_default > 0);
     }
 
     // On its own cache line: read by every reader on every read attempt.
@@ -21,14 +23,14 @@ pub const SeqLock = struct {
     pub fn writeLock(self: *SeqLock) void {
         self.writer_mutex.lock();
         const previous_seq = self.seq.fetchAdd(1, .acq_rel);
-        std.debug.assert((previous_seq & 1) == 0);
-        std.debug.assert((self.seq.load(.acquire) & 1) == 1);
+        assert((previous_seq & 1) == 0);
+        assert((self.seq.load(.acquire) & 1) == 1);
     }
 
     pub fn writeUnlock(self: *SeqLock) void {
         const previous_seq = self.seq.fetchAdd(1, .release);
-        std.debug.assert((previous_seq & 1) == 1);
-        std.debug.assert((self.seq.load(.acquire) & 1) == 0);
+        assert((previous_seq & 1) == 1);
+        assert((self.seq.load(.acquire) & 1) == 0);
         self.writer_mutex.unlock();
     }
 
@@ -37,7 +39,7 @@ pub const SeqLock = struct {
         while (spin_attempt < self.max_read_spins) : (spin_attempt += 1) {
             const token = self.seq.load(.acquire);
             if ((token & 1) == 0) {
-                std.debug.assert((token & 1) == 0);
+                assert((token & 1) == 0);
                 return token;
             }
             std.atomic.spinLoopHint();
@@ -46,7 +48,7 @@ pub const SeqLock = struct {
         self.writer_mutex.lock();
         defer self.writer_mutex.unlock();
         const token = self.seq.load(.acquire);
-        std.debug.assert((token & 1) == 0);
+        assert((token & 1) == 0);
         return token;
     }
 
@@ -57,10 +59,10 @@ pub const SeqLock = struct {
         const should_retry = (now & 1) == 1 or (token & 1) == 1 or now != token;
         // Assertion 1: a token with odd parity was captured during a write;
         // retrying is mandatory.
-        if ((token & 1) == 1) std.debug.assert(should_retry);
+        if ((token & 1) == 1) assert(should_retry);
         // Assertion 2: if no retry is needed, the sequence must equal the token
         // and have even parity -- confirming the read window was stable.
-        if (!should_retry) std.debug.assert(now == token and (now & 1) == 0);
+        if (!should_retry) assert(now == token and (now & 1) == 0);
         return should_retry;
     }
 };
@@ -72,7 +74,7 @@ test "seqlock token changes across writes" {
     const before = l.readBegin();
     l.writeLock();
     l.writeUnlock();
-    try std.testing.expect(l.readRetry(before));
+    try testing.expect(l.readRetry(before));
 }
 
 test "seqlock no retry when no write has occurred" {
@@ -80,7 +82,7 @@ test "seqlock no retry when no write has occurred" {
     // Method: call `readBegin` and immediately evaluate `readRetry`.
     var l = SeqLock{};
     const token = l.readBegin();
-    try std.testing.expect(!l.readRetry(token));
+    try testing.expect(!l.readRetry(token));
 }
 
 test "seqlock multiple write cycles bump token" {
@@ -91,8 +93,8 @@ test "seqlock multiple write cycles bump token" {
     l.writeLock();
     l.writeUnlock();
     const t1 = l.readBegin();
-    try std.testing.expect(!l.readRetry(t1));
-    try std.testing.expect(l.readRetry(t0));
+    try testing.expect(!l.readRetry(t1));
+    try testing.expect(l.readRetry(t0));
 }
 
 test "seqlock write lock toggles odd/even parity" {
@@ -100,22 +102,22 @@ test "seqlock write lock toggles odd/even parity" {
     // Method: inspect sequence value around write lock boundaries.
     var l = SeqLock{};
     const seq0 = l.seq.load(.acquire);
-    try std.testing.expect((seq0 & 1) == 0);
+    try testing.expect((seq0 & 1) == 0);
 
     l.writeLock();
     const seq1 = l.seq.load(.acquire);
-    try std.testing.expect((seq1 & 1) == 1);
+    try testing.expect((seq1 & 1) == 1);
 
     l.writeUnlock();
     const seq2 = l.seq.load(.acquire);
-    try std.testing.expect((seq2 & 1) == 0);
+    try testing.expect((seq2 & 1) == 0);
 }
 
 test "seqlock readRetry requires retry for odd token" {
     // Goal: verify defensive handling of malformed odd tokens.
     // Method: pass an odd token directly to `readRetry`.
     var l = SeqLock{};
-    try std.testing.expect(l.readRetry(1));
+    try testing.expect(l.readRetry(1));
 }
 
 test "seqlock readBegin returns a stable token after writer contention" {
@@ -161,7 +163,7 @@ test "seqlock readBegin returns a stable token after writer contention" {
         std.Thread.yield() catch unreachable;
     }
 
-    std.debug.assert((l.seq.load(.acquire) & 1) == 1);
+    assert((l.seq.load(.acquire) & 1) == 1);
     l.writeUnlock();
     wait_timer.reset();
 
@@ -171,6 +173,6 @@ test "seqlock readBegin returns a stable token after writer contention" {
     }
 
     const observed = token.load(.acquire);
-    try std.testing.expectEqual(@as(u64, 2), observed);
-    try std.testing.expect(!l.readRetry(observed));
+    try testing.expectEqual(@as(u64, 2), observed);
+    try testing.expect(!l.readRetry(observed));
 }

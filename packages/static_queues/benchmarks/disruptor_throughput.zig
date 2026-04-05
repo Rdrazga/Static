@@ -4,6 +4,7 @@
 //! workflow and retained baseline artifacts.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_queues = @import("static_queues");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -21,9 +22,9 @@ const DisruptorContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *DisruptorContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.queue.capacity() == batch_count);
-        std.debug.assert(context.queue.activeConsumerCount() == 1);
-        std.debug.assert(context.queue.pending(context.consumer_id) == 0);
+        assert(context.queue.capacity() == batch_count);
+        assert(context.queue.activeConsumerCount() == 1);
+        assert(context.queue.pending(context.consumer_id) == 0);
 
         var index: usize = 0;
         while (index < batch_count) : (index += 1) {
@@ -37,9 +38,9 @@ const DisruptorContext = struct {
             context.sink = bench.case.blackBox(context.sink + item);
         }
 
-        std.debug.assert(context.queue.pending(context.consumer_id) == 0);
-        std.debug.assert(context.queue.activeConsumerCount() == 1);
-        std.debug.assert(context.sink > 0);
+        assert(context.queue.pending(context.consumer_id) == 0);
+        assert(context.queue.activeConsumerCount() == 1);
+        assert(context.sink > 0);
     }
 };
 
@@ -104,9 +105,9 @@ fn validateSemanticPreflight(allocator: std.mem.Allocator) !void {
     const consumer_id = try disruptor.addConsumer();
     defer disruptor.removeConsumer(consumer_id);
 
-    std.debug.assert(disruptor.capacity() == batch_count);
-    std.debug.assert(disruptor.activeConsumerCount() == 1);
-    std.debug.assert(disruptor.pending(consumer_id) == 0);
+    assert(disruptor.capacity() == batch_count);
+    assert(disruptor.activeConsumerCount() == 1);
+    assert(disruptor.pending(consumer_id) == 0);
 
     var index: usize = 0;
     while (index < batch_count) : (index += 1) {
@@ -116,5 +117,5 @@ fn validateSemanticPreflight(allocator: std.mem.Allocator) !void {
     while (index < batch_count) : (index += 1) {
         _ = try disruptor.tryRecv(consumer_id);
     }
-    std.debug.assert(disruptor.pending(consumer_id) == 0);
+    assert(disruptor.pending(consumer_id) == 0);
 }

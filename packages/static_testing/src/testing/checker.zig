@@ -1,6 +1,8 @@
 //! Shared checker vocabulary and contracts for deterministic validation.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// One deterministic checker violation with a stable code and message.
 pub const Violation = struct {
@@ -28,7 +30,7 @@ pub const CheckResult = struct {
         violations: []const Violation,
         checkpoint_digest: ?CheckpointDigest,
     ) CheckResult {
-        std.debug.assert(violations.len > 0);
+        assert(violations.len > 0);
         assertValidViolations(violations);
         return .{
             .passed = false,
@@ -75,22 +77,22 @@ pub fn runChecker(
 ) CheckError!CheckResult {
     const result = try checker.run(input);
     if (result.passed) {
-        std.debug.assert(result.violations.len == 0);
+        assert(result.violations.len == 0);
     } else {
-        std.debug.assert(result.violations.len > 0);
+        assert(result.violations.len > 0);
         assertValidViolations(result.violations);
     }
     return result;
 }
 
 comptime {
-    std.debug.assert(@sizeOf(CheckpointDigest) == @sizeOf(u128));
+    assert(@sizeOf(CheckpointDigest) == @sizeOf(u128));
 }
 
 fn assertValidViolations(violations: []const Violation) void {
     for (violations) |violation| {
-        std.debug.assert(violation.code.len > 0);
-        std.debug.assert(violation.message.len > 0);
+        assert(violation.code.len > 0);
+        assert(violation.message.len > 0);
     }
 }
 
@@ -108,9 +110,9 @@ test "checker pass result propagates without violations" {
     };
     const result = try runChecker(u32, error{Unexpected}, checker, 7);
 
-    try std.testing.expect(result.passed);
-    try std.testing.expectEqual(@as(usize, 0), result.violations.len);
-    try std.testing.expect(result.checkpoint_digest != null);
+    try testing.expect(result.passed);
+    try testing.expectEqual(@as(usize, 0), result.violations.len);
+    try testing.expect(result.checkpoint_digest != null);
 }
 
 test "checker failure result must carry violations" {
@@ -130,9 +132,9 @@ test "checker failure result must carry violations" {
     };
     const result = try runChecker(u32, error{}, checker, 3);
 
-    try std.testing.expect(!result.passed);
-    try std.testing.expectEqual(@as(usize, 1), result.violations.len);
-    try std.testing.expectEqualStrings("mismatch", result.violations[0].code);
+    try testing.expect(!result.passed);
+    try testing.expectEqual(@as(usize, 1), result.violations.len);
+    try testing.expectEqualStrings("mismatch", result.violations[0].code);
 }
 
 test "checkpoint digest equality and inequality are stable" {
@@ -140,6 +142,6 @@ test "checkpoint digest equality and inequality are stable" {
     const b = CheckpointDigest.init(1);
     const c = CheckpointDigest.init(2);
 
-    try std.testing.expect(a.eql(b));
-    try std.testing.expect(!a.eql(c));
+    try testing.expect(a.eql(b));
+    try testing.expect(!a.eql(c));
 }

@@ -12,6 +12,8 @@
 //!
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const trace = @import("trace.zig");
 const writeJsonString = trace.writeJsonString;
 
@@ -35,10 +37,10 @@ pub const max_counter_name_len: usize = 256;
 pub fn writeCounterEventJson(writer: *std.Io.Writer, ev: CounterEvent) !void {
     // Precondition: a counter with an empty name would produce unidentifiable
     // events in the trace. Callers must supply a non-empty name.
-    std.debug.assert(ev.name.len > 0);
+    assert(ev.name.len > 0);
     // Precondition: name length must not exceed the defined maximum; counter names
     // are short identifiers, not arbitrary strings.
-    std.debug.assert(ev.name.len <= max_counter_name_len);
+    assert(ev.name.len <= max_counter_name_len);
     try writer.writeAll("{\"name\":");
     try writeJsonString(writer, ev.name);
     try writer.writeAll(",\"ph\":\"C\",\"ts\":");
@@ -53,32 +55,32 @@ pub fn writeCounterEventJson(writer: *std.Io.Writer, ev: CounterEvent) !void {
 }
 
 test "writeCounterEventJson produces valid Chrome C phase JSON" {
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     const ev = CounterEvent{ .name = "fps", .ts = 1000, .tid = 2, .pid = 0, .value = 60 };
     try writeCounterEventJson(&aw.writer, ev);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
     const expected = "{\"name\":\"fps\",\"ph\":\"C\",\"ts\":1000,\"pid\":0,\"tid\":2,\"args\":{\"value\":60}}";
-    try std.testing.expectEqualStrings(expected, out.items);
+    try testing.expectEqualStrings(expected, out.items);
 }
 
 test "writeCounterEventJson handles negative counter values" {
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     const ev = CounterEvent{ .name = "delta", .ts = 500, .tid = 1, .pid = 0, .value = -42 };
     try writeCounterEventJson(&aw.writer, ev);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expect(std.mem.indexOf(u8, out.items, "-42") != null);
+    try testing.expect(std.mem.indexOf(u8, out.items, "-42") != null);
 }
 
 test "writeCounterEventJson escapes special characters in name" {
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     const ev = CounterEvent{ .name = "a\"b", .ts = 1, .tid = 0, .pid = 0, .value = 1 };
     try writeCounterEventJson(&aw.writer, ev);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expect(std.mem.indexOf(u8, out.items, "\\\"") != null);
+    try testing.expect(std.mem.indexOf(u8, out.items, "\\\"") != null);
 }

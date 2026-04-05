@@ -12,6 +12,8 @@
 //! - Receives drain buffered items first, then return `error.Closed`.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("ring_buffer.zig");
 const sync = @import("static_sync");
 const caps = @import("caps.zig");
@@ -22,8 +24,8 @@ pub fn Channel(comptime T: type) type {
     // Guard against zero-size types: the backing ring buffer is slot-based and
     // relies on addressable storage. For a signal-only channel, use `bool`.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     const supports_blocking_wait_enabled = caps.blocking_wait_enabled;
@@ -77,20 +79,20 @@ pub fn Channel(comptime T: type) type {
             const self: Self = .{
                 .rb = try ring.RingBuffer(T).init(allocator, cfg),
             };
-            std.debug.assert(!self.closed);
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(!self.closed);
+            assert(self.rb.capacity() > 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
-            std.debug.assert(self.rb.capacity() > 0);
-            std.debug.assert(self.rb.len() <= self.rb.capacity());
+            assert(self.rb.capacity() > 0);
+            assert(self.rb.len() <= self.rb.capacity());
             self.rb.deinit();
             self.* = undefined;
         }
 
         pub fn capacity(self: *const Self) usize {
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             return self.rb.capacity();
         }
 
@@ -98,7 +100,7 @@ pub fn Channel(comptime T: type) type {
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
             const queue_len = self.rb.len();
-            std.debug.assert(queue_len <= self.rb.capacity());
+            assert(queue_len <= self.rb.capacity());
             return queue_len;
         }
 
@@ -128,13 +130,13 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             if (self.closed) return error.Closed;
 
             const old_len = self.rb.len();
             const sent_count = self.rb.tryPushBatch(values[0..items_limit]);
-            std.debug.assert(sent_count <= items_limit);
-            std.debug.assert(self.rb.len() == old_len + sent_count);
+            assert(sent_count <= items_limit);
+            assert(self.rb.len() == old_len + sent_count);
             if (sent_count > 0) {
                 self.bumpWaitStateLocked();
                 self.wakeReceiversForBatchLocked(sent_count, options.wake_mode);
@@ -160,11 +162,11 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             const old_len = self.rb.len();
             const recv_count = self.rb.tryPopBatch(out[0..items_limit]);
-            std.debug.assert(recv_count <= items_limit);
-            std.debug.assert(self.rb.len() + recv_count == old_len);
+            assert(recv_count <= items_limit);
+            assert(self.rb.len() + recv_count == old_len);
             if (recv_count > 0) {
                 self.bumpWaitStateLocked();
                 self.wakeSendersForBatchLocked(recv_count, options.wake_mode);
@@ -189,10 +191,10 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             if (self.closed) return error.Closed;
             self.rb.tryPush(value) catch return error.WouldBlock;
-            std.debug.assert(self.rb.len() > 0);
+            assert(self.rb.len() > 0);
             self.bumpWaitStateLocked();
             self.wakeReceiverLocked();
         }
@@ -201,13 +203,13 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             const old_len = self.rb.len();
             const value = self.rb.tryPop() catch {
                 if (self.closed) return error.Closed;
                 return error.WouldBlock;
             };
-            std.debug.assert(self.rb.len() == old_len - 1);
+            assert(self.rb.len() == old_len - 1);
             self.bumpWaitStateLocked();
             self.wakeSenderLocked();
             return value;
@@ -265,7 +267,7 @@ pub fn Channel(comptime T: type) type {
                     continue;
                 };
 
-                std.debug.assert(self.rb.len() == old_len - 1);
+                assert(self.rb.len() == old_len - 1);
                 self.bumpWaitStateLocked();
                 self.wakeSenderLocked();
                 return value;
@@ -342,7 +344,7 @@ pub fn Channel(comptime T: type) type {
                     continue;
                 };
 
-                std.debug.assert(self.rb.len() == old_len - 1);
+                assert(self.rb.len() == old_len - 1);
                 self.bumpWaitStateLocked();
                 self.wakeSenderLocked();
                 return value;
@@ -432,7 +434,7 @@ pub fn Channel(comptime T: type) type {
             progress_count: usize,
             wake_mode: BatchWakeMode,
         ) void {
-            std.debug.assert(progress_count > 0);
+            assert(progress_count > 0);
             switch (wake_mode) {
                 .progress => self.wakeSenderCountLocked(clampBatchWakeCount(progress_count)),
                 .single => self.wakeSenderCountLocked(1),
@@ -445,7 +447,7 @@ pub fn Channel(comptime T: type) type {
             progress_count: usize,
             wake_mode: BatchWakeMode,
         ) void {
-            std.debug.assert(progress_count > 0);
+            assert(progress_count > 0);
             switch (wake_mode) {
                 .progress => self.wakeReceiverCountLocked(clampBatchWakeCount(progress_count)),
                 .single => self.wakeReceiverCountLocked(1),
@@ -503,20 +505,20 @@ pub fn Channel(comptime T: type) type {
             const self: Self = .{
                 .rb = try ring.RingBuffer(T).init(allocator, cfg),
             };
-            std.debug.assert(!self.closed);
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(!self.closed);
+            assert(self.rb.capacity() > 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
-            std.debug.assert(self.rb.capacity() > 0);
-            std.debug.assert(self.rb.len() <= self.rb.capacity());
+            assert(self.rb.capacity() > 0);
+            assert(self.rb.len() <= self.rb.capacity());
             self.rb.deinit();
             self.* = undefined;
         }
 
         pub fn capacity(self: *const Self) usize {
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             return self.rb.capacity();
         }
 
@@ -524,7 +526,7 @@ pub fn Channel(comptime T: type) type {
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
             const queue_len = self.rb.len();
-            std.debug.assert(queue_len <= self.rb.capacity());
+            assert(queue_len <= self.rb.capacity());
             return queue_len;
         }
 
@@ -557,13 +559,13 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             if (self.closed) return error.Closed;
 
             const old_len = self.rb.len();
             const sent_count = self.rb.tryPushBatch(values[0..items_limit]);
-            std.debug.assert(sent_count <= items_limit);
-            std.debug.assert(self.rb.len() == old_len + sent_count);
+            assert(sent_count <= items_limit);
+            assert(self.rb.len() == old_len + sent_count);
             return sent_count;
         }
 
@@ -588,11 +590,11 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             const old_len = self.rb.len();
             const recv_count = self.rb.tryPopBatch(out[0..items_limit]);
-            std.debug.assert(recv_count <= items_limit);
-            std.debug.assert(self.rb.len() + recv_count == old_len);
+            assert(recv_count <= items_limit);
+            assert(self.rb.len() + recv_count == old_len);
             if (recv_count > 0) return recv_count;
 
             if (self.closed) return error.Closed;
@@ -609,23 +611,23 @@ pub fn Channel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             if (self.closed) return error.Closed;
             self.rb.tryPush(value) catch return error.WouldBlock;
-            std.debug.assert(self.rb.len() > 0);
+            assert(self.rb.len() > 0);
         }
 
         pub fn tryRecv(self: *Self) TryRecvError!T {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             const old_len = self.rb.len();
             const value = self.rb.tryPop() catch {
                 if (self.closed) return error.Closed;
                 return error.WouldBlock;
             };
-            std.debug.assert(self.rb.len() == old_len - 1);
+            assert(self.rb.len() == old_len - 1);
             return value;
         }
     };
@@ -633,69 +635,69 @@ pub fn Channel(comptime T: type) type {
 
 test "channel blocking API shape is capability-gated" {
     const C = Channel(u8);
-    try std.testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "send"));
-    try std.testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "recv"));
-    try std.testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "sendTimeout"));
-    try std.testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "recvTimeout"));
+    try testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "send"));
+    try testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "recv"));
+    try testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "sendTimeout"));
+    try testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "recvTimeout"));
 }
 
 test "channel close semantics for try APIs" {
-    var c = try Channel(u8).init(std.testing.allocator, .{ .capacity = 1 });
+    var c = try Channel(u8).init(testing.allocator, .{ .capacity = 1 });
     defer c.deinit();
     c.close();
-    try std.testing.expectError(error.Closed, c.trySend(1));
-    try std.testing.expectError(error.Closed, c.tryRecv());
+    try testing.expectError(error.Closed, c.trySend(1));
+    try testing.expectError(error.Closed, c.tryRecv());
 }
 
 test "channel introspection methods reflect queue state" {
-    var c = try Channel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c = try Channel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c.deinit();
 
-    try std.testing.expectEqual(@as(usize, 2), c.capacity());
-    try std.testing.expectEqual(@as(usize, 0), c.len());
-    try std.testing.expect(c.isEmpty());
-    try std.testing.expect(!c.isFull());
+    try testing.expectEqual(@as(usize, 2), c.capacity());
+    try testing.expectEqual(@as(usize, 0), c.len());
+    try testing.expect(c.isEmpty());
+    try testing.expect(!c.isFull());
 
     try c.trySend(44);
-    try std.testing.expectEqual(@as(usize, 1), c.len());
-    try std.testing.expect(!c.isEmpty());
-    try std.testing.expect(!c.isFull());
+    try testing.expectEqual(@as(usize, 1), c.len());
+    try testing.expect(!c.isEmpty());
+    try testing.expect(!c.isFull());
     try c.trySend(45);
-    try std.testing.expect(c.isFull());
+    try testing.expect(c.isFull());
 
     _ = try c.tryRecv();
-    try std.testing.expect(!c.isFull());
+    try testing.expect(!c.isFull());
 }
 
 test "channel recv drains buffered items before Closed" {
-    var c = try Channel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c = try Channel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c.deinit();
 
     try c.trySend(1);
     c.close();
 
-    try std.testing.expectEqual(@as(u8, 1), try c.tryRecv());
-    try std.testing.expectError(error.Closed, c.tryRecv());
+    try testing.expectEqual(@as(u8, 1), try c.tryRecv());
+    try testing.expectError(error.Closed, c.tryRecv());
 }
 
 test "channel batch send and recv preserve prefix semantics" {
-    var c = try Channel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c = try Channel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c.deinit();
 
     const sent = try c.trySendBatch(&.{ 1, 2, 3 });
-    try std.testing.expectEqual(@as(usize, 2), sent);
-    try std.testing.expect(c.isFull());
+    try testing.expectEqual(@as(usize, 2), sent);
+    try testing.expect(c.isFull());
 
     var recv_small: [1]u8 = undefined;
     const recv_first = try c.tryRecvBatch(&recv_small);
-    try std.testing.expectEqual(@as(usize, 1), recv_first);
-    try std.testing.expectEqual(@as(u8, 1), recv_small[0]);
+    try testing.expectEqual(@as(usize, 1), recv_first);
+    try testing.expectEqual(@as(u8, 1), recv_small[0]);
 
     var recv_large: [3]u8 = undefined;
     const recv_second = try c.tryRecvBatch(&recv_large);
-    try std.testing.expectEqual(@as(usize, 1), recv_second);
-    try std.testing.expectEqual(@as(u8, 2), recv_large[0]);
-    try std.testing.expectEqual(@as(usize, 0), try c.tryRecvBatch(&recv_large));
+    try testing.expectEqual(@as(usize, 1), recv_second);
+    try testing.expectEqual(@as(u8, 2), recv_large[0]);
+    try testing.expectEqual(@as(usize, 0), try c.tryRecvBatch(&recv_large));
 }
 
 test "channel batch options bound work and define close behavior" {
@@ -703,30 +705,30 @@ test "channel batch options bound work and define close behavior" {
     const wake_mode_batch: C.BatchWakeMode = if (C.supports_blocking_wait) .single else .progress;
     const wake_mode_close: C.BatchWakeMode = if (C.supports_blocking_wait) .broadcast else .progress;
 
-    var c = try C.init(std.testing.allocator, .{ .capacity = 3 });
+    var c = try C.init(testing.allocator, .{ .capacity = 3 });
     defer c.deinit();
 
     const sent_zero = try c.trySendBatchWith(&.{ 1, 2 }, .{
         .items_max = 0,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 0), sent_zero);
-    try std.testing.expect(c.isEmpty());
+    try testing.expectEqual(@as(usize, 0), sent_zero);
+    try testing.expect(c.isEmpty());
 
     const sent_two = try c.trySendBatchWith(&.{ 1, 2, 3 }, .{
         .items_max = 2,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 2), sent_two);
-    try std.testing.expectEqual(@as(usize, 2), c.len());
+    try testing.expectEqual(@as(usize, 2), sent_two);
+    try testing.expectEqual(@as(usize, 2), c.len());
 
     var recv: [4]u8 = undefined;
     const recv_one = try c.tryRecvBatchWith(&recv, .{
         .items_max = 1,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 1), recv_one);
-    try std.testing.expectEqual(@as(u8, 1), recv[0]);
+    try testing.expectEqual(@as(usize, 1), recv_one);
+    try testing.expectEqual(@as(u8, 1), recv[0]);
 
     c.close();
 
@@ -734,15 +736,15 @@ test "channel batch options bound work and define close behavior" {
         .items_max = 1,
         .wake_mode = wake_mode_close,
     });
-    try std.testing.expectEqual(@as(usize, 0), empty_send_after_close);
+    try testing.expectEqual(@as(usize, 0), empty_send_after_close);
 
     const empty_recv_after_close = try c.tryRecvBatchWith(recv[0..0], .{
         .items_max = 1,
         .wake_mode = wake_mode_close,
     });
-    try std.testing.expectEqual(@as(usize, 0), empty_recv_after_close);
+    try testing.expectEqual(@as(usize, 0), empty_recv_after_close);
 
-    try std.testing.expectError(error.Closed, c.trySendBatchWith(&.{9}, .{
+    try testing.expectError(error.Closed, c.trySendBatchWith(&.{9}, .{
         .items_max = 1,
         .wake_mode = wake_mode_batch,
     }));
@@ -751,10 +753,10 @@ test "channel batch options bound work and define close behavior" {
         .items_max = 3,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 1), recv_after_close);
-    try std.testing.expectEqual(@as(u8, 2), recv[0]);
+    try testing.expectEqual(@as(usize, 1), recv_after_close);
+    try testing.expectEqual(@as(u8, 2), recv[0]);
 
-    try std.testing.expectError(error.Closed, c.tryRecvBatchWith(&recv, .{
+    try testing.expectError(error.Closed, c.tryRecvBatchWith(&recv, .{
         .items_max = 3,
         .wake_mode = wake_mode_batch,
     }));
@@ -764,7 +766,7 @@ test "channel len remains bounded during concurrent mutation" {
     if (caps.shouldSkipThreadedTests()) return error.SkipZigTest;
 
     const C = Channel(u16);
-    var c = try C.init(std.testing.allocator, .{ .capacity = 16 });
+    var c = try C.init(testing.allocator, .{ .capacity = 16 });
     defer c.deinit();
 
     const Worker = struct {
@@ -796,12 +798,12 @@ test "channel len remains bounded during concurrent mutation" {
     var checks: u32 = 0;
     while (checks < 20_000) : (checks += 1) {
         const queue_len = c.len();
-        try std.testing.expect(queue_len <= c.capacity());
+        try testing.expect(queue_len <= c.capacity());
         std.Thread.yield() catch {};
     }
     thread.join();
 
-    try std.testing.expect(c.len() <= c.capacity());
+    try testing.expect(c.len() <= c.capacity());
 }
 
 test "channel timed send and recv honor immediate timeout" {
@@ -809,14 +811,14 @@ test "channel timed send and recv honor immediate timeout" {
     if (!@hasDecl(C, "sendTimeout")) return error.SkipZigTest;
     if (!@hasDecl(C, "recvTimeout")) return error.SkipZigTest;
 
-    var c = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var c = try C.init(testing.allocator, .{ .capacity = 1 });
     defer c.deinit();
 
     try c.trySend(1);
-    try std.testing.expectError(error.Timeout, c.sendTimeout(2, null, 0));
+    try testing.expectError(error.Timeout, c.sendTimeout(2, null, 0));
 
     _ = try c.tryRecv();
-    try std.testing.expectError(error.Timeout, c.recvTimeout(null, 0));
+    try testing.expectError(error.Timeout, c.recvTimeout(null, 0));
 }
 
 test "channel timed ops prefer cancellation over timeout" {
@@ -824,24 +826,24 @@ test "channel timed ops prefer cancellation over timeout" {
     if (!@hasDecl(C, "sendTimeout")) return error.SkipZigTest;
     if (!@hasDecl(C, "recvTimeout")) return error.SkipZigTest;
 
-    var c = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var c = try C.init(testing.allocator, .{ .capacity = 1 });
     defer c.deinit();
     try c.trySend(1);
 
     var source = sync.cancel.CancelSource{};
     source.cancel();
     const token = source.token();
-    try std.testing.expectError(error.Cancelled, c.sendTimeout(2, token, std.time.ns_per_ms));
+    try testing.expectError(error.Cancelled, c.sendTimeout(2, token, std.time.ns_per_ms));
 
     _ = try c.tryRecv();
-    try std.testing.expectError(error.Cancelled, c.recvTimeout(token, std.time.ns_per_ms));
+    try testing.expectError(error.Cancelled, c.recvTimeout(token, std.time.ns_per_ms));
 }
 
 test "channel blocking recv wakes on close when supported" {
     const C = Channel(u8);
     if (!@hasDecl(C, "recv")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
 
     const Waiter = struct {
@@ -862,14 +864,14 @@ test "channel blocking recv wakes on close when supported" {
 
     channel.close();
     thread.join();
-    try std.testing.expectEqual(@as(?anyerror, error.Closed), waiter.result);
+    try testing.expectEqual(@as(?anyerror, error.Closed), waiter.result);
 }
 
 test "channel blocking send wakes on close when supported" {
     const C = Channel(u8);
     if (!@hasDecl(C, "send")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
     try channel.trySend(11);
 
@@ -891,14 +893,14 @@ test "channel blocking send wakes on close when supported" {
 
     channel.close();
     thread.join();
-    try std.testing.expectEqual(@as(?anyerror, error.Closed), waiter.result);
+    try testing.expectEqual(@as(?anyerror, error.Closed), waiter.result);
 }
 
 test "channel batch progress wake mode unblocks multiple receivers" {
     const C = Channel(u8);
     if (!@hasDecl(C, "recv")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 3 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 3 });
     defer channel.deinit();
 
     const Waiter = struct {
@@ -927,28 +929,28 @@ test "channel batch progress wake mode unblocks multiple receivers" {
     var thread1 = try std.Thread.spawn(.{}, Waiter.run, .{&waiter1});
     var thread2 = try std.Thread.spawn(.{}, Waiter.run, .{&waiter2});
 
-    try std.testing.expect(waitForAtomicAtLeast(&started_count, 3, 20_000));
+    try testing.expect(waitForAtomicAtLeast(&started_count, 3, 20_000));
 
     const sent = try channel.trySendBatchWith(&.{ 11, 12, 13 }, .{
         .items_max = 3,
         .wake_mode = .progress,
     });
-    try std.testing.expectEqual(@as(usize, 3), sent);
+    try testing.expectEqual(@as(usize, 3), sent);
 
     const all_done = waitForAtomicAtLeast(&done_count, 3, 20_000);
     if (!all_done) channel.close();
     thread0.join();
     thread1.join();
     thread2.join();
-    try std.testing.expect(all_done);
-    try std.testing.expectEqual(@as(u32, 0), failed_count.load(.acquire));
+    try testing.expect(all_done);
+    try testing.expectEqual(@as(u32, 0), failed_count.load(.acquire));
 }
 
 test "channel batch single wake mode unblocks at least one receiver" {
     const C = Channel(u8);
     if (!@hasDecl(C, "recv")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 2 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 2 });
     defer channel.deinit();
 
     const Waiter = struct {
@@ -975,28 +977,28 @@ test "channel batch single wake mode unblocks at least one receiver" {
     var thread0 = try std.Thread.spawn(.{}, Waiter.run, .{&waiter0});
     var thread1 = try std.Thread.spawn(.{}, Waiter.run, .{&waiter1});
 
-    try std.testing.expect(waitForAtomicAtLeast(&started_count, 2, 20_000));
+    try testing.expect(waitForAtomicAtLeast(&started_count, 2, 20_000));
 
     const sent = try channel.trySendBatchWith(&.{ 21, 22 }, .{
         .items_max = 2,
         .wake_mode = .single,
     });
-    try std.testing.expectEqual(@as(usize, 2), sent);
+    try testing.expectEqual(@as(usize, 2), sent);
 
     const one_done = waitForAtomicAtLeast(&done_count, 1, 20_000);
     channel.close();
     thread0.join();
     thread1.join();
-    try std.testing.expect(one_done);
-    try std.testing.expect(done_count.load(.acquire) >= 1);
-    try std.testing.expect(failed_count.load(.acquire) <= 1);
+    try testing.expect(one_done);
+    try testing.expect(done_count.load(.acquire) >= 1);
+    try testing.expect(failed_count.load(.acquire) <= 1);
 }
 
 test "channel batch broadcast wake mode unblocks all receivers" {
     const C = Channel(u8);
     if (!@hasDecl(C, "recv")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 2 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 2 });
     defer channel.deinit();
 
     const Waiter = struct {
@@ -1023,20 +1025,20 @@ test "channel batch broadcast wake mode unblocks all receivers" {
     var thread0 = try std.Thread.spawn(.{}, Waiter.run, .{&waiter0});
     var thread1 = try std.Thread.spawn(.{}, Waiter.run, .{&waiter1});
 
-    try std.testing.expect(waitForAtomicAtLeast(&started_count, 2, 20_000));
+    try testing.expect(waitForAtomicAtLeast(&started_count, 2, 20_000));
 
     const sent = try channel.trySendBatchWith(&.{ 31, 32 }, .{
         .items_max = 2,
         .wake_mode = .broadcast,
     });
-    try std.testing.expectEqual(@as(usize, 2), sent);
+    try testing.expectEqual(@as(usize, 2), sent);
 
     const all_done = waitForAtomicAtLeast(&done_count, 2, 20_000);
     if (!all_done) channel.close();
     thread0.join();
     thread1.join();
-    try std.testing.expect(all_done);
-    try std.testing.expectEqual(@as(u32, 0), failed_count.load(.acquire));
+    try testing.expect(all_done);
+    try testing.expectEqual(@as(u32, 0), failed_count.load(.acquire));
 }
 
 fn waitForAtomicAtLeast(counter: *const std.atomic.Value(u32), threshold: u32, iterations_max: u32) bool {

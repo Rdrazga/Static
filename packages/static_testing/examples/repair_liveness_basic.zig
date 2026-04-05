@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -57,7 +58,7 @@ pub fn main() !void {
         .pending_reason_fn = Context.pending,
     });
 
-    std.debug.assert(summary.converged);
+    assert(summary.converged);
     var buffer: [256]u8 = undefined;
     const text = try liveness.formatSummary(&buffer, summary);
     std.debug.print("{s}\n", .{text});

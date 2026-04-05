@@ -1,6 +1,7 @@
 //! Thin benchmark review workflow over raw text export and baseline comparison.
 
 const std = @import("std");
+const testing = std.testing;
 const runner = @import("runner.zig");
 const stats = @import("stats.zig");
 const baseline = @import("baseline.zig");
@@ -246,10 +247,10 @@ fn currentUnixMsWindows() WorkflowError!u64 {
 extern "kernel32" fn GetSystemTimeAsFileTime(system_time_as_file_time: *std.os.windows.FILETIME) callconv(.winapi) void;
 
 test "workflow records missing baseline then compares existing baseline" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -278,7 +279,7 @@ test "workflow records missing baseline then compares existing baseline" {
     var read_source_a: [1024]u8 = undefined;
     var names_a: [4096]u8 = undefined;
     var comparisons_a: [2]baseline.BaselineCaseComparison = undefined;
-    var report_writer_a: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var report_writer_a: std.Io.Writer.Allocating = .init(testing.allocator);
     defer report_writer_a.deinit();
     const first = try writeTextAndOptionalBaselineReport(&report_writer_a.writer, run_result, .{
         .io = io,
@@ -293,14 +294,14 @@ test "workflow records missing baseline then compares existing baseline" {
         },
         .comparison_storage = &comparisons_a,
     });
-    try std.testing.expectEqual(WorkflowAction.recorded, first.action);
+    try testing.expectEqual(WorkflowAction.recorded, first.action);
 
     var stats_storage_b: [1]stats.BenchmarkStats = undefined;
     var write_buffer_b: [1024]u8 = undefined;
     var read_source_b: [1024]u8 = undefined;
     var names_b: [4096]u8 = undefined;
     var comparisons_b: [2]baseline.BaselineCaseComparison = undefined;
-    var report_writer_b: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var report_writer_b: std.Io.Writer.Allocating = .init(testing.allocator);
     defer report_writer_b.deinit();
     const second = try writeTextAndOptionalBaselineReport(&report_writer_b.writer, run_result, .{
         .io = io,
@@ -315,16 +316,16 @@ test "workflow records missing baseline then compares existing baseline" {
         },
         .comparison_storage = &comparisons_b,
     });
-    try std.testing.expectEqual(WorkflowAction.compared, second.action);
-    try std.testing.expect(second.compare_summary != null);
-    try std.testing.expect(second.compare_summary.?.passed);
+    try testing.expectEqual(WorkflowAction.compared, second.action);
+    try testing.expect(second.compare_summary != null);
+    try testing.expect(second.compare_summary.?.passed);
 }
 
 test "workflow records bounded history metadata beside baseline reviews" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -362,7 +363,7 @@ test "workflow records bounded history metadata beside baseline reviews" {
     var history_names_a: [256]u8 = undefined;
     var history_tags_a: [4][]const u8 = undefined;
     var history_comparisons_a: [2]baseline.BaselineCaseComparison = undefined;
-    var report_writer_a: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var report_writer_a: std.Io.Writer.Allocating = .init(testing.allocator);
     defer report_writer_a.deinit();
     _ = try writeTextAndOptionalBaselineReport(&report_writer_a.writer, run_result, .{
         .io = io,
@@ -413,7 +414,7 @@ test "workflow records bounded history metadata beside baseline reviews" {
     var history_names_b: [256]u8 = undefined;
     var history_tags_b: [4][]const u8 = undefined;
     var history_comparisons_b: [2]baseline.BaselineCaseComparison = undefined;
-    var report_writer_b: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var report_writer_b: std.Io.Writer.Allocating = .init(testing.allocator);
     defer report_writer_b.deinit();
     _ = try writeTextAndOptionalBaselineReport(&report_writer_b.writer, run_result, .{
         .io = io,
@@ -451,11 +452,11 @@ test "workflow records bounded history metadata beside baseline reviews" {
     });
 
     var report = report_writer_b.toArrayList();
-    defer report.deinit(std.testing.allocator);
-    try std.testing.expect(std.mem.indexOf(u8, report.items, "history_path=history.binlog") != null);
-    try std.testing.expect(std.mem.indexOf(u8, report.items, "history_latest timestamp_unix_ms=11") != null);
-    try std.testing.expect(std.mem.indexOf(u8, report.items, "environment_note=lab-a") != null);
-    try std.testing.expect(std.mem.indexOf(u8, report.items, "environment_tags=workflow,history") != null);
+    defer report.deinit(testing.allocator);
+    try testing.expect(std.mem.indexOf(u8, report.items, "history_path=history.binlog") != null);
+    try testing.expect(std.mem.indexOf(u8, report.items, "history_latest timestamp_unix_ms=11") != null);
+    try testing.expect(std.mem.indexOf(u8, report.items, "environment_note=lab-a") != null);
+    try testing.expect(std.mem.indexOf(u8, report.items, "environment_tags=workflow,history") != null);
 
     var stored_history: [4096]u8 = undefined;
     const history_bytes = try tmp_dir.dir.readFile(io, "history.binlog", &stored_history);
@@ -482,7 +483,7 @@ test "workflow records bounded history metadata beside baseline reviews" {
             .tag_storage = &history_tags_b,
         },
     );
-    try std.testing.expect(history_bytes.len != 0);
-    try std.testing.expect(history_iter != null);
-    try std.testing.expectEqual(@as(u64, 22), history_iter.?.timestamp_unix_ms);
+    try testing.expect(history_bytes.len != 0);
+    try testing.expect(history_iter != null);
+    try testing.expectEqual(@as(u64, 22), history_iter.?.timestamp_unix_ms);
 }

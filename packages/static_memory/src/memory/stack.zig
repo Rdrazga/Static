@@ -10,6 +10,8 @@
 //! Stack is 48 bytes on 64-bit targets; return-by-value init is acceptable.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const CapacityReport = @import("capacity_report.zig").CapacityReport;
 
 pub const StackError = error{
@@ -39,7 +41,7 @@ pub const Stack = struct {
     // header_size is computed as alignForward(sizeOf(Header), header_align). The result must
     // be a multiple of header_align so that stacking headers back-to-back preserves alignment.
     comptime {
-        std.debug.assert(header_size % header_align == 0);
+        assert(header_size % header_align == 0);
     }
 
     const Layout = struct {
@@ -68,8 +70,8 @@ pub const Stack = struct {
             .high_water = 0,
             .overflow_count = 0,
         };
-        std.debug.assert(out.buffer.len == capacity_bytes);
-        std.debug.assert(out.top == 0);
+        assert(out.buffer.len == capacity_bytes);
+        assert(out.top == 0);
         return out;
     }
 
@@ -91,20 +93,20 @@ pub const Stack = struct {
     pub fn used(self: *const Stack) u32 {
         self.assertInvariants();
         // Postcondition: used (top) must not exceed the capacity (buffer.len).
-        std.debug.assert(@as(usize, self.top) <= self.buffer.len);
+        assert(@as(usize, self.top) <= self.buffer.len);
         return self.top;
     }
 
     pub fn capacity(self: *const Stack) u32 {
         self.assertInvariants();
         // Postcondition: capacity must be >= current used bytes.
-        std.debug.assert(self.buffer.len >= @as(usize, self.top));
+        assert(self.buffer.len >= @as(usize, self.top));
         return @intCast(self.buffer.len);
     }
 
     pub fn highWater(self: *const Stack) u32 {
         self.assertInvariants();
-        std.debug.assert(self.high_water >= self.top);
+        assert(self.high_water >= self.top);
         return self.high_water;
     }
 
@@ -112,7 +114,7 @@ pub const Stack = struct {
         self.assertInvariants();
         // Pair assertion: if any overflow occurred, high_water must be >= the cursor, since
         // overflow tracking records the watermark at the time of the failed allocation.
-        if (self.overflow_count > 0) std.debug.assert(self.high_water >= self.top);
+        if (self.overflow_count > 0) assert(self.high_water >= self.top);
         return self.overflow_count;
     }
 
@@ -126,7 +128,7 @@ pub const Stack = struct {
             .overflow_count = self.overflowCount(),
         };
         // Postcondition: reported capacity must equal the buffer length.
-        std.debug.assert(r.capacity == @as(u64, self.buffer.len));
+        assert(r.capacity == @as(u64, self.buffer.len));
         return r;
     }
 
@@ -135,7 +137,7 @@ pub const Stack = struct {
         const cap: u32 = @intCast(self.buffer.len);
         const rem = cap - self.top;
         // Postcondition: remaining + used must equal capacity.
-        std.debug.assert(@as(usize, rem) + @as(usize, self.top) == self.buffer.len);
+        assert(@as(usize, rem) + @as(usize, self.top) == self.buffer.len);
         return rem;
     }
 
@@ -144,13 +146,13 @@ pub const Stack = struct {
         const m = self.top;
         // Postcondition: the marker must be within [0, capacity]. A mark outside this range
         // would be invalid for any future freeTo() call and indicates memory corruption.
-        std.debug.assert(m <= @as(u32, @intCast(self.buffer.len)));
+        assert(m <= @as(u32, @intCast(self.buffer.len)));
         return m;
     }
 
     pub fn freeTo(self: *Stack, marker: Marker) void {
         self.assertInvariants();
-        std.debug.assert(marker <= self.top);
+        assert(marker <= self.top);
         self.top = marker;
         self.assertInvariants();
     }
@@ -159,8 +161,8 @@ pub const Stack = struct {
         self.assertInvariants();
         const last = self.lastHeader() orelse return false;
         const header = last.header.*;
-        std.debug.assert(header.prev_offset < self.top);
-        std.debug.assert(header.payload_offset + header.payload_len <= last.header_start);
+        assert(header.prev_offset < self.top);
+        assert(header.payload_offset + header.payload_len <= last.header_start);
         self.top = header.prev_offset;
         self.assertInvariants();
         return true;
@@ -197,7 +199,7 @@ pub const Stack = struct {
 
     pub fn allocator(self: *Stack) std.mem.Allocator {
         self.assertInvariants();
-        std.debug.assert(@intFromPtr(self) != 0);
+        assert(@intFromPtr(self) != 0);
         return .{ .ptr = self, .vtable = &vtable };
     }
 
@@ -237,10 +239,10 @@ pub const Stack = struct {
         if (self.top == 0) return null;
 
         const top_usize: usize = @intCast(self.top);
-        std.debug.assert(top_usize >= header_size);
+        assert(top_usize >= header_size);
 
         const header_start = top_usize - header_size;
-        std.debug.assert(header_start + header_size <= self.buffer.len);
+        assert(header_start + header_size <= self.buffer.len);
 
         return .{
             .header = self.headerPtr(header_start),
@@ -249,9 +251,9 @@ pub const Stack = struct {
     }
 
     fn assertInvariants(self: *const Stack) void {
-        std.debug.assert(self.buffer.len != 0);
-        std.debug.assert(@as(usize, self.top) <= self.buffer.len);
-        std.debug.assert(self.high_water >= self.top);
+        assert(self.buffer.len != 0);
+        assert(@as(usize, self.top) <= self.buffer.len);
+        assert(self.high_water >= self.top);
     }
 
     fn allocRaw(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
@@ -328,11 +330,11 @@ pub const Stack = struct {
         const mem_ptr = @intFromPtr(memory.ptr);
 
         const expected_ptr = std.math.add(usize, base, payload_offset) catch {
-            if (std.debug.runtime_safety) std.debug.assert(false);
+            if (std.debug.runtime_safety) assert(false);
             return;
         };
         if (mem_ptr != expected_ptr or memory.len != payload_len) {
-            if (std.debug.runtime_safety) std.debug.assert(false);
+            if (std.debug.runtime_safety) assert(false);
             return;
         }
 
@@ -342,44 +344,44 @@ pub const Stack = struct {
 
 test "stack basic alloc/freeLast" {
     // Verifies LIFO allocation metadata and `freeLast()` behavior down to the empty stack.
-    var stack = try Stack.init(std.testing.allocator, 128);
+    var stack = try Stack.init(testing.allocator, 128);
     defer stack.deinit();
 
     _ = try stack.alloc(8, 4);
     _ = try stack.alloc(16, 8);
-    try std.testing.expect(stack.used() > 0);
+    try testing.expect(stack.used() > 0);
 
-    try std.testing.expect(stack.freeLast());
-    try std.testing.expect(stack.freeLast());
-    try std.testing.expect(!stack.freeLast());
-    try std.testing.expectEqual(@as(u32, 0), stack.used());
+    try testing.expect(stack.freeLast());
+    try testing.expect(stack.freeLast());
+    try testing.expect(!stack.freeLast());
+    try testing.expectEqual(@as(u32, 0), stack.used());
 }
 
 test "stack mark/freeTo" {
     // Verifies mark/freeTo restores the stack cursor and safely discards newer allocations.
-    var stack = try Stack.init(std.testing.allocator, 128);
+    var stack = try Stack.init(testing.allocator, 128);
     defer stack.deinit();
 
     _ = try stack.alloc(8, 4);
     const mark = stack.mark();
     _ = try stack.alloc(16, 8);
     stack.freeTo(mark);
-    try std.testing.expectEqual(mark, stack.used());
+    try testing.expectEqual(mark, stack.used());
 }
 
 test "stack rejects invalid alignment" {
     // Verifies alignment preconditions reject non-power-of-two and zero alignment values.
-    var stack = try Stack.init(std.testing.allocator, 64);
+    var stack = try Stack.init(testing.allocator, 64);
     defer stack.deinit();
 
-    try std.testing.expectError(error.InvalidAlignment, stack.alloc(8, 3));
-    try std.testing.expectError(error.InvalidAlignment, stack.alloc(8, 0));
+    try testing.expectError(error.InvalidAlignment, stack.alloc(8, 3));
+    try testing.expectError(error.InvalidAlignment, stack.alloc(8, 0));
 }
 
 test "stack allocator resize and remap preserve LIFO contract" {
     // Verifies that the allocator facade can grow/shrink the top allocation, remap it in place,
     // and rejects resize attempts for non-top allocations.
-    var stack = try Stack.init(std.testing.allocator, 64);
+    var stack = try Stack.init(testing.allocator, 64);
     defer stack.deinit();
 
     const alloc_if = stack.allocator();
@@ -389,32 +391,32 @@ test "stack allocator resize and remap preserve LIFO contract" {
     const used_after_second = stack.used();
     const second_ptr = second.ptr;
 
-    try std.testing.expect(alloc_if.resize(second, 12));
+    try testing.expect(alloc_if.resize(second, 12));
     second = second_ptr[0..12];
     const used_after_resize = stack.used();
-    try std.testing.expect(used_after_resize > used_after_second);
+    try testing.expect(used_after_resize > used_after_second);
 
     const remapped = alloc_if.remap(second, 16);
-    try std.testing.expect(remapped != null);
+    try testing.expect(remapped != null);
     second = remapped.?;
-    try std.testing.expectEqual(@intFromPtr(second_ptr), @intFromPtr(second.ptr));
-    try std.testing.expectEqual(@as(usize, 16), second.len);
+    try testing.expectEqual(@intFromPtr(second_ptr), @intFromPtr(second.ptr));
+    try testing.expectEqual(@as(usize, 16), second.len);
     const used_after_remap = stack.used();
-    try std.testing.expect(used_after_remap > used_after_resize);
+    try testing.expect(used_after_remap > used_after_resize);
 
-    try std.testing.expect(!alloc_if.resize(first, 12));
-    try std.testing.expectEqual(used_after_remap, stack.used());
+    try testing.expect(!alloc_if.resize(first, 12));
+    try testing.expectEqual(used_after_remap, stack.used());
 
-    try std.testing.expect(stack.freeLast());
-    try std.testing.expectEqual(used_after_first, stack.used());
-    try std.testing.expect(stack.freeLast());
-    try std.testing.expectEqual(@as(u32, 0), stack.used());
+    try testing.expect(stack.freeLast());
+    try testing.expectEqual(used_after_first, stack.used());
+    try testing.expect(stack.freeLast());
+    try testing.expectEqual(@as(u32, 0), stack.used());
 }
 
 test "stack report tracks overflow and reset reuses memory" {
     // Verifies that failed growth updates diagnostics without advancing the cursor, and reset
     // rewinds the stack so the first allocation address is reused deterministically.
-    var stack = try Stack.init(std.testing.allocator, 32);
+    var stack = try Stack.init(testing.allocator, 32);
     defer stack.deinit();
 
     const alloc_if = stack.allocator();
@@ -422,21 +424,21 @@ test "stack report tracks overflow and reset reuses memory" {
     const first_ptr = @intFromPtr(first.ptr);
 
     const used_before_overflow = stack.used();
-    try std.testing.expectError(error.OutOfMemory, stack.alloc(24, 8));
-    try std.testing.expectEqual(used_before_overflow, stack.used());
-    try std.testing.expect(stack.overflowCount() >= 1);
-    try std.testing.expect(stack.highWater() > stack.capacity());
+    try testing.expectError(error.OutOfMemory, stack.alloc(24, 8));
+    try testing.expectEqual(used_before_overflow, stack.used());
+    try testing.expect(stack.overflowCount() >= 1);
+    try testing.expect(stack.highWater() > stack.capacity());
 
     const report = stack.report();
-    try std.testing.expectEqual(@as(u64, used_before_overflow), report.used);
-    try std.testing.expectEqual(@as(u64, 32), report.capacity);
-    try std.testing.expect(report.high_water > report.capacity);
-    try std.testing.expect(report.overflow_count >= 1);
+    try testing.expectEqual(@as(u64, used_before_overflow), report.used);
+    try testing.expectEqual(@as(u64, 32), report.capacity);
+    try testing.expect(report.high_water > report.capacity);
+    try testing.expect(report.overflow_count >= 1);
 
     stack.reset();
-    try std.testing.expectEqual(@as(u32, 0), stack.used());
-    try std.testing.expect(stack.highWater() > stack.capacity());
+    try testing.expectEqual(@as(u32, 0), stack.used());
+    try testing.expect(stack.highWater() > stack.capacity());
 
     const second = try alloc_if.alloc(u8, 8);
-    try std.testing.expectEqual(first_ptr, @intFromPtr(second.ptr));
+    try testing.expectEqual(first_ptr, @intFromPtr(second.ptr));
 }

@@ -10,6 +10,8 @@
 //! enforced via `std.debug.assert` — programmer errors per agents.md §3.10.1.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const scalar = @import("scalar.zig");
 const vec2_mod = @import("vec2.zig");
 
@@ -20,7 +22,7 @@ pub const Vec3 = extern struct {
 
     comptime {
         // Compile-time invariant: extern struct must be exactly 3 floats.
-        std.debug.assert(@sizeOf(Vec3) == 3 * @sizeOf(f32));
+        assert(@sizeOf(Vec3) == 3 * @sizeOf(f32));
     }
 
     // ── Constants ──────────────────────────────────────────────────────
@@ -71,9 +73,9 @@ pub const Vec3 = extern struct {
     }
 
     pub inline fn div(a: Vec3, b: Vec3) Vec3 {
-        std.debug.assert(b.x != 0.0);
-        std.debug.assert(b.y != 0.0);
-        std.debug.assert(b.z != 0.0);
+        assert(b.x != 0.0);
+        assert(b.y != 0.0);
+        assert(b.z != 0.0);
         return .{ .x = a.x / b.x, .y = a.y / b.y, .z = a.z / b.z };
     }
 
@@ -155,8 +157,8 @@ pub const Vec3 = extern struct {
     /// division by a near-zero sine.
     pub inline fn slerp(a: Vec3, b: Vec3, t: f32) Vec3 {
         // Precondition: both inputs should be unit vectors for slerp to be geometrically correct.
-        std.debug.assert(@abs(lengthSq(a) - 1.0) <= scalar.epsilon * 100.0);
-        std.debug.assert(@abs(lengthSq(b) - 1.0) <= scalar.epsilon * 100.0);
+        assert(@abs(lengthSq(a) - 1.0) <= scalar.epsilon * 100.0);
+        assert(@abs(lengthSq(b) - 1.0) <= scalar.epsilon * 100.0);
         const d = scalar.clamp(dot(a, b), -1.0, 1.0);
         const theta = std.math.acos(d);
         if (theta < scalar.epsilon) {
@@ -210,7 +212,7 @@ pub const Vec3 = extern struct {
     // ── Comparison ────────────────────────────────────────────────────
 
     pub inline fn approxEqual(a: Vec3, b: Vec3, tolerance: f32) bool {
-        std.debug.assert(tolerance >= 0.0);
+        assert(tolerance >= 0.0);
         return @abs(a.x - b.x) <= tolerance and
             @abs(a.y - b.y) <= tolerance and
             @abs(a.z - b.z) <= tolerance;
@@ -221,7 +223,7 @@ pub const Vec3 = extern struct {
     /// Reflect vector v about plane normal n.
     /// Precondition: n must be normalized.
     pub inline fn reflect(v: Vec3, n: Vec3) Vec3 {
-        std.debug.assert(approxEqual(
+        assert(approxEqual(
             splat(n.lengthSq()),
             one,
             scalar.epsilon * 100.0,
@@ -238,7 +240,7 @@ pub const Vec3 = extern struct {
     /// Precondition: `onto` must be non-zero.
     pub inline fn project(v: Vec3, onto: Vec3) Vec3 {
         const denom = dot(onto, onto);
-        std.debug.assert(denom != 0.0);
+        assert(denom != 0.0);
         const s = dot(v, onto) / denom;
         return onto.scale(s);
     }
@@ -248,8 +250,8 @@ pub const Vec3 = extern struct {
     pub inline fn angle(a: Vec3, b: Vec3) f32 {
         const len_a = a.length();
         const len_b = b.length();
-        std.debug.assert(len_a != 0.0);
-        std.debug.assert(len_b != 0.0);
+        assert(len_a != 0.0);
+        assert(len_b != 0.0);
         const cos_theta = scalar.clamp(
             dot(a, b) / (len_a * len_b),
             -1.0,
@@ -276,7 +278,7 @@ pub const Vec3 = extern struct {
 // ── Tests ─────────────────────────────────────────────────────────────
 
 const eps = scalar.epsilon;
-const expectApprox = std.testing.expectApproxEqAbs;
+const expectApprox = testing.expectApproxEqAbs;
 
 test "Vec3 basic arithmetic" {
     const a = Vec3.init(1.0, 2.0, 3.0);
@@ -317,7 +319,7 @@ test "Vec3 dot and cross" {
     try expectApprox(c.x, 0.0, eps);
     try expectApprox(c.y, 0.0, eps);
     try expectApprox(c.z, 1.0, eps);
-    try std.testing.expect(Vec3.approxEqual(c, Vec3.unit_z, eps));
+    try testing.expect(Vec3.approxEqual(c, Vec3.unit_z, eps));
 }
 
 test "Vec3 normalize" {
@@ -328,17 +330,17 @@ test "Vec3 normalize" {
     try expectApprox(n.z, 0.8, eps);
 
     const z = Vec3.zero.normalize();
-    try std.testing.expect(Vec3.approxEqual(z, Vec3.zero, eps));
+    try testing.expect(Vec3.approxEqual(z, Vec3.zero, eps));
 }
 
 test "Vec3 tryNormalize" {
     const v = Vec3.init(3.0, 0.0, 4.0);
     const n = Vec3.tryNormalize(v);
-    try std.testing.expect(n != null);
+    try testing.expect(n != null);
     try expectApprox(n.?.length(), 1.0, eps);
 
     // Zero vector returns null.
-    try std.testing.expect(Vec3.tryNormalize(Vec3.zero) == null);
+    try testing.expect(Vec3.tryNormalize(Vec3.zero) == null);
 }
 
 test "Vec3 reflect" {
@@ -364,10 +366,10 @@ test "Vec3 project" {
 test "Vec3 approxEqual" {
     const a = Vec3.init(1.0, 2.0, 3.0);
     const b = Vec3.init(1.0 + eps * 0.5, 2.0, 3.0 - eps * 0.5);
-    try std.testing.expect(Vec3.approxEqual(a, b, eps));
+    try testing.expect(Vec3.approxEqual(a, b, eps));
 
     const c = Vec3.init(1.0 + 0.01, 2.0, 3.0);
-    try std.testing.expect(!Vec3.approxEqual(a, c, eps));
+    try testing.expect(!Vec3.approxEqual(a, c, eps));
 }
 
 test "Vec3 fromArray/toArray roundtrip" {

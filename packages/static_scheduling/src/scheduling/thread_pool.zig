@@ -1,6 +1,8 @@
 //! Bounded worker thread pool.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const sync = @import("static_sync");
 
 pub const ThreadPoolError = error{
@@ -133,7 +135,7 @@ pub const ThreadPool = if (supports_thread_pool) struct {
     }
 
     fn popTaskLocked(state: *State) Task {
-        std.debug.assert(state.len > 0);
+        assert(state.len > 0);
         const task = state.queue[state.head];
         state.head = (state.head + 1) % state.queue.len;
         state.len -= 1;
@@ -146,7 +148,7 @@ pub const ThreadPool = if (supports_thread_pool) struct {
             while (state.len == 0 and !state.closed) {
                 state.waiting_workers += 1;
                 state.not_empty.wait(&state.mutex);
-                std.debug.assert(state.waiting_workers > 0);
+                assert(state.waiting_workers > 0);
                 state.waiting_workers -= 1;
             }
 
@@ -200,11 +202,11 @@ pub const ThreadPool = if (supports_thread_pool) struct {
 test "thread pool rejects invalid config" {
     if (!ThreadPool.supports_thread_pool) return error.SkipZigTest;
 
-    try std.testing.expectError(error.InvalidConfig, ThreadPool.init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, ThreadPool.init(testing.allocator, .{
         .worker_count = 0,
         .global_queue_capacity = 1,
     }));
-    try std.testing.expectError(error.InvalidConfig, ThreadPool.init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 0,
     }));
@@ -238,7 +240,7 @@ test "thread pool apply backpressure when saturated" {
         .release = &release,
     };
 
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 1,
     });
@@ -258,7 +260,7 @@ test "thread pool apply backpressure when saturated" {
         .run = Noop.run,
     });
 
-    try std.testing.expectError(error.WouldBlock, pool.trySubmit(.{
+    try testing.expectError(error.WouldBlock, pool.trySubmit(.{
         .ctx = &noop_ctx,
         .run = Noop.run,
     }));
@@ -271,7 +273,7 @@ test "thread pool apply backpressure when saturated" {
 test "thread pool close is idempotent" {
     if (!ThreadPool.supports_thread_pool) return error.SkipZigTest;
 
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 2,
     });
@@ -290,14 +292,14 @@ test "thread pool trySubmit returns Closed after close" {
     };
 
     var ctx: u8 = 0;
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 1,
     });
     defer pool.deinit();
 
     pool.close();
-    try std.testing.expectError(error.Closed, pool.trySubmit(.{
+    try testing.expectError(error.Closed, pool.trySubmit(.{
         .ctx = &ctx,
         .run = Noop.run,
     }));
@@ -317,7 +319,7 @@ test "thread pool close wakes idle workers so join completes after work drains" 
 
     var finished = std.atomic.Value(bool).init(false);
     var marker = Marker{ .finished = &finished };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 1,
     });
@@ -340,7 +342,7 @@ test "thread pool close wakes idle workers so join completes after work drains" 
         fn run(_: *anyopaque) void {}
     };
     var noop_ctx: u8 = 0;
-    try std.testing.expectError(error.Closed, pool.trySubmit(.{
+    try testing.expectError(error.Closed, pool.trySubmit(.{
         .ctx = &noop_ctx,
         .run = Noop.run,
     }));
@@ -360,7 +362,7 @@ test "thread pool trySubmit wakes an idle blocked worker without close" {
 
     var finished = std.atomic.Value(bool).init(false);
     var marker = Marker{ .finished = &finished };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 1,
     });
@@ -371,7 +373,7 @@ test "thread pool trySubmit wakes an idle blocked worker without close" {
     pool.state.mutex.lock();
     const idle_waiting = pool.state.len == 0 and pool.state.waiting_workers > 0 and !pool.state.closed;
     pool.state.mutex.unlock();
-    try std.testing.expect(idle_waiting);
+    try testing.expect(idle_waiting);
 
     try pool.trySubmit(.{
         .ctx = &marker,
@@ -385,14 +387,14 @@ test "thread pool trySubmit wakes an idle blocked worker without close" {
     pool.state.mutex.lock();
     const queue_drained = pool.state.len == 0 and !pool.state.closed;
     pool.state.mutex.unlock();
-    try std.testing.expect(queue_drained);
-    try std.testing.expect(finished.load(.acquire));
+    try testing.expect(queue_drained);
+    try testing.expect(finished.load(.acquire));
 }
 
 test "thread pool close wakes all idle workers in multi-worker pool" {
     if (!ThreadPool.supports_thread_pool) return error.SkipZigTest;
 
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 3,
         .global_queue_capacity = 1,
     });
@@ -402,7 +404,7 @@ test "thread pool close wakes all idle workers in multi-worker pool" {
     pool.close();
     try pool.join();
 
-    try std.testing.expect(pool.joined);
+    try testing.expect(pool.joined);
 }
 
 test "thread pool trySubmit wakes multiple idle workers for a burst" {
@@ -427,7 +429,7 @@ test "thread pool trySubmit wakes multiple idle workers for a burst" {
         .started_count = &started_count,
         .release = &release,
     };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 3,
         .global_queue_capacity = 3,
     });
@@ -454,8 +456,8 @@ test "thread pool trySubmit wakes multiple idle workers for a burst" {
     pool.state.mutex.lock();
     const woke_multiple_workers = pool.state.waiting_workers <= 1 and !pool.state.closed;
     pool.state.mutex.unlock();
-    try std.testing.expect(woke_multiple_workers);
-    try std.testing.expect(started_count.load(.acquire) >= 2);
+    try testing.expect(woke_multiple_workers);
+    try testing.expect(started_count.load(.acquire) >= 2);
 }
 
 test "thread pool close drains queued work submitted before shutdown" {
@@ -484,7 +486,7 @@ test "thread pool close drains queued work submitted before shutdown" {
         .completed_count = &completed_count,
         .release = &release,
     };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 2,
         .global_queue_capacity = 3,
     });
@@ -510,15 +512,15 @@ test "thread pool close drains queued work submitted before shutdown" {
     pool.state.mutex.lock();
     const has_queued_work = pool.state.len == 1 and !pool.state.closed;
     pool.state.mutex.unlock();
-    try std.testing.expect(has_queued_work);
+    try testing.expect(has_queued_work);
 
     pool.close();
     release.store(true, .release);
     try pool.join();
 
-    try std.testing.expect(pool.joined);
-    try std.testing.expectEqual(@as(u32, 3), started_count.load(.acquire));
-    try std.testing.expectEqual(@as(u32, 3), completed_count.load(.acquire));
+    try testing.expect(pool.joined);
+    try testing.expectEqual(@as(u32, 3), started_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 3), completed_count.load(.acquire));
 }
 
 test "thread pool backpressure clears after worker progress" {
@@ -558,7 +560,7 @@ test "thread pool backpressure clears after worker progress" {
         .completed = &blocker_completed,
     };
     var marker = Marker{ .finished = &marker_finished };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 1,
         .global_queue_capacity = 1,
     });
@@ -577,7 +579,7 @@ test "thread pool backpressure clears after worker progress" {
         .ctx = &marker,
         .run = Marker.run,
     });
-    try std.testing.expectError(error.WouldBlock, pool.trySubmit(.{
+    try testing.expectError(error.WouldBlock, pool.trySubmit(.{
         .ctx = &marker,
         .run = Marker.run,
     }));
@@ -599,7 +601,7 @@ test "thread pool backpressure clears after worker progress" {
     while (!marker_finished.load(.acquire)) {
         std.Thread.yield() catch {};
     }
-    try std.testing.expect(marker_finished.load(.acquire));
+    try testing.expect(marker_finished.load(.acquire));
 }
 
 test "thread pool multi-worker backpressure clears after worker progress" {
@@ -639,7 +641,7 @@ test "thread pool multi-worker backpressure clears after worker progress" {
         .release = &blocker_release,
     };
     var marker = Marker{ .finished_count = &marker_finished };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 2,
         .global_queue_capacity = 2,
     });
@@ -663,7 +665,7 @@ test "thread pool multi-worker backpressure clears after worker progress" {
     });
 
     try waitForCounterAtLeast(&blocker_started, 2, 100 * std.time.ns_per_ms);
-    try std.testing.expectError(error.WouldBlock, pool.trySubmit(.{
+    try testing.expectError(error.WouldBlock, pool.trySubmit(.{
         .ctx = &marker,
         .run = Marker.run,
     }));
@@ -717,7 +719,7 @@ test "thread pool wakes multiple workers for queued follow-up work after prior p
         .release = &blocker_release,
     };
     var marker = Marker{ .finished_count = &marker_finished };
-    var pool = try ThreadPool.init(std.testing.allocator, .{
+    var pool = try ThreadPool.init(testing.allocator, .{
         .worker_count = 2,
         .global_queue_capacity = 3,
     });
@@ -758,7 +760,7 @@ test "thread pool wakes multiple workers for queued follow-up work after prior p
     pool.state.mutex.lock();
     const queued_follow_up_woke_multiple_workers = pool.state.waiting_workers == 0 and pool.state.len == 1 and !pool.state.closed;
     pool.state.mutex.unlock();
-    try std.testing.expect(queued_follow_up_woke_multiple_workers);
+    try testing.expect(queued_follow_up_woke_multiple_workers);
 
     blocker_release.store(true, .release);
     try waitForCounterAtLeast(&blocker_completed, 4, 100 * std.time.ns_per_ms);

@@ -8,6 +8,7 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const static_hash = @import("static_hash");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -266,34 +267,34 @@ fn validateSemanticPreflight(
     padded: PaddedKey,
     slice: SliceKey,
 ) void {
-    std.debug.assert(static_hash.hashAnySeeded(0x3344_5566_7788_9900, simple) == std.hash.Wyhash.hash(0x3344_5566_7788_9900, std.mem.asBytes(&simple)));
-    std.debug.assert(static_hash.stableHashAny(simple) == static_hash.stable.stableFingerprint64(stable_simple_bytes));
+    assert(static_hash.hashAnySeeded(0x3344_5566_7788_9900, simple) == std.hash.Wyhash.hash(0x3344_5566_7788_9900, std.mem.asBytes(&simple)));
+    assert(static_hash.stableHashAny(simple) == static_hash.stable.stableFingerprint64(stable_simple_bytes));
 
     const padded_alt = makePaddedKey(0x55, padded.tag, padded.value);
-    std.debug.assert(std.meta.eql(padded, padded_alt));
-    std.debug.assert(static_hash.hashAnySeeded(0x7788_99aa_bbcc_ddee, padded) == static_hash.hashAnySeeded(0x7788_99aa_bbcc_ddee, padded_alt));
-    std.debug.assert(static_hash.stableHashAny(padded) == static_hash.stableHashAny(padded_alt));
+    assert(std.meta.eql(padded, padded_alt));
+    assert(static_hash.hashAnySeeded(0x7788_99aa_bbcc_ddee, padded) == static_hash.hashAnySeeded(0x7788_99aa_bbcc_ddee, padded_alt));
+    assert(static_hash.stableHashAny(padded) == static_hash.stableHashAny(padded_alt));
 
     const slice_copy_storage = [_]u8{ 1, 4, 9, 16, 25, 36, 49, 64 };
     const slice_copy = SliceKey{
         .bytes = slice_copy_storage[0..],
         .flag = slice.flag,
     };
-    std.debug.assert(static_hash.hashAnySeeded(0x1020_3040_5060_7080, slice) == static_hash.hashAnySeeded(0x1020_3040_5060_7080, slice_copy));
-    std.debug.assert(
+    assert(static_hash.hashAnySeeded(0x1020_3040_5060_7080, slice) == static_hash.hashAnySeeded(0x1020_3040_5060_7080, slice_copy));
+    assert(
         static_hash.hash_any.hashAnySeededStrict(0x1020_3040_5060_7080, slice) ==
             static_hash.hash_any.hashAnySeededStrict(0x1020_3040_5060_7080, slice_copy),
     );
-    std.debug.assert(static_hash.stableHashAny(slice) == static_hash.stableHashAny(slice_copy));
+    assert(static_hash.stableHashAny(slice) == static_hash.stableHashAny(slice_copy));
 
     var hash_budget = static_hash.HashBudget.unlimited();
-    std.debug.assert(
+    assert(
         static_hash.hashAny(slice) ==
             static_hash.hashAnyBudgeted(slice, &hash_budget) catch unreachable,
     );
 
     var stable_budget = static_hash.HashBudget.unlimited();
-    std.debug.assert(
+    assert(
         static_hash.stableHashAny(slice) ==
             static_hash.stable.stableHashAnyBudgeted(slice, &stable_budget) catch unreachable,
     );
@@ -316,7 +317,7 @@ fn makePaddedKey(pattern: u8, tag: u8, value: u32) PaddedKey {
 }
 
 fn encodeStableSimpleKey(storage: []u8, seed: u64, simple: SimpleKey) []const u8 {
-    std.debug.assert(storage.len >= 34);
+    assert(storage.len >= 34);
     var index: usize = 0;
     storage[index] = 0x00;
     index += 1;
@@ -342,6 +343,6 @@ fn encodeStableSimpleKey(storage: []u8, seed: u64, simple: SimpleKey) []const u8
     index += 2;
     std.mem.writeInt(u32, storage[index..][0..4], simple.right, .little);
     index += 4;
-    std.debug.assert(index == 34);
+    assert(index == 34);
     return storage[0..index];
 }

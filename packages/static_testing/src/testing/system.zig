@@ -2,6 +2,8 @@
 //! trace, and failure-bundle surfaces.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const checker = @import("checker.zig");
 const failure_bundle = @import("failure_bundle.zig");
 const identity = @import("identity.zig");
@@ -78,7 +80,7 @@ pub fn SystemContext(comptime FixtureType: type) type {
         components: []const ComponentSpec,
 
         pub fn hasComponent(self: Self, name: []const u8) bool {
-            std.debug.assert(name.len > 0);
+            assert(name.len > 0);
             for (self.components) |component| {
                 if (std.mem.eql(u8, component.name, name)) return true;
             }
@@ -103,9 +105,9 @@ pub fn SystemContext(comptime FixtureType: type) type {
             cause_sequence_no: ?u32,
             value: u64,
         ) trace.TraceAppendError!u32 {
-            std.debug.assert(label.len > 0);
-            std.debug.assert(surface_label.len > 0);
-            std.debug.assert(self.traceBufferPtr() != null);
+            assert(label.len > 0);
+            assert(surface_label.len > 0);
+            assert(self.traceBufferPtr() != null);
 
             const sequence_no = next_sequence_no.*;
             next_sequence_no.* += 1;
@@ -426,9 +428,9 @@ fn formatPendingReasonMessage(
 
 fn assertCheckResult(check_result: checker.CheckResult) void {
     if (check_result.passed) {
-        std.debug.assert(check_result.violations.len == 0);
+        assert(check_result.violations.len == 0);
     } else {
-        std.debug.assert(check_result.violations.len > 0);
+        assert(check_result.violations.len > 0);
     }
 }
 
@@ -449,7 +451,7 @@ test "runWithFixture rejects duplicate component names" {
 
     var fixture: sim.fixture.Fixture(4, 4, 4, 0) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(1),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -475,7 +477,7 @@ test "runWithFixture rejects duplicate component names" {
     };
     var user_context = {};
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
         runWithFixture(@TypeOf(fixture), void, error{}, &fixture, run_identity, .{
             .components = &components,
@@ -488,7 +490,7 @@ test "runWithFixture shares run identity and persists failure bundles" {
 
     var fixture: sim.fixture.Fixture(4, 4, 4, 8) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(3),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -496,10 +498,10 @@ test "runWithFixture shares run identity and persists failure bundles" {
     });
     defer fixture.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -531,9 +533,9 @@ test "runWithFixture shares run identity and persists failure bundles" {
 
     const Context = struct {
         fn run(_: *void, context: *SystemContext(@TypeOf(fixture))) anyerror!checker.CheckResult {
-            try std.testing.expect(context.hasComponent("network"));
-            try std.testing.expect(context.hasComponent("storage"));
-            try std.testing.expectEqualStrings("system_failure_bundle", context.run_identity.run_name);
+            try testing.expect(context.hasComponent("network"));
+            try testing.expect(context.hasComponent("storage"));
+            try testing.expectEqualStrings("system_failure_bundle", context.run_identity.run_name);
 
             try context.traceBufferPtr().?.append(.{
                 .timestamp_ns = context.fixture.sim_clock.now().tick,
@@ -575,9 +577,9 @@ test "runWithFixture shares run identity and persists failure bundles" {
         },
     }, &user_context, Context.run);
 
-    try std.testing.expect(!execution.check_result.passed);
-    try std.testing.expect(execution.retained_bundle != null);
-    try std.testing.expectEqual(@as(u32, 2), execution.trace_metadata.event_count);
+    try testing.expect(!execution.check_result.passed);
+    try testing.expect(execution.retained_bundle != null);
+    try testing.expectEqual(@as(u32, 2), execution.trace_metadata.event_count);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -607,11 +609,11 @@ test "runWithFixture shares run identity and persists failure bundles" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("system_failure_bundle", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqual(@as(usize, 2), bundle.retained_trace.?.items.len);
-    try std.testing.expectEqualStrings("system_failure", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_failure_bundle", bundle.manifest_document.run_name);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqual(@as(usize, 2), bundle.retained_trace.?.items.len);
+    try testing.expectEqualStrings("system_failure", bundle.violations_document.violations[0].code);
 }
 
 test "runWithFixture rejects retained traces without trace storage" {
@@ -619,17 +621,17 @@ test "runWithFixture rejects retained traces without trace storage" {
 
     var fixture: sim.fixture.Fixture(4, 4, 4, 0) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(9),
         .event_loop_config = .{ .step_budget_max = 4 },
     });
     defer fixture.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -657,7 +659,7 @@ test "runWithFixture rejects retained traces without trace storage" {
     };
     var user_context = {};
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
         runWithFixture(@TypeOf(fixture), void, error{}, &fixture, run_identity, .{
             .components = &components,
@@ -682,7 +684,7 @@ test "runRepairLivenessWithFixture converges after repair transition" {
 
     var fixture: sim.fixture.Fixture(4, 4, 4, 8) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(13),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -711,8 +713,8 @@ test "runRepairLivenessWithFixture converges after repair transition" {
             context: *SystemContext(@TypeOf(fixture)),
             steps_max: u32,
         ) anyerror!liveness.PhaseExecution {
-            std.debug.assert(context.hasComponent("runtime"));
-            std.debug.assert(context.traceBufferPtr() != null);
+            assert(context.hasComponent("runtime"));
+            assert(context.traceBufferPtr() != null);
 
             var steps: u32 = 0;
             if (self.queue_depth != 0 and steps < steps_max) {
@@ -736,7 +738,7 @@ test "runRepairLivenessWithFixture converges after repair transition" {
             self: *@This(),
             context: *SystemContext(@TypeOf(fixture)),
         ) void {
-            std.debug.assert(context.hasComponent("retry_policy"));
+            assert(context.hasComponent("retry_policy"));
             self.repaired = true;
         }
 
@@ -745,7 +747,7 @@ test "runRepairLivenessWithFixture converges after repair transition" {
             context: *SystemContext(@TypeOf(fixture)),
             steps_max: u32,
         ) anyerror!liveness.PhaseExecution {
-            std.debug.assert(self.repaired);
+            assert(self.repaired);
 
             var steps: u32 = 0;
             while (self.queue_depth != 0 and steps < steps_max) : (steps += 1) {
@@ -801,10 +803,10 @@ test "runRepairLivenessWithFixture converges after repair transition" {
         },
     );
 
-    try std.testing.expect(execution.summary.converged);
-    try std.testing.expect(execution.summary.pending_reason == null);
-    try std.testing.expect(execution.retained_bundle == null);
-    try std.testing.expect(execution.trace_metadata.event_count >= 2);
+    try testing.expect(execution.summary.converged);
+    try testing.expect(execution.summary.pending_reason == null);
+    try testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.trace_metadata.event_count >= 2);
 }
 
 test "runRepairLivenessWithFixture persists pending reason when repair does not settle" {
@@ -812,7 +814,7 @@ test "runRepairLivenessWithFixture persists pending reason when repair does not 
 
     var fixture: sim.fixture.Fixture(4, 4, 4, 8) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(17),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -820,10 +822,10 @@ test "runRepairLivenessWithFixture persists pending reason when repair does not 
     });
     defer fixture.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -883,7 +885,7 @@ test "runRepairLivenessWithFixture persists pending reason when repair does not 
             context: *SystemContext(@TypeOf(fixture)),
             steps_max: u32,
         ) anyerror!liveness.PhaseExecution {
-            std.debug.assert(self.repaired);
+            assert(self.repaired);
             var steps: u32 = 0;
             while (self.queue_depth != 0 and steps < steps_max) : (steps += 1) {
                 self.queue_depth -= 1;
@@ -952,9 +954,9 @@ test "runRepairLivenessWithFixture persists pending reason when repair does not 
         },
     );
 
-    try std.testing.expect(!execution.summary.converged);
-    try std.testing.expect(execution.summary.pending_reason != null);
-    try std.testing.expect(execution.retained_bundle != null);
+    try testing.expect(!execution.summary.converged);
+    try testing.expect(execution.summary.pending_reason != null);
+    try testing.expect(execution.retained_bundle != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -989,10 +991,10 @@ test "runRepairLivenessWithFixture persists pending reason when repair does not 
         },
     );
 
-    try std.testing.expectEqualStrings("system_repair_liveness_pending", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.manifest_document.pending_reason != null);
-    try std.testing.expectEqual(liveness.PendingReason.work_queue_not_empty, bundle.manifest_document.pending_reason.?.reason);
-    try std.testing.expectEqual(@as(u32, 1), bundle.manifest_document.pending_reason.?.count);
-    try std.testing.expectEqualStrings("queue_depth", bundle.manifest_document.pending_reason.?.label.?);
-    try std.testing.expectEqualStrings("system_repair_liveness.pending_reason", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_repair_liveness_pending", bundle.manifest_document.run_name);
+    try testing.expect(bundle.manifest_document.pending_reason != null);
+    try testing.expectEqual(liveness.PendingReason.work_queue_not_empty, bundle.manifest_document.pending_reason.?.reason);
+    try testing.expectEqual(@as(u32, 1), bundle.manifest_document.pending_reason.?.count);
+    try testing.expectEqualStrings("queue_depth", bundle.manifest_document.pending_reason.?.label.?);
+    try testing.expectEqualStrings("system_repair_liveness.pending_reason", bundle.violations_document.violations[0].code);
 }

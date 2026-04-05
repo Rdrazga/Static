@@ -1,6 +1,7 @@
 //! Build-time capability helpers for `static_io`.
 
 const std = @import("std");
+const testing = std.testing;
 const static_core = @import("static_core");
 
 const core_build_options = static_core.options.current();
@@ -41,11 +42,11 @@ fn builtinOsTag() std.Target.Os.Tag {
 }
 
 test "threaded backend capability matches build options" {
-    try std.testing.expectEqual(threadedBackendEnabled(), os_backends_enabled and threads_enabled);
+    try testing.expectEqual(threadedBackendEnabled(), os_backends_enabled and threads_enabled);
 }
 
 test "platform capability includes windows linux and bsd" {
-    try std.testing.expect(platformBackendEnabled(.windows) == threadedBackendEnabled());
-    try std.testing.expect(platformBackendEnabled(.linux) == threadedBackendEnabled());
-    try std.testing.expect(platformBackendEnabled(.macos) == threadedBackendEnabled());
+    try testing.expect(platformBackendEnabled(.windows) == threadedBackendEnabled());
+    try testing.expect(platformBackendEnabled(.linux) == threadedBackendEnabled());
+    try testing.expect(platformBackendEnabled(.macos) == threadedBackendEnabled());
 }

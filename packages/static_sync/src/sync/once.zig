@@ -3,6 +3,8 @@
 //! Thread safety: safe for concurrent use; exactly one caller's `call` function executes even under contention.
 //! Single-threaded mode: the mutex is a no-op; `call` executes on the first invocation.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const caps = @import("caps.zig");
 const mutex = std.Thread;
 const padded_atomic = @import("padded_atomic.zig");
@@ -15,11 +17,11 @@ pub const Once = struct {
 
     pub fn call(self: *Once, f: anytype) void {
         if (self.done.load(.acquire)) {
-            std.debug.assert(self.done.load(.acquire));
+            assert(self.done.load(.acquire));
             return;
         }
         self.callSlow(f);
-        std.debug.assert(self.done.load(.acquire));
+        assert(self.done.load(.acquire));
     }
 
     fn callSlow(self: *Once, f: anytype) void {
@@ -28,19 +30,19 @@ pub const Once = struct {
         // Assertion 1: holding the mutex, monotonic and acquire loads must agree
         // on the done flag -- a coherence check that both orderings observe the
         // same value once the write fence from a prior store(release) is visible.
-        std.debug.assert(self.done.load(.monotonic) == self.done.load(.acquire));
+        assert(self.done.load(.monotonic) == self.done.load(.acquire));
         // Assertion 2: if done is already true we must not call f again, so
         // document that the flag being set implies acquire load also sees it.
-        if (self.done.load(.monotonic)) std.debug.assert(self.done.load(.acquire));
+        if (self.done.load(.monotonic)) assert(self.done.load(.acquire));
 
         if (!self.done.load(.monotonic)) {
             f();
             self.done.store(true, .release);
-            std.debug.assert(self.done.load(.acquire));
+            assert(self.done.load(.acquire));
             return;
         }
 
-        std.debug.assert(self.done.load(.acquire));
+        assert(self.done.load(.acquire));
     }
 };
 
@@ -58,8 +60,8 @@ test "once executes function at most once" {
     var once = Once{};
     once.call(bumpOnceTestCount);
     once.call(bumpOnceTestCount);
-    std.debug.assert(once_test_count == 1);
-    try std.testing.expectEqual(@as(u32, 1), once_test_count);
+    assert(once_test_count == 1);
+    try testing.expectEqual(@as(u32, 1), once_test_count);
 }
 
 test "once with zero calls does not invoke function" {
@@ -67,7 +69,7 @@ test "once with zero calls does not invoke function" {
     // Method: create instance without calling `call` and check counter.
     once_test_count = 0;
     _ = Once{};
-    try std.testing.expectEqual(@as(u32, 0), once_test_count);
+    try testing.expectEqual(@as(u32, 0), once_test_count);
 }
 
 test "once is idempotent across many calls" {
@@ -79,8 +81,8 @@ test "once is idempotent across many calls" {
     while (i < 10) : (i += 1) {
         once.call(bumpOnceTestCount);
     }
-    std.debug.assert(once_test_count == 1);
-    try std.testing.expectEqual(@as(u32, 1), once_test_count);
+    assert(once_test_count == 1);
+    try testing.expectEqual(@as(u32, 1), once_test_count);
 }
 
 fn bumpThreadCount() void {
@@ -142,8 +144,8 @@ test "once contending callers do not return before active initializer completes"
     var init_ctx = InitThread{ .once = &once };
     var init_thread = try std.Thread.spawn(.{}, InitThread.run, .{&init_ctx});
 
-    try std.testing.expect(waitForBoolTrue(&once_blocking_started, 10_000));
-    try std.testing.expect(!once.done.load(.acquire));
+    try testing.expect(waitForBoolTrue(&once_blocking_started, 10_000));
+    try testing.expect(!once.done.load(.acquire));
 
     var contender = Contender{
         .once = &once,
@@ -152,18 +154,18 @@ test "once contending callers do not return before active initializer completes"
     };
     var contender_thread = try std.Thread.spawn(.{}, Contender.run, .{&contender});
 
-    try std.testing.expect(waitForBoolTrue(&contender_started, 10_000));
-    try std.testing.expect(flagStaysFalse(&contender_done, 10_000));
-    try std.testing.expect(!once.done.load(.acquire));
+    try testing.expect(waitForBoolTrue(&contender_started, 10_000));
+    try testing.expect(flagStaysFalse(&contender_done, 10_000));
+    try testing.expect(!once.done.load(.acquire));
 
     once_blocking_release.store(true, .release);
     init_thread.join();
     contender_thread.join();
 
-    try std.testing.expectEqual(@as(u32, 1), once_blocking_executed.load(.acquire));
-    try std.testing.expectEqual(@as(u32, 0), once_contender_executed.load(.acquire));
-    try std.testing.expect(contender_done.load(.acquire));
-    try std.testing.expect(once.done.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), once_blocking_executed.load(.acquire));
+    try testing.expectEqual(@as(u32, 0), once_contender_executed.load(.acquire));
+    try testing.expect(contender_done.load(.acquire));
+    try testing.expect(once.done.load(.acquire));
 }
 
 test "once executes function once across threads" {
@@ -192,7 +194,7 @@ test "once executes function once across threads" {
 
     once.call(bumpThreadCount);
 
-    try std.testing.expectEqual(@as(u32, 1), once_thread_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), once_thread_count.load(.acquire));
 }
 
 fn waitForBoolTrue(flag: *const std.atomic.Value(bool), iterations_max: u32) bool {

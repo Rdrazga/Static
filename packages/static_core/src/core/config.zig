@@ -6,6 +6,8 @@
 //! Thread safety: not thread-safe — each function is pure and stateless.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const errors = @import("errors.zig");
 
 pub const ValidateError = error{InvalidConfig};
@@ -22,26 +24,26 @@ pub const LockState = enum {
 pub fn validate(ok: bool) ValidateError!void {
     if (!ok) return error.InvalidConfig;
     // Postcondition: if we reach here the configuration check passed.
-    std.debug.assert(ok);
+    assert(ok);
 }
 
 pub fn ensureUnlocked(state: LockState) ValidateError!void {
     if (state == .locked) return error.InvalidConfig;
     // Postcondition: the lock is confirmed to be in the mutable (unlocked) state.
-    std.debug.assert(state == .mutable);
+    assert(state == .mutable);
 }
 
 pub fn ensureLocked(state: LockState) ValidateError!void {
     if (state != .locked) return error.InvalidConfig;
     // Postcondition: the lock is confirmed to be in the locked state.
-    std.debug.assert(state == .locked);
+    assert(state == .locked);
 }
 
 test "lock state helpers enforce expected mode" {
     try validate(true);
     try ensureUnlocked(.mutable);
     try ensureLocked(.locked);
-    try std.testing.expectError(error.InvalidConfig, validate(false));
-    try std.testing.expectError(error.InvalidConfig, ensureUnlocked(.locked));
-    try std.testing.expectError(error.InvalidConfig, ensureLocked(.mutable));
+    try testing.expectError(error.InvalidConfig, validate(false));
+    try testing.expectError(error.InvalidConfig, ensureUnlocked(.locked));
+    try testing.expectError(error.InvalidConfig, ensureLocked(.mutable));
 }

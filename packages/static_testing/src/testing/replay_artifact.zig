@@ -8,6 +8,8 @@
 //! - later mismatch detection against richer replay artifacts.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const serial = @import("static_serial");
 const identity = @import("identity.zig");
@@ -89,9 +91,9 @@ pub const ReplayArtifactWriter = struct {
 
 comptime {
     core.errors.assertVocabularySubset(ReplayArtifactError);
-    std.debug.assert(artifact_magic.len == 8);
-    std.debug.assert(@intFromEnum(identity.ArtifactVersion.v1) == 1);
-    std.debug.assert(header_fixed_size_bytes == 66);
+    assert(artifact_magic.len == 8);
+    assert(@intFromEnum(identity.ArtifactVersion.v1) == 1);
+    assert(header_fixed_size_bytes == 66);
 }
 
 /// Encode one replay artifact into caller-owned storage.
@@ -100,8 +102,8 @@ pub fn encodeReplayArtifact(
     run_identity: identity.RunIdentity,
     trace_metadata: trace.TraceMetadata,
 ) ReplayArtifactError!usize {
-    std.debug.assert(run_identity.package_name.len > 0);
-    std.debug.assert(run_identity.run_name.len > 0);
+    assert(run_identity.package_name.len > 0);
+    assert(run_identity.run_name.len > 0);
     assertValidTraceMetadata(trace_metadata);
 
     const encoded_len = try encodedLen(run_identity);
@@ -129,7 +131,7 @@ pub fn encodeReplayArtifact(
     try writeBytes(&writer, run_identity.package_name);
     try writeBytes(&writer, run_identity.run_name);
 
-    std.debug.assert(writer.position() == encoded_len);
+    assert(writer.position() == encoded_len);
     return encoded_len;
 }
 
@@ -373,11 +375,11 @@ test "replay artifact round-trips identity and trace metadata" {
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
     const view = try decodeReplayArtifact(bytes[0..written]);
 
-    try std.testing.expectEqualStrings(run_identity.package_name, view.identity.package_name);
-    try std.testing.expectEqualStrings(run_identity.run_name, view.identity.run_name);
-    try std.testing.expectEqual(run_identity.seed.value, view.identity.seed.value);
-    try std.testing.expectEqual(trace_metadata.event_count, view.trace_metadata.event_count);
-    try std.testing.expect(view.trace_metadata.truncated);
+    try testing.expectEqualStrings(run_identity.package_name, view.identity.package_name);
+    try testing.expectEqualStrings(run_identity.run_name, view.identity.run_name);
+    try testing.expectEqual(run_identity.seed.value, view.identity.seed.value);
+    try testing.expectEqual(trace_metadata.event_count, view.trace_metadata.event_count);
+    try testing.expect(view.trace_metadata.truncated);
 }
 
 test "replay artifact rejects unsupported version" {
@@ -403,7 +405,7 @@ test "replay artifact rejects unsupported version" {
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
     std.mem.writeInt(u16, bytes[artifact_magic.len..][0..2], 99, .little);
 
-    try std.testing.expectError(error.Unsupported, decodeReplayArtifact(bytes[0..written]));
+    try testing.expectError(error.Unsupported, decodeReplayArtifact(bytes[0..written]));
 }
 
 test "replay artifact rejects truncated buffers" {
@@ -427,7 +429,7 @@ test "replay artifact rejects truncated buffers" {
 
     var bytes: [128]u8 = undefined;
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
-    try std.testing.expectError(error.EndOfStream, decodeReplayArtifact(bytes[0 .. written - 1]));
+    try testing.expectError(error.EndOfStream, decodeReplayArtifact(bytes[0 .. written - 1]));
 }
 
 test "replay artifact supports empty trace range metadata" {
@@ -453,9 +455,9 @@ test "replay artifact supports empty trace range metadata" {
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
     const view = try decodeReplayArtifact(bytes[0..written]);
 
-    try std.testing.expectEqual(@as(u32, 0), view.trace_metadata.event_count);
-    try std.testing.expect(!view.trace_metadata.has_range);
-    try std.testing.expect(!view.trace_metadata.truncated);
+    try testing.expectEqual(@as(u32, 0), view.trace_metadata.event_count);
+    try testing.expect(!view.trace_metadata.has_range);
+    try testing.expect(!view.trace_metadata.truncated);
 }
 
 test "replay artifact rejects non-zero reserved bytes" {
@@ -481,7 +483,7 @@ test "replay artifact rejects non-zero reserved bytes" {
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
     bytes[25] = 1;
 
-    try std.testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
+    try testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
 }
 
 test "replay artifact rejects unknown trace flags for v1" {
@@ -507,7 +509,7 @@ test "replay artifact rejects unknown trace flags for v1" {
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
     std.mem.writeInt(u16, bytes[10..12], trace_flag_has_range | (@as(u16, 1) << 15), .little);
 
-    try std.testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
+    try testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
 }
 
 test "replay artifact rejects empty traces that still claim a range" {
@@ -533,7 +535,7 @@ test "replay artifact rejects empty traces that still claim a range" {
     const written = try encodeReplayArtifact(&bytes, run_identity, trace_metadata);
     std.mem.writeInt(u16, bytes[10..12], trace_flag_has_range, .little);
 
-    try std.testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
+    try testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
 }
 
 test "replay artifact rejects reversed trace ranges" {
@@ -560,5 +562,5 @@ test "replay artifact rejects reversed trace ranges" {
     std.mem.writeInt(u32, bytes[42..46], 7, .little);
     std.mem.writeInt(u32, bytes[46..50], 6, .little);
 
-    try std.testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
+    try testing.expectError(error.CorruptData, decodeReplayArtifact(bytes[0..written]));
 }

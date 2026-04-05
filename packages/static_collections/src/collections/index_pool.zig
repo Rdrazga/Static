@@ -6,6 +6,8 @@
 //! validate / release" behavior without dynamic growth.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const memory = @import("static_memory");
 const handle_mod = @import("handle.zig");
 
@@ -131,7 +133,7 @@ pub const IndexPool = struct {
 
     pub fn capacity(self: *const IndexPool) u32 {
         self.assertStructuralInvariants();
-        std.debug.assert(self.generations.len <= std.math.maxInt(u32));
+        assert(self.generations.len <= std.math.maxInt(u32));
         return @intCast(self.generations.len);
     }
 
@@ -164,12 +166,12 @@ pub const IndexPool = struct {
 
         self.free_len -= 1;
         const slot_index = self.free_stack[self.free_len];
-        std.debug.assert(slot_index < self.occupied.len);
-        std.debug.assert(!self.occupied[slot_index]);
+        assert(slot_index < self.occupied.len);
+        assert(!self.occupied[slot_index]);
 
         self.occupied[slot_index] = true;
         const generation = self.generations[slot_index];
-        std.debug.assert(generation != 0);
+        assert(generation != 0);
         self.assertFullInvariants();
         return .{
             .index = slot_index,
@@ -198,7 +200,7 @@ pub const IndexPool = struct {
         if (!self.occupied[slot_index]) return null;
 
         const generation = self.generations[slot_index];
-        std.debug.assert(generation != 0);
+        assert(generation != 0);
         return .{
             .index = slot_index,
             .generation = generation,
@@ -208,8 +210,8 @@ pub const IndexPool = struct {
     pub fn release(self: *IndexPool, handle: Handle) Error!void {
         self.assertStructuralInvariants();
         const slot_index = try self.validate(handle);
-        std.debug.assert(self.free_len < self.free_stack.len);
-        std.debug.assert(self.occupied[slot_index]);
+        assert(self.free_len < self.free_stack.len);
+        assert(self.occupied[slot_index]);
 
         self.occupied[slot_index] = false;
         self.generations[slot_index] = nextGeneration(self.generations[slot_index]);
@@ -220,10 +222,10 @@ pub const IndexPool = struct {
 
     /// O(1) structural checks: array sizes match, counters are bounded.
     fn assertStructuralInvariants(self: *const IndexPool) void {
-        std.debug.assert(self.generations.len == self.occupied.len);
-        std.debug.assert(self.generations.len == self.free_stack.len);
-        std.debug.assert(self.free_len <= self.free_stack.len);
-        std.debug.assert(self.generations.len <= std.math.maxInt(u32));
+        assert(self.generations.len == self.occupied.len);
+        assert(self.generations.len == self.free_stack.len);
+        assert(self.free_len <= self.free_stack.len);
+        assert(self.generations.len <= std.math.maxInt(u32));
     }
 
     /// O(n) full validation: walks free stack and occupied array to prove
@@ -242,8 +244,8 @@ pub const IndexPool = struct {
         var free_slot: u32 = 0;
         while (free_slot < self.free_len) : (free_slot += 1) {
             const slot_index = self.free_stack[free_slot];
-            std.debug.assert(slot_index < len);
-            std.debug.assert(!self.occupied[slot_index]);
+            assert(slot_index < len);
+            assert(!self.occupied[slot_index]);
         }
 
         // Pass 2: count unoccupied slots and assert it matches free_len.
@@ -259,7 +261,7 @@ pub const IndexPool = struct {
                 expected_free_count += 1;
             }
         }
-        std.debug.assert(expected_free_count == self.free_len);
+        assert(expected_free_count == self.free_len);
     }
 
     fn detectsDuplicateFreeStackEntries(self: *IndexPool) bool {
@@ -296,7 +298,7 @@ pub const IndexPool = struct {
     }
 
     fn fillFreeStack(free_stack: []u32) void {
-        std.debug.assert(free_stack.len <= std.math.maxInt(u32));
+        assert(free_stack.len <= std.math.maxInt(u32));
         var index: u32 = 0;
         const len_u32: u32 = @intCast(free_stack.len);
         while (index < len_u32) : (index += 1) {
@@ -311,70 +313,70 @@ pub const IndexPool = struct {
         // so we skip it when the counter wraps around.
         var next = current +% 1;
         if (next == 0) next = 1;
-        std.debug.assert(next != 0);
+        assert(next != 0);
         return next;
     }
 };
 
 test "index pool allocates, validates, and rejects stale handles" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2, .budget = null });
+    var pool = try IndexPool.init(testing.allocator, .{ .slots_max = 2, .budget = null });
     defer pool.deinit();
 
     const first = try pool.allocate();
-    try std.testing.expect(pool.contains(first));
-    try std.testing.expectEqual(@as(u32, first.index), try pool.validate(first));
+    try testing.expect(pool.contains(first));
+    try testing.expectEqual(@as(u32, first.index), try pool.validate(first));
 
     try pool.release(first);
-    try std.testing.expect(!pool.contains(first));
-    try std.testing.expectError(error.NotFound, pool.validate(first));
+    try testing.expect(!pool.contains(first));
+    try testing.expectError(error.NotFound, pool.validate(first));
 
     const second = try pool.allocate();
-    try std.testing.expectEqual(first.index, second.index);
-    try std.testing.expect(second.generation != first.generation);
+    try testing.expectEqual(first.index, second.index);
+    try testing.expect(second.generation != first.generation);
 }
 
 test "index pool reports capacity exhaustion explicitly" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 1, .budget = null });
+    var pool = try IndexPool.init(testing.allocator, .{ .slots_max = 1, .budget = null });
     defer pool.deinit();
 
     _ = try pool.allocate();
-    try std.testing.expectEqual(@as(u32, 0), pool.freeCount());
-    try std.testing.expectError(error.NoSpaceLeft, pool.allocate());
+    try testing.expectEqual(@as(u32, 0), pool.freeCount());
+    try testing.expectError(error.NoSpaceLeft, pool.allocate());
 }
 
 test "index pool handleForIndex only exposes live handles" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2, .budget = null });
+    var pool = try IndexPool.init(testing.allocator, .{ .slots_max = 2, .budget = null });
     defer pool.deinit();
 
-    try std.testing.expect(pool.handleForIndex(0) == null);
+    try testing.expect(pool.handleForIndex(0) == null);
     const handle = try pool.allocate();
-    try std.testing.expectEqualDeep(handle, pool.handleForIndex(handle.index).?);
+    try testing.expectEqualDeep(handle, pool.handleForIndex(handle.index).?);
     try pool.release(handle);
-    try std.testing.expect(pool.handleForIndex(handle.index) == null);
+    try testing.expect(pool.handleForIndex(handle.index) == null);
 }
 
 test "index pool clear invalidates handles and restores full capacity" {
     // Goal: confirm clear resets all slots and stales existing handles.
     // Method: allocate handles, clear, verify stale, then reallocate.
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3, .budget = null });
+    var pool = try IndexPool.init(testing.allocator, .{ .slots_max = 3, .budget = null });
     defer pool.deinit();
 
     const h1 = try pool.allocate();
     const h2 = try pool.allocate();
-    try std.testing.expectEqual(@as(u32, 1), pool.freeCount());
+    try testing.expectEqual(@as(u32, 1), pool.freeCount());
 
     pool.clear();
-    try std.testing.expectEqual(@as(u32, 3), pool.freeCount());
-    try std.testing.expect(!pool.contains(h1));
-    try std.testing.expect(!pool.contains(h2));
+    try testing.expectEqual(@as(u32, 3), pool.freeCount());
+    try testing.expect(!pool.contains(h1));
+    try testing.expect(!pool.contains(h2));
 
     const h3 = try pool.allocate();
-    try std.testing.expect(pool.contains(h3));
-    try std.testing.expectEqual(@as(u32, 2), pool.freeCount());
+    try testing.expect(pool.contains(h3));
+    try testing.expectEqual(@as(u32, 2), pool.freeCount());
 }
 
 test "index pool duplicate free stack entries are detectable" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 3, .budget = null });
+    var pool = try IndexPool.init(testing.allocator, .{ .slots_max = 3, .budget = null });
     defer pool.deinit();
 
     pool.free_stack[0] = 0;
@@ -383,11 +385,11 @@ test "index pool duplicate free stack entries are detectable" {
     pool.free_len = 3;
     @memset(pool.occupied, false);
 
-    try std.testing.expect(pool.detectsDuplicateFreeStackEntries());
-    try std.testing.expectEqual(@as(u32, 3), pool.freeCount());
-    try std.testing.expect(!pool.occupied[0]);
-    try std.testing.expect(!pool.occupied[1]);
-    try std.testing.expect(!pool.occupied[2]);
+    try testing.expect(pool.detectsDuplicateFreeStackEntries());
+    try testing.expectEqual(@as(u32, 3), pool.freeCount());
+    try testing.expect(!pool.occupied[0]);
+    try testing.expect(!pool.occupied[1]);
+    try testing.expect(!pool.occupied[2]);
 
     IndexPool.fillFreeStack(pool.free_stack);
 }

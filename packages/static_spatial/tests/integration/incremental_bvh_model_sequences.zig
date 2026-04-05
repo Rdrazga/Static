@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_spatial = @import("static_spatial");
 const static_testing = @import("static_testing");
 
@@ -105,7 +107,7 @@ const Context = struct {
 
     fn resetState(self: *@This()) void {
         if (self.initialized) self.bvh.deinit();
-        self.bvh = BVH.init(std.testing.allocator);
+        self.bvh = BVH.init(testing.allocator);
         self.initialized = true;
         self.leaves = [_]LeafState{.{}, .{}, .{}};
         self.query_buffer = [_]u32{0} ** 4;
@@ -113,7 +115,7 @@ const Context = struct {
         self.saw_refit_far = false;
         self.saw_reuse_after_empty = false;
         self.saw_overlap_query = false;
-        std.debug.assert(self.bvh.count() == 0);
+        assert(self.bvh.count() == 0);
     }
 
     fn validateCount(self: *const @This()) checker.CheckResult {
@@ -121,7 +123,7 @@ const Context = struct {
         for (self.leaves) |leaf_state| {
             if (leaf_state.live) expected_count += 1;
         }
-        std.debug.assert(self.bvh.count() == expected_count);
+        assert(self.bvh.count() == expected_count);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(
             (@as(u128, expected_count) << 64) |
                 (@as(u128, @intFromBool(self.saw_refit_far)) << 2) |
@@ -136,7 +138,7 @@ const Context = struct {
 
     fn insertLeaf(self: *@This(), slot: LeafSlot, bounds: AABB3, value: u32) checker.CheckResult {
         const leaf_state = self.leafState(slot);
-        std.debug.assert(!leaf_state.live);
+        assert(!leaf_state.live);
         const handle = self.bvh.insert(bounds, value) catch return checker.CheckResult.fail(&violation, null);
         leaf_state.* = .{
             .live = true,
@@ -167,8 +169,8 @@ const Context = struct {
 
     fn expectQuery(self: *@This(), aabb: AABB3, expected: []const u32) checker.CheckResult {
         const hit_count = self.bvh.queryAABB(aabb, &self.query_buffer);
-        std.debug.assert(expected.len <= self.query_buffer.len);
-        std.debug.assert(hit_count >= @as(u32, @intCast(expected.len)));
+        assert(expected.len <= self.query_buffer.len);
+        assert(hit_count >= @as(u32, @intCast(expected.len)));
         const hits = self.query_buffer[0..expected.len];
         if (hits.len != expected.len) return checker.CheckResult.fail(&violation, null);
         for (expected) |needle| {
@@ -183,11 +185,11 @@ const Context = struct {
     fn finish(self: *const @This(), case_index: usize) checker.CheckResult {
         const count_check = self.validateCount();
         if (!count_check.passed) return count_check;
-        std.debug.assert(self.bvh.count() == 0);
+        assert(self.bvh.count() == 0);
         switch (case_index) {
-            0 => std.debug.assert(self.saw_refit_far),
-            1 => std.debug.assert(self.saw_reuse_after_empty),
-            2 => std.debug.assert(self.saw_overlap_query),
+            0 => assert(self.saw_refit_far),
+            1 => assert(self.saw_reuse_after_empty),
+            2 => assert(self.saw_overlap_query),
             else => unreachable,
         }
         return checker.CheckResult.pass(null);
@@ -226,8 +228,8 @@ test "incremental BVH runtime sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -236,8 +238,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 
@@ -287,7 +289,7 @@ fn finish(
     _: u32,
 ) error{}!checker.CheckResult {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     return context.finish(run_identity.case_index);
 }
 

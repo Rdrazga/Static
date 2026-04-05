@@ -4,6 +4,8 @@
 //! - `zig build bench -Doptimize=ReleaseFast` (from `packages/static_testing`).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -24,7 +26,7 @@ const EncodeContext = struct {
             context.run_identity,
             context.trace_metadata,
         ) catch |err| {
-            std.debug.panic("encodeReplayArtifact failed: {s}", .{@errorName(err)});
+            panic("encodeReplayArtifact failed: {s}", .{@errorName(err)});
         };
 
         context.sink +%= written;
@@ -40,7 +42,7 @@ const DecodeContext = struct {
     fn run(context_ptr: *anyopaque) void {
         const context: *@This() = @ptrCast(@alignCast(context_ptr));
         const artifact = testing.replay_artifact.decodeReplayArtifact(context.artifact_bytes) catch |err| {
-            std.debug.panic("decodeReplayArtifact failed: {s}", .{@errorName(err)});
+            panic("decodeReplayArtifact failed: {s}", .{@errorName(err)});
         };
 
         context.sink +%= artifact.trace_metadata.event_count;
@@ -84,12 +86,12 @@ fn verifyReplayArtifactBenchmarkInputs(
     );
     const decoded = try testing.replay_artifact.decodeReplayArtifact(artifact_buffer[0..encoded_len]);
 
-    std.debug.assert(std.mem.eql(u8, decoded.identity.package_name, run_identity.package_name));
-    std.debug.assert(std.mem.eql(u8, decoded.identity.run_name, run_identity.run_name));
-    std.debug.assert(decoded.identity.seed.value == run_identity.seed.value);
-    std.debug.assert(decoded.trace_metadata.event_count == trace_metadata.event_count);
-    std.debug.assert(decoded.trace_metadata.first_sequence_no == trace_metadata.first_sequence_no);
-    std.debug.assert(decoded.trace_metadata.last_timestamp_ns == trace_metadata.last_timestamp_ns);
+    assert(std.mem.eql(u8, decoded.identity.package_name, run_identity.package_name));
+    assert(std.mem.eql(u8, decoded.identity.run_name, run_identity.run_name));
+    assert(decoded.identity.seed.value == run_identity.seed.value);
+    assert(decoded.trace_metadata.event_count == trace_metadata.event_count);
+    assert(decoded.trace_metadata.first_sequence_no == trace_metadata.first_sequence_no);
+    assert(decoded.trace_metadata.last_timestamp_ns == trace_metadata.last_timestamp_ns);
     return artifact_buffer[0..encoded_len];
 }
 

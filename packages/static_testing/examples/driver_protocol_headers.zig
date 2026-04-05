@@ -1,6 +1,7 @@
 //! Demonstrates raw driver-protocol request and response header round-trips.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -24,11 +25,11 @@ pub fn main() !void {
         response_bytes[0..response_written],
     );
 
-    std.debug.assert(request_written == testing.testing.driver_protocol.request_header_size_bytes);
-    std.debug.assert(response_written == testing.testing.driver_protocol.response_header_size_bytes);
-    std.debug.assert(request_header.kind == .echo);
-    std.debug.assert(response_header.kind == .ok);
-    std.debug.assert(response_header.request_id == request_header.request_id);
+    assert(request_written == testing.testing.driver_protocol.request_header_size_bytes);
+    assert(response_written == testing.testing.driver_protocol.response_header_size_bytes);
+    assert(request_header.kind == .echo);
+    assert(response_header.kind == .ok);
+    assert(response_header.request_id == request_header.request_id);
     std.debug.print(
         "protocol request_id={} payload_len={}\n",
         .{ response_header.request_id, response_header.payload_len },

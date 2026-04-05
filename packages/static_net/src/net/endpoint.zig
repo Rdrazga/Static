@@ -4,6 +4,8 @@
 //! literals for higher-level packages.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const address = @import("address.zig");
 const errors = @import("errors.zig");
 
@@ -152,7 +154,7 @@ fn appendPort(out: []u8, cursor: *usize, port: Port) errors.EndpointFormatError!
         count = 1;
     } else {
         while (value > 0) {
-            std.debug.assert(count < scratch.len);
+            assert(count < scratch.len);
             const digit = @as(u8, @intCast(value % 10));
             scratch[count] = '0' + digit;
             value /= 10;
@@ -169,38 +171,38 @@ fn appendPort(out: []u8, cursor: *usize, port: Port) errors.EndpointFormatError!
 
 test "ipv4 endpoint parse and format roundtrip" {
     const parsed = try Ipv4Endpoint.parseLiteral("10.4.7.9:443");
-    try std.testing.expectEqual(@as(u16, 443), parsed.port);
-    try std.testing.expectEqualSlices(u8, &.{ 10, 4, 7, 9 }, &parsed.address.octets);
+    try testing.expectEqual(@as(u16, 443), parsed.port);
+    try testing.expectEqualSlices(u8, &.{ 10, 4, 7, 9 }, &parsed.address.octets);
 
     var out: [21]u8 = [_]u8{0} ** 21;
     const formatted = try parsed.format(&out);
-    try std.testing.expectEqualStrings("10.4.7.9:443", formatted);
+    try testing.expectEqualStrings("10.4.7.9:443", formatted);
 }
 
 test "ipv6 endpoint parse and format roundtrip" {
     const parsed = try Ipv6Endpoint.parseLiteral("[2001:db8::1]:8080");
-    try std.testing.expectEqual(@as(u16, 8080), parsed.port);
-    try std.testing.expectEqual(@as(u16, 0x2001), parsed.address.segments[0]);
-    try std.testing.expectEqual(@as(u16, 0x0db8), parsed.address.segments[1]);
-    try std.testing.expectEqual(@as(u16, 0x0001), parsed.address.segments[7]);
+    try testing.expectEqual(@as(u16, 8080), parsed.port);
+    try testing.expectEqual(@as(u16, 0x2001), parsed.address.segments[0]);
+    try testing.expectEqual(@as(u16, 0x0db8), parsed.address.segments[1]);
+    try testing.expectEqual(@as(u16, 0x0001), parsed.address.segments[7]);
 
     var out: [47]u8 = [_]u8{0} ** 47;
     const formatted = try parsed.format(&out);
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "[2001:0db8:0000:0000:0000:0000:0000:0001]:8080",
         formatted,
     );
 }
 
 test "endpoint parser rejects malformed literals" {
-    try std.testing.expectError(error.InvalidInput, Endpoint.parseLiteral("127.0.0.1"));
-    try std.testing.expectError(error.InvalidInput, Endpoint.parseLiteral("127.0.0.1:70000"));
-    try std.testing.expectError(error.InvalidInput, Endpoint.parseLiteral("[::1:80"));
-    try std.testing.expectError(error.InvalidInput, Endpoint.parseLiteral("::1:80"));
+    try testing.expectError(error.InvalidInput, Endpoint.parseLiteral("127.0.0.1"));
+    try testing.expectError(error.InvalidInput, Endpoint.parseLiteral("127.0.0.1:70000"));
+    try testing.expectError(error.InvalidInput, Endpoint.parseLiteral("[::1:80"));
+    try testing.expectError(error.InvalidInput, Endpoint.parseLiteral("::1:80"));
 }
 
 test "endpoint parser rejects unsupported IPv6 scope IDs" {
-    try std.testing.expectError(error.Unsupported, Endpoint.parseLiteral("[fe80::1%eth0]:80"));
+    try testing.expectError(error.Unsupported, Endpoint.parseLiteral("[fe80::1%eth0]:80"));
 }
 
 test "endpoint format reports no space left and exact fit succeeds" {
@@ -212,9 +214,9 @@ test "endpoint format reports no space left and exact fit succeeds" {
     };
 
     var too_small: [46]u8 = [_]u8{0} ** 46;
-    try std.testing.expectError(error.NoSpaceLeft, endpoint_value.format(&too_small));
+    try testing.expectError(error.NoSpaceLeft, endpoint_value.format(&too_small));
 
     var exact: [47]u8 = [_]u8{0} ** 47;
     const formatted = try endpoint_value.format(&exact);
-    try std.testing.expectEqual(@as(usize, 47), formatted.len);
+    try testing.expectEqual(@as(usize, 47), formatted.len);
 }

@@ -11,6 +11,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const vec_mod = @import("vec.zig");
 const memory = @import("static_memory");
 const assert = std.debug.assert;
@@ -186,98 +187,98 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
 test "small vec spills after inline capacity" {
     // Goal: verify growth transitions from inline storage to spill vector.
     // Method: append past inline capacity and validate resulting length.
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
     try s.append(1);
     try s.append(2);
     try s.append(3);
-    try std.testing.expectEqual(@as(usize, 3), s.len());
+    try testing.expectEqual(@as(usize, 3), s.len());
 }
 
 test "small vec preserves order across spill transition" {
     // Goal: preserve insertion order while migrating inline data to spill.
     // Method: append inline then spilled values and verify contiguous sequence.
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
     try s.append(5);
     try s.append(6);
     try s.append(7);
 
     const values = s.items();
-    try std.testing.expectEqual(@as(usize, 3), values.len);
-    try std.testing.expectEqual(@as(u8, 5), values[0]);
-    try std.testing.expectEqual(@as(u8, 6), values[1]);
-    try std.testing.expectEqual(@as(u8, 7), values[2]);
+    try testing.expectEqual(@as(usize, 3), values.len);
+    try testing.expectEqual(@as(u8, 5), values[0]);
+    try testing.expectEqual(@as(u8, 6), values[1]);
+    try testing.expectEqual(@as(u8, 7), values[2]);
 }
 
 test "small vec inline capacity zero spills immediately" {
     // Goal: handle InlineN=0 without special-case call-site behavior.
     // Method: append one value and assert storage length and content.
-    var s = SmallVec(u8, 0).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 0).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
     try s.append(9);
-    try std.testing.expectEqual(@as(usize, 1), s.len());
-    try std.testing.expectEqual(@as(u8, 9), s.items()[0]);
+    try testing.expectEqual(@as(usize, 1), s.len());
+    try testing.expectEqual(@as(u8, 9), s.items()[0]);
 }
 
 test "small vec pop returns last element from inline and spill" {
     // Goal: validate LIFO pop semantics across inline and spill storage.
     // Method: pop inline items, then pop after spill transition.
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
 
-    try std.testing.expect(s.pop() == null);
+    try testing.expect(s.pop() == null);
     try s.append(1);
     try s.append(2);
-    try std.testing.expectEqual(@as(u8, 2), s.pop().?);
-    try std.testing.expectEqual(@as(u8, 1), s.pop().?);
-    try std.testing.expect(s.pop() == null);
+    try testing.expectEqual(@as(u8, 2), s.pop().?);
+    try testing.expectEqual(@as(u8, 1), s.pop().?);
+    try testing.expect(s.pop() == null);
 
     // After spill
     try s.append(10);
     try s.append(20);
     try s.append(30);
-    try std.testing.expectEqual(@as(u8, 30), s.pop().?);
-    try std.testing.expectEqual(@as(usize, 2), s.len());
+    try testing.expectEqual(@as(u8, 30), s.pop().?);
+    try testing.expectEqual(@as(usize, 2), s.len());
 }
 
 test "small vec spilled storage can drain back to empty" {
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
 
     try s.append(1);
     try s.append(2);
     try s.append(3);
 
-    try std.testing.expectEqual(@as(u8, 3), s.pop().?);
-    try std.testing.expectEqual(@as(u8, 2), s.pop().?);
-    try std.testing.expectEqual(@as(u8, 1), s.pop().?);
-    try std.testing.expect(s.pop() == null);
-    try std.testing.expectEqual(@as(usize, 0), s.len());
+    try testing.expectEqual(@as(u8, 3), s.pop().?);
+    try testing.expectEqual(@as(u8, 2), s.pop().?);
+    try testing.expectEqual(@as(u8, 1), s.pop().?);
+    try testing.expect(s.pop() == null);
+    try testing.expectEqual(@as(usize, 0), s.len());
 }
 
 test "small vec spilled storage may shrink below inline capacity without respilling inline" {
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
 
     try s.append(1);
     try s.append(2);
     try s.append(3);
-    try std.testing.expect(s.spill != null);
+    try testing.expect(s.spill != null);
 
     _ = s.pop();
     _ = s.pop();
-    try std.testing.expectEqual(@as(usize, 1), s.len());
+    try testing.expectEqual(@as(usize, 1), s.len());
 
     s.shrinkToFit();
-    try std.testing.expect(s.spill != null);
-    try std.testing.expectEqual(@as(usize, 1), s.spill.?.capacity());
-    try std.testing.expectEqual(@as(u8, 1), s.items()[0]);
+    try testing.expect(s.spill != null);
+    try testing.expectEqual(@as(usize, 1), s.spill.?.capacity());
+    try testing.expectEqual(@as(u8, 1), s.items()[0]);
 }
 
 test "small vec ensureCapacity returns Overflow for oversized public requests" {
-    var s = SmallVec(u8, 2).init(std.testing.allocator, .{ .budget = null });
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
     defer s.deinit();
 
-    try std.testing.expectError(error.Overflow, s.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));
+    try testing.expectError(error.Overflow, s.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));
 }

@@ -7,6 +7,8 @@
 //! Thread safety: not thread-safe — `Writer` instances are single-owner values.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_hash = @import("static_hash");
 const writer_mod = @import("writer.zig");
 
@@ -14,25 +16,25 @@ pub const Checksum32 = static_hash.crc32.Crc32;
 
 pub fn writeChecksum32(writer: *writer_mod.Writer, payload: []const u8) writer_mod.Error!void {
     // Precondition: an empty payload has no meaningful checksum to protect.
-    std.debug.assert(payload.len > 0);
+    assert(payload.len > 0);
     const pos_before = writer.position();
     const sum = static_hash.crc32.checksum(payload);
     try writer.writeInt(sum, .little);
     // Postcondition: exactly 4 bytes (u32) were written to the writer.
-    std.debug.assert(writer.position() == pos_before + 4);
+    assert(writer.position() == pos_before + 4);
 }
 
 pub fn verifyChecksum32(payload: []const u8, expected: u32) error{CorruptData}!void {
     // Precondition: an empty payload has no meaningful checksum to verify.
-    std.debug.assert(payload.len > 0);
+    assert(payload.len > 0);
     // Precondition: expected value must be a plausible u32 (always true for the
     // type, but documenting that caller must pass the stored value, not zero by default).
-    std.debug.assert(@TypeOf(expected) == u32);
+    assert(@TypeOf(expected) == u32);
     if (static_hash.crc32.checksum(payload) != expected) return error.CorruptData;
 }
 
 test "checksum mismatch returns CorruptData" {
-    try std.testing.expectError(error.CorruptData, verifyChecksum32("abc", 0));
+    try testing.expectError(error.CorruptData, verifyChecksum32("abc", 0));
 }
 
 test "SE-T5: checksum positive case: write then verify succeeds" {
@@ -43,7 +45,7 @@ test "SE-T5: checksum positive case: write then verify succeeds" {
     var buf = [_]u8{0} ** 4;
     var w = writer_mod.Writer.init(&buf);
     try writeChecksum32(&w, payload);
-    std.debug.assert(w.position() == 4);
+    assert(w.position() == 4);
 
     const stored_checksum = std.mem.readInt(u32, buf[0..4], .little);
     try verifyChecksum32(payload, stored_checksum);
@@ -67,30 +69,30 @@ test "SE-T1: serial end-to-end integration roundtrip" {
     try w.writeZigZag(test_zigzag);
 
     const payload_end = w.position();
-    std.debug.assert(payload_end > payload_start);
+    assert(payload_end > payload_start);
 
     const payload = buf[payload_start..payload_end];
     try writeChecksum32(&w, payload);
     const written_total = w.position();
-    std.debug.assert(written_total == payload_end + 4);
+    assert(written_total == payload_end + 4);
 
     // Read phase.
     const reader_mod = @import("reader.zig");
     var r = reader_mod.Reader.init(buf[0..written_total]);
 
     const read_int = try r.readInt(u32, .little);
-    try std.testing.expectEqual(test_int, read_int);
+    try testing.expectEqual(test_int, read_int);
 
     const read_varint = try r.readVarint(u64);
-    try std.testing.expectEqual(test_varint, read_varint);
+    try testing.expectEqual(test_varint, read_varint);
 
     const read_zigzag = try r.readZigZag(i32);
-    try std.testing.expectEqual(test_zigzag, read_zigzag);
+    try testing.expectEqual(test_zigzag, read_zigzag);
 
     // Read and verify checksum.
     const stored_checksum = try r.readInt(u32, .little);
     try verifyChecksum32(payload, stored_checksum);
 
     // Postcondition: reader consumed exactly the bytes writer produced.
-    std.debug.assert(r.remaining() == 0);
+    assert(r.remaining() == 0);
 }

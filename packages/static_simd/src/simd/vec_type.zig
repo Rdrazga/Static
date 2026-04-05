@@ -12,6 +12,8 @@
 //! Thread safety: all operations are pure functions with no shared state.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const masked = @import("masked.zig");
 
 // ---------------------------------------------------------------------------
@@ -21,7 +23,7 @@ const masked = @import("masked.zig");
 /// Return the number of bits needed to index any lane in a vector of width N.
 /// N must be a power of two in {2, 4, 8, 16}.
 fn laneIndexBits(comptime N: comptime_int) comptime_int {
-    comptime std.debug.assert(N == 2 or N == 4 or N == 8 or N == 16);
+    comptime assert(N == 2 or N == 4 or N == 8 or N == 16);
     return switch (N) {
         2 => 1,
         4 => 2,
@@ -33,7 +35,7 @@ fn laneIndexBits(comptime N: comptime_int) comptime_int {
 
 /// Return the Mask type corresponding to a lane count.
 fn MaskFor(comptime N: comptime_int) type {
-    comptime std.debug.assert(N == 2 or N == 4 or N == 8 or N == 16);
+    comptime assert(N == 2 or N == 4 or N == 8 or N == 16);
     return switch (N) {
         2 => masked.Mask2,
         4 => masked.Mask4,
@@ -80,9 +82,9 @@ fn isUnsigned(comptime Element: type) bool {
 /// Unsigned `sub`: asserts all lanes satisfy `a >= b` before subtracting.
 pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
     comptime {
-        std.debug.assert(N > 0);
-        std.debug.assert(N == 2 or N == 4 or N == 8 or N == 16);
-        std.debug.assert(@sizeOf(Element) > 0);
+        assert(N > 0);
+        assert(N == 2 or N == 4 or N == 8 or N == 16);
+        assert(@sizeOf(Element) > 0);
     }
 
     const LaneIdx = std.meta.Int(.unsigned, laneIndexBits(N));
@@ -99,19 +101,19 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
         /// Construct from N individual values packed in an array literal.
         /// Call as `Vec4f.init(.{x, y, z, w})`.
         pub inline fn init(args: [N]Element) Self {
-            comptime std.debug.assert(N > 0);
+            comptime assert(N > 0);
             return .{ .v = args };
         }
 
         /// Broadcast a single scalar to all N lanes.
         pub inline fn splat(scalar: Element) Self {
-            comptime std.debug.assert(@sizeOf(Element) > 0);
+            comptime assert(@sizeOf(Element) > 0);
             return .{ .v = @splat(scalar) };
         }
 
         /// Construct from a fixed-size array of N elements.
         pub inline fn fromArray(arr: [N]Element) Self {
-            comptime std.debug.assert(N > 0);
+            comptime assert(N > 0);
             return .{ .v = arr };
         }
 
@@ -131,7 +133,7 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
         /// For unsigned element types, asserts `a >= b` per lane to prevent underflow.
         pub inline fn sub(a: Self, b: Self) Self {
             if (comptime isUnsigned(Element)) {
-                std.debug.assert(@reduce(.And, a.v >= b.v));
+                assert(@reduce(.And, a.v >= b.v));
             }
             return .{ .v = a.v - b.v };
         }
@@ -164,13 +166,13 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
 
         /// Extract the value of a single lane. `i` must be in [0, N).
         pub inline fn extract(self: Self, comptime i: LaneIdx) Element {
-            comptime std.debug.assert(i < N);
+            comptime assert(i < N);
             return self.v[i];
         }
 
         /// Return a copy of `self` with lane `i` replaced by `val`.
         pub inline fn insert(self: Self, comptime i: LaneIdx, val: Element) Self {
-            comptime std.debug.assert(i < N);
+            comptime assert(i < N);
             var result = self.v;
             result[i] = val;
             return .{ .v = result };
@@ -210,7 +212,7 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
             }
             if (comptime isSigned(Element)) {
                 const min_int: Vec = @splat(std.math.minInt(Element));
-                std.debug.assert(!@reduce(.Or, a.v == min_int));
+                assert(!@reduce(.Or, a.v == min_int));
             }
             return .{ .v = -a.v };
         }
@@ -225,7 +227,7 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
             }
             if (comptime isSigned(Element)) {
                 const min_int: Vec = @splat(std.math.minInt(Element));
-                std.debug.assert(!@reduce(.Or, a.v == min_int));
+                assert(!@reduce(.Or, a.v == min_int));
                 const zero: Vec = @splat(@as(Element, 0));
                 const neg_mask = a.v < zero;
                 return .{ .v = @select(Element, neg_mask, -a.v, a.v) };
@@ -273,7 +275,7 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
             if (comptime !isInt(Element)) {
                 @compileError("shl is only defined for integer VecTypes, got " ++ @typeName(Element));
             }
-            comptime std.debug.assert(shift < @bitSizeOf(Element));
+            comptime assert(shift < @bitSizeOf(Element));
             return .{ .v = a.v << @as(@Vector(N, u5), @splat(shift)) };
         }
 
@@ -283,7 +285,7 @@ pub fn VecType(comptime N: comptime_int, comptime Element: type) type {
             if (comptime !isInt(Element)) {
                 @compileError("shr is only defined for integer VecTypes, got " ++ @typeName(Element));
             }
-            comptime std.debug.assert(shift < @bitSizeOf(Element));
+            comptime assert(shift < @bitSizeOf(Element));
             return .{ .v = a.v >> @as(@Vector(N, u5), @splat(shift)) };
         }
     };
@@ -321,10 +323,10 @@ test "VecType f32 NaN propagation in min — Vec2f and Vec8f" {
     const v2_min_result = Vec2f.min(v2_nan, v2_one).toArray();
     const v2_min_rev = Vec2f.min(v2_one, v2_nan).toArray();
     // Both orderings must produce the same lane-0 result (consistent behaviour).
-    try std.testing.expectEqual(std.math.isNan(v2_min_result[0]), std.math.isNan(v2_min_rev[0]));
+    try testing.expectEqual(std.math.isNan(v2_min_result[0]), std.math.isNan(v2_min_rev[0]));
     // Lane 1 (both normal) must equal one in both orderings.
-    try std.testing.expectEqual(@as(f32, one), v2_min_result[1]);
-    try std.testing.expectEqual(@as(f32, one), v2_min_rev[1]);
+    try testing.expectEqual(@as(f32, one), v2_min_result[1]);
+    try testing.expectEqual(@as(f32, one), v2_min_rev[1]);
 
     // Vec8f: all-NaN vector vs all-one vector.
     const v8_nan = Vec8f.splat(nan);
@@ -333,7 +335,7 @@ test "VecType f32 NaN propagation in min — Vec2f and Vec8f" {
     const v8_min_ba = Vec8f.min(v8_one, v8_nan).toArray();
     // Document consistent behaviour: both orderings must agree per lane.
     for (0..8) |i| {
-        try std.testing.expectEqual(std.math.isNan(v8_min_ab[i]), std.math.isNan(v8_min_ba[i]));
+        try testing.expectEqual(std.math.isNan(v8_min_ab[i]), std.math.isNan(v8_min_ba[i]));
     }
 }
 
@@ -346,9 +348,9 @@ test "VecType f32 NaN propagation in max — Vec2f and Vec8f" {
     const v2_one = Vec2f.splat(one);
     const v2_max_result = Vec2f.max(v2_nan, v2_one).toArray();
     const v2_max_rev = Vec2f.max(v2_one, v2_nan).toArray();
-    try std.testing.expectEqual(std.math.isNan(v2_max_result[0]), std.math.isNan(v2_max_rev[0]));
-    try std.testing.expectEqual(@as(f32, one), v2_max_result[1]);
-    try std.testing.expectEqual(@as(f32, one), v2_max_rev[1]);
+    try testing.expectEqual(std.math.isNan(v2_max_result[0]), std.math.isNan(v2_max_rev[0]));
+    try testing.expectEqual(@as(f32, one), v2_max_result[1]);
+    try testing.expectEqual(@as(f32, one), v2_max_rev[1]);
 
     // Vec8f: all-NaN vector vs all-one vector.
     const v8_nan = Vec8f.splat(nan);
@@ -356,7 +358,7 @@ test "VecType f32 NaN propagation in max — Vec2f and Vec8f" {
     const v8_max_ab = Vec8f.max(v8_nan, v8_one).toArray();
     const v8_max_ba = Vec8f.max(v8_one, v8_nan).toArray();
     for (0..8) |i| {
-        try std.testing.expectEqual(std.math.isNan(v8_max_ab[i]), std.math.isNan(v8_max_ba[i]));
+        try testing.expectEqual(std.math.isNan(v8_max_ab[i]), std.math.isNan(v8_max_ba[i]));
     }
 }
 
@@ -365,34 +367,34 @@ test "VecType Vec2f arithmetic matches scalar reference" {
     const b = Vec2f.fromArray(.{ 10.0, 20.0 });
 
     const sum = Vec2f.add(a, b).toArray();
-    try std.testing.expectEqual(@as(f32, 11.0), sum[0]);
-    try std.testing.expectEqual(@as(f32, 22.0), sum[1]);
+    try testing.expectEqual(@as(f32, 11.0), sum[0]);
+    try testing.expectEqual(@as(f32, 22.0), sum[1]);
 
     const prod = Vec2f.mul(a, b).toArray();
-    try std.testing.expectEqual(@as(f32, 10.0), prod[0]);
-    try std.testing.expectEqual(@as(f32, 40.0), prod[1]);
+    try testing.expectEqual(@as(f32, 10.0), prod[0]);
+    try testing.expectEqual(@as(f32, 40.0), prod[1]);
 }
 
 test "VecType Vec4f round-trip and sign ops" {
     const arr = [4]f32{ 1.5, -2.5, 3.5, -4.5 };
     const v = Vec4f.fromArray(arr);
-    try std.testing.expectEqual(arr, v.toArray());
+    try testing.expectEqual(arr, v.toArray());
 
     const neg = Vec4f.negate(v).toArray();
-    try std.testing.expectEqual(@as(f32, -1.5), neg[0]);
-    try std.testing.expectEqual(@as(f32, 4.5), neg[3]);
+    try testing.expectEqual(@as(f32, -1.5), neg[0]);
+    try testing.expectEqual(@as(f32, 4.5), neg[3]);
 
     const a = Vec4f.abs(v).toArray();
-    try std.testing.expectEqual(@as(f32, 1.5), a[0]);
-    try std.testing.expectEqual(@as(f32, 2.5), a[1]);
+    try testing.expectEqual(@as(f32, 1.5), a[0]);
+    try testing.expectEqual(@as(f32, 2.5), a[1]);
 }
 
 test "VecType Vec4u unsigned sub no underflow" {
     const a = Vec4u.fromArray(.{ 10, 20, 30, 40 });
     const b = Vec4u.fromArray(.{ 1, 2, 3, 4 });
     const diff = Vec4u.sub(a, b).toArray();
-    try std.testing.expectEqual(@as(u32, 9), diff[0]);
-    try std.testing.expectEqual(@as(u32, 36), diff[3]);
+    try testing.expectEqual(@as(u32, 9), diff[0]);
+    try testing.expectEqual(@as(u32, 36), diff[3]);
 }
 
 test "VecType Vec4i bitwise and shift operations" {
@@ -400,19 +402,19 @@ test "VecType Vec4i bitwise and shift operations" {
     const b = Vec4i.fromArray(.{ 0b1010, 0b1100, 0b1111, 0b0000 });
 
     const and_r = Vec4i.bitAnd(a, b).toArray();
-    try std.testing.expectEqual(@as(i32, 0b1000), and_r[0]);
+    try testing.expectEqual(@as(i32, 0b1000), and_r[0]);
 
     const or_r = Vec4i.bitOr(a, b).toArray();
-    try std.testing.expectEqual(@as(i32, 0b1110), or_r[0]);
+    try testing.expectEqual(@as(i32, 0b1110), or_r[0]);
 
     const xor_r = Vec4i.bitXor(a, b).toArray();
-    try std.testing.expectEqual(@as(i32, 0b0110), xor_r[0]);
+    try testing.expectEqual(@as(i32, 0b0110), xor_r[0]);
 
     const left = Vec4i.shl(Vec4i.splat(1), 4).toArray();
-    try std.testing.expectEqual(@as(i32, 16), left[0]);
+    try testing.expectEqual(@as(i32, 16), left[0]);
 
     const right = Vec4i.shr(Vec4i.splat(64), 2).toArray();
-    try std.testing.expectEqual(@as(i32, 16), right[0]);
+    try testing.expectEqual(@as(i32, 16), right[0]);
 }
 
 test "VecType Vec8f splat and select" {
@@ -420,27 +422,27 @@ test "VecType Vec8f splat and select" {
     const b = Vec8f.splat(7.0);
     const mask = masked.Mask8.fromBits(0b01010101);
     const selected = Vec8f.select(mask, a, b).toArray();
-    try std.testing.expectEqual(@as(f32, 3.0), selected[0]);
-    try std.testing.expectEqual(@as(f32, 7.0), selected[1]);
-    try std.testing.expectEqual(@as(f32, 3.0), selected[6]);
-    try std.testing.expectEqual(@as(f32, 7.0), selected[7]);
+    try testing.expectEqual(@as(f32, 3.0), selected[0]);
+    try testing.expectEqual(@as(f32, 7.0), selected[1]);
+    try testing.expectEqual(@as(f32, 3.0), selected[6]);
+    try testing.expectEqual(@as(f32, 7.0), selected[7]);
 }
 
 test "VecType Vec16f lane extract and insert" {
     var v = Vec16f.splat(0.0);
     v = v.insert(0, 1.0);
     v = v.insert(15, 16.0);
-    try std.testing.expectEqual(@as(f32, 1.0), v.extract(0));
-    try std.testing.expectEqual(@as(f32, 16.0), v.extract(15));
-    try std.testing.expectEqual(@as(f32, 0.0), v.extract(8));
+    try testing.expectEqual(@as(f32, 1.0), v.extract(0));
+    try testing.expectEqual(@as(f32, 16.0), v.extract(15));
+    try testing.expectEqual(@as(f32, 0.0), v.extract(8));
 }
 
 test "VecType Vec4d arithmetic precision" {
     const a = Vec4d.fromArray(.{ 1.0, 2.0, 3.0, 4.0 });
     const b = Vec4d.fromArray(.{ 10.0, 20.0, 30.0, 40.0 });
     const sum = Vec4d.add(a, b).toArray();
-    try std.testing.expectEqual(@as(f64, 11.0), sum[0]);
-    try std.testing.expectEqual(@as(f64, 44.0), sum[3]);
+    try testing.expectEqual(@as(f64, 11.0), sum[0]);
+    try testing.expectEqual(@as(f64, 44.0), sum[3]);
 }
 
 test "VecType Vec2i sign and comparison" {
@@ -448,10 +450,10 @@ test "VecType Vec2i sign and comparison" {
     const b = Vec2i.fromArray(.{ 3, -10 });
 
     const neg = Vec2i.negate(a).toArray();
-    try std.testing.expectEqual(@as(i32, 7), neg[0]);
-    try std.testing.expectEqual(@as(i32, -9), neg[1]);
+    try testing.expectEqual(@as(i32, 7), neg[0]);
+    try testing.expectEqual(@as(i32, -9), neg[1]);
 
     const mins = Vec2i.min(a, b).toArray();
-    try std.testing.expectEqual(@as(i32, -7), mins[0]);
-    try std.testing.expectEqual(@as(i32, -10), mins[1]);
+    try testing.expectEqual(@as(i32, -7), mins[0]);
+    try testing.expectEqual(@as(i32, -10), mins[1]);
 }

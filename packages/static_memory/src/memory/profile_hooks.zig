@@ -1,6 +1,7 @@
 //! Helpers for emitting allocator capacity metrics to external profilers/collectors.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const CapacityReport = @import("capacity_report.zig").CapacityReport;
 
 fn clampU64ToI64(v: u64) i64 {
@@ -8,9 +9,9 @@ fn clampU64ToI64(v: u64) i64 {
     const result: i64 = if (v > max_i64_u64) std.math.maxInt(i64) else @intCast(v);
     // Postcondition: the result must be non-negative because u64 is unsigned and
     // i64 can only be negative if the cast were to wrap, which the clamp prevents.
-    std.debug.assert(result >= 0);
+    assert(result >= 0);
     // Postcondition: the result must not exceed maxInt(i64), enforced by the clamp above.
-    std.debug.assert(result <= std.math.maxInt(i64));
+    assert(result <= std.math.maxInt(i64));
     return result;
 }
 
@@ -20,9 +21,9 @@ pub fn emitCapacityReportCounters(
     ctx: anytype,
     comptime emit: fn (@TypeOf(ctx), []const u8, i64) void,
 ) void {
-    std.debug.assert(base.len != 0);
-    std.debug.assert(report.high_water >= report.used);
-    if (report.capacity != 0) std.debug.assert(report.capacity >= report.used);
+    assert(base.len != 0);
+    assert(report.high_water >= report.used);
+    if (report.capacity != 0) assert(report.capacity >= report.used);
 
     emit(ctx, base ++ ".used", clampU64ToI64(report.used));
     emit(ctx, base ++ ".high_water", clampU64ToI64(report.high_water));
@@ -48,7 +49,7 @@ test "emitCapacityReportCounters emits stable names and values" {
         len: u32 = 0,
 
         fn emit(self: *@This(), name: []const u8, value: i64) void {
-            std.debug.assert(self.len < self.names.len);
+            assert(self.len < self.names.len);
             self.names[@intCast(self.len)] = name;
             self.values[@intCast(self.len)] = value;
             self.len += 1;

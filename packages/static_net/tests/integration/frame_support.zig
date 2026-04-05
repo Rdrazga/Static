@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_net = @import("static_net");
 const static_testing = @import("static_testing");
 
@@ -155,7 +156,7 @@ pub fn encodeFrame(
 }
 
 pub fn corruptLastChecksumByte(bytes: []u8, written_len: usize) void {
-    std.debug.assert(written_len >= 4);
+    assert(written_len >= 4);
     bytes[written_len - 1] ^= 0x5a;
 }
 
@@ -259,7 +260,7 @@ pub fn buildGeneratedFrameCase(seed_value: u64) GeneratedFrameCase {
         },
     }
 
-    std.debug.assert(generated.len <= generated.bytes.len);
+    assert(generated.len <= generated.bytes.len);
     return generated;
 }
 

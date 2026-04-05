@@ -1,6 +1,7 @@
 //! Demonstrates bounded portfolio exploration and replay of a retained schedule.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const checker = testing.testing.checker;
@@ -105,10 +106,10 @@ pub fn main() !void {
     const summary_line = try explore.formatExplorationSummary(&summary_buffer, summary);
     std.debug.print("{s}\n", .{summary_line});
 
-    std.debug.assert(summary.first_failure != null);
+    assert(summary.first_failure != null);
     const first_failure = summary.first_failure.?;
-    std.debug.assert(first_failure.schedule_seed != null);
-    std.debug.assert(first_failure.trace_provenance_summary != null);
+    assert(first_failure.schedule_seed != null);
+    assert(first_failure.trace_provenance_summary != null);
 
     var existing_file_buffer: [512]u8 = undefined;
     var record_buffer: [256]u8 = undefined;
@@ -129,8 +130,8 @@ pub fn main() !void {
         .mode_buffer = &mode_buffer,
         .decision_buffer = &decoded_decisions,
     })).?;
-    std.debug.assert(retained_failure.recorded_decision_count == 1);
-    std.debug.assert(retained_failure.trace_provenance_summary != null);
+    assert(retained_failure.recorded_decision_count == 1);
+    assert(retained_failure.trace_provenance_summary != null);
 
     var replay_ready_storage: [4]sim.scheduler.ReadyItem = undefined;
     var replay_decision_storage: [4]sim.scheduler.ScheduleDecision = undefined;
@@ -145,7 +146,7 @@ pub fn main() !void {
     try replayer.enqueueReady(.{ .id = 22, .value = 2 });
 
     const replayed = try replayer.applyRecordedDecision(retained_failure.recorded_decisions[0]);
-    std.debug.assert(replayed.chosen_id == retained_failure.recorded_decisions[0].chosen_id);
+    assert(replayed.chosen_id == retained_failure.recorded_decisions[0].chosen_id);
     std.debug.print(
         "replayed mode={s} seed={s} chosen_id={} persisted=exploration_failures.binlog\n",
         .{

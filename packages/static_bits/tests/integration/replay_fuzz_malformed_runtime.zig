@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_bits = @import("static_bits");
 const static_testing = @import("static_testing");
 
@@ -79,10 +81,10 @@ const retained_nonterminating_violation = [_]checker.Violation{
 };
 
 test "static_bits deterministic malformed runtime invariants stay replayable" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -113,14 +115,14 @@ test "static_bits deterministic malformed runtime invariants stay replayable" {
     }).run();
 
     try expectNoFailureOrReplay(io, tmp_dir.dir, summary);
-    try std.testing.expectEqual(invariant_case_count, summary.executed_case_count);
+    try testing.expectEqual(invariant_case_count, summary.executed_case_count);
 }
 
 test "static_bits retained malformed varint bundles preserve replay metadata" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -150,10 +152,10 @@ test "static_bits retained malformed varint bundles preserve replay metadata" {
         },
     }).run();
 
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expectEqual(@as(u32, 1), summary.executed_case_count);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     const retained_case = buildRetainedMalformedCase(failed_case.run_identity.seed.value);
     try assertRetainedMalformedCase(retained_case);
@@ -165,7 +167,7 @@ test "static_bits retained malformed varint bundles preserve replay metadata" {
         failed_case.persisted_entry_name.?,
         &corpus_buffer,
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         failed_case.run_identity.seed.value,
         entry.artifact.identity.seed.value,
     );
@@ -176,7 +178,7 @@ test "static_bits retained malformed varint bundles preserve replay metadata" {
     }, .{
         .expected_identity_hash = entry.meta.identity_hash,
     });
-    try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, replay_outcome);
+    try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, replay_outcome);
 
     var bundle_entry_name_buffer: [128]u8 = undefined;
     var bundle_artifact_buffer: [512]u8 = undefined;
@@ -213,15 +215,15 @@ test "static_bits retained malformed varint bundles preserve replay metadata" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("static_bits", bundle.manifest_document.package_name);
-    try std.testing.expectEqualStrings("retained_malformed_varint", bundle.manifest_document.run_name);
-    try std.testing.expectEqualStrings(retained_case.label, bundle.manifest_document.scenario_variant_label.?);
-    try std.testing.expectEqual(
+    try testing.expectEqualStrings("static_bits", bundle.manifest_document.package_name);
+    try testing.expectEqualStrings("retained_malformed_varint", bundle.manifest_document.run_name);
+    try testing.expectEqualStrings(retained_case.label, bundle.manifest_document.scenario_variant_label.?);
+    try testing.expectEqual(
         failed_case.run_identity.seed.value,
         bundle.replay_artifact_view.identity.seed.value,
     );
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expectEqualStrings(
+    try testing.expect(bundle.trace_document != null);
+    try testing.expectEqualStrings(
         failed_case.check_result.violations[0].code,
         bundle.violations_document.violations[0].code,
     );
@@ -370,7 +372,7 @@ fn expectNoFailureOrReplay(
     summary: fuzz_runner.FuzzRunSummary,
 ) !void {
     if (summary.failed_case) |failed_case| {
-        try std.testing.expect(failed_case.persisted_entry_name != null);
+        try testing.expect(failed_case.persisted_entry_name != null);
 
         var read_buffer: [512]u8 = undefined;
         const entry = try corpus.readCorpusEntry(
@@ -385,7 +387,7 @@ fn expectNoFailureOrReplay(
         }, .{
             .expected_identity_hash = entry.meta.identity_hash,
         });
-        try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
+        try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
         return error.TestUnexpectedResult;
     }
 }
@@ -962,7 +964,7 @@ fn buildUlebBytes(seed_value: u64) GeneratedBytes {
         1 => {
             var encoded: [max_varint_bytes]u8 = undefined;
             const encoded_len = static_bits.varint.encodeUleb128(&encoded, random.int(u64) | 0x80) catch unreachable;
-            std.debug.assert(encoded_len >= 2);
+            assert(encoded_len >= 2);
             @memcpy(generated.bytes[0..encoded_len], encoded[0..encoded_len]);
             generated.len = encoded_len - 1;
         },
@@ -1014,7 +1016,7 @@ fn buildSlebBytes(seed_value: u64) GeneratedBytes {
             const value = multi_byte_values[@as(usize, @intCast((seed_value >> 3) % multi_byte_values.len))];
             var encoded: [max_varint_bytes]u8 = undefined;
             const encoded_len = static_bits.varint.encodeSleb128(&encoded, value) catch unreachable;
-            std.debug.assert(encoded_len >= 2);
+            assert(encoded_len >= 2);
             @memcpy(generated.bytes[0..encoded_len], encoded[0..encoded_len]);
             generated.len = encoded_len - 1;
         },
@@ -1128,7 +1130,7 @@ fn buildRetainedMalformedCase(seed_value: u64) RetainedMalformedCase {
     switch (seed_value % 3) {
         0 => {
             const encoded_len = static_bits.varint.encodeUleb128(retained.bytes[0..max_varint_bytes], 624485) catch unreachable;
-            std.debug.assert(encoded_len == 3);
+            assert(encoded_len == 3);
             retained.len = encoded_len - 1;
             retained.label = "truncated_uleb";
             retained.violations = &retained_truncated_violation;
@@ -1154,35 +1156,35 @@ fn buildRetainedMalformedCase(seed_value: u64) RetainedMalformedCase {
 
 fn assertRetainedMalformedCase(retained_case: RetainedMalformedCase) !void {
     if (std.mem.eql(u8, retained_case.label, "truncated_uleb")) {
-        try std.testing.expectError(
+        try testing.expectError(
             error.EndOfStream,
             static_bits.varint.decodeUleb128(retained_case.bytes[0..retained_case.len]),
         );
         var reader = static_bits.cursor.ByteReader.init(retained_case.bytes[0..retained_case.len]);
-        try std.testing.expectError(error.EndOfStream, static_bits.varint.readUleb128(&reader));
-        try std.testing.expectEqual(@as(usize, 0), reader.position());
+        try testing.expectError(error.EndOfStream, static_bits.varint.readUleb128(&reader));
+        try testing.expectEqual(@as(usize, 0), reader.position());
         return;
     }
 
     if (std.mem.eql(u8, retained_case.label, "noncanonical_sleb")) {
-        try std.testing.expectError(
+        try testing.expectError(
             error.InvalidEncoding,
             static_bits.varint.decodeSleb128(retained_case.bytes[0..retained_case.len]),
         );
         var reader = static_bits.cursor.ByteReader.init(retained_case.bytes[0..retained_case.len]);
-        try std.testing.expectError(error.InvalidEncoding, static_bits.varint.readSleb128(&reader));
-        try std.testing.expectEqual(@as(usize, 0), reader.position());
+        try testing.expectError(error.InvalidEncoding, static_bits.varint.readSleb128(&reader));
+        try testing.expectEqual(@as(usize, 0), reader.position());
         return;
     }
 
-    try std.testing.expectEqualStrings("nonterminating_uleb", retained_case.label);
-    try std.testing.expectError(
+    try testing.expectEqualStrings("nonterminating_uleb", retained_case.label);
+    try testing.expectError(
         error.InvalidEncoding,
         static_bits.varint.decodeUleb128(retained_case.bytes[0..retained_case.len]),
     );
     var reader = static_bits.cursor.ByteReader.init(retained_case.bytes[0..retained_case.len]);
-    try std.testing.expectError(error.InvalidEncoding, static_bits.varint.readUleb128(&reader));
-    try std.testing.expectEqual(@as(usize, 0), reader.position());
+    try testing.expectError(error.InvalidEncoding, static_bits.varint.readUleb128(&reader));
+    try testing.expectEqual(@as(usize, 0), reader.position());
 }
 
 fn makeTraceMetadata(

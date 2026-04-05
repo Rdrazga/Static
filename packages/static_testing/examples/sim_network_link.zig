@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const temporal = testing.testing.temporal;
@@ -66,8 +67,8 @@ pub fn main() !void {
         &receiver,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(delivered.delivered_count == 1);
-    std.debug.assert(try receiver.recv() == 42);
+    assert(delivered.delivered_count == 1);
+    assert(try receiver.recv() == 42);
 
     const delayed_early = try link.deliverDueToMailbox(
         sim_fixture.sim_clock.now(),
@@ -75,7 +76,7 @@ pub fn main() !void {
         &receiver,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(delayed_early.delivered_count == 0);
+    assert(delayed_early.delivered_count == 0);
 
     _ = try sim_fixture.sim_clock.advance(.init(2));
     const delayed = try link.deliverDueToMailbox(
@@ -84,8 +85,8 @@ pub fn main() !void {
         &receiver,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(delayed.delivered_count == 1);
-    std.debug.assert(try receiver.recv() == 77);
+    assert(delayed.delivered_count == 1);
+    assert(try receiver.recv() == 77);
 
     const congested_early = try link.deliverDueToMailbox(
         sim_fixture.sim_clock.now(),
@@ -93,7 +94,7 @@ pub fn main() !void {
         &receiver,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(congested_early.delivered_count == 0);
+    assert(congested_early.delivered_count == 0);
 
     _ = try sim_fixture.sim_clock.advance(.init(1));
     const congested_released = try link.deliverDueToMailbox(
@@ -102,8 +103,8 @@ pub fn main() !void {
         &receiver,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(congested_released.delivered_count == 1);
-    std.debug.assert(try receiver.recv() == 123);
+    assert(congested_released.delivered_count == 1);
+    assert(try receiver.recv() == 123);
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const delivered_once = try temporal.checkExactlyOnce(snapshot, .{
@@ -111,7 +112,7 @@ pub fn main() !void {
         .value = 7,
         .surface_label = "network_link",
     });
-    std.debug.assert(delivered_once.check_result.passed);
+    assert(delivered_once.check_result.passed);
 
     std.debug.print(
         "network link kept 7->11 partitioned, delivered 11->7 immediately, delayed destination=13, and held destination=17 behind a congestion window\n",

@@ -8,6 +8,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const io_caps = @import("../../caps.zig");
 const static_queues = @import("static_queues");
 const backend = @import("../../backend.zig");
@@ -372,7 +374,7 @@ pub const IocpBackend = struct {
                     tryPostQueuedCompletionStatus(self.port, &slot.overlapped, 0);
                     return operation_id;
                 };
-                std.debug.assert(request_len_u32 > 0);
+                assert(request_len_u32 > 0);
 
                 setOverlappedOffset(&slot.overlapped, file_op.offset_bytes);
                 const handle: windows.HANDLE = @ptrFromInt(file_native);
@@ -410,7 +412,7 @@ pub const IocpBackend = struct {
                     tryPostQueuedCompletionStatus(self.port, &slot.overlapped, 0);
                     return operation_id;
                 };
-                std.debug.assert(request_len_u32 > 0);
+                assert(request_len_u32 > 0);
 
                 const sock: windows.ws2_32.SOCKET = @ptrFromInt(stream_native);
                 var wsabuf: windows.ws2_32.WSABUF = .{
@@ -444,7 +446,7 @@ pub const IocpBackend = struct {
                     tryPostQueuedCompletionStatus(self.port, &slot.overlapped, 0);
                     return operation_id;
                 };
-                std.debug.assert(request_len_u32 > 0);
+                assert(request_len_u32 > 0);
 
                 const sock: windows.ws2_32.SOCKET = @ptrFromInt(stream_native);
                 var wsabuf: windows.ws2_32.WSABUF = .{
@@ -612,7 +614,7 @@ pub const IocpBackend = struct {
 
     /// Drains completion entries without blocking.
     pub fn pump(self: *IocpBackend, max_completions: u32) backend.PumpError!u32 {
-        std.debug.assert(max_completions > 0);
+        assert(max_completions > 0);
         const now = std.time.Instant.now() catch return error.Unsupported;
         self.cancelExpiredTimeouts(now);
         var saw_wakeup = false;
@@ -628,7 +630,7 @@ pub const IocpBackend = struct {
         };
         const slot = &self.slots[slot_index];
         if (slot.state != .ready) {
-            std.debug.assert(slot.state == .ready);
+            assert(slot.state == .ready);
             return null;
         }
         const completion = slot.completion;
@@ -799,25 +801,25 @@ pub const IocpBackend = struct {
     }
 
     fn allocSlot(self: *IocpBackend) backend.SubmitError!u32 {
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
         if (self.free_len == 0) return error.WouldBlock;
         self.free_len -= 1;
         const slot_index = self.free_slots[self.free_len];
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.slots[slot_index].state == .free);
+        assert(slot_index < self.slots.len);
+        assert(self.slots[slot_index].state == .free);
         return slot_index;
     }
 
     fn freeSlot(self: *IocpBackend, slot_index: u32) void {
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.free_len < self.free_slots.len);
+        assert(slot_index < self.slots.len);
+        assert(self.free_len < self.free_slots.len);
         const next_generation = nextGeneration(self.slots[slot_index].generation);
         self.slots[slot_index] = .{
             .generation = next_generation,
         };
         self.free_slots[self.free_len] = slot_index;
         self.free_len += 1;
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
     }
 
     fn cancelExpiredTimeouts(self: *IocpBackend, now: std.time.Instant) void {
@@ -1206,11 +1208,11 @@ test "iocp backend supports bounded nop/fill completions" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     var storage_a: [8]u8 = [_]u8{0} ** 8;
@@ -1224,17 +1226,17 @@ test "iocp backend supports bounded nop/fill completions" {
         .byte = 0x7A,
     } });
     const id_b = try backend_impl.submit(.{ .nop = buf_b });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
 
     _ = try backend_impl.pump(8);
     const first = backend_impl.poll().?;
     const second = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
-    try std.testing.expectEqual(id_a, first.operation_id);
-    try std.testing.expectEqual(id_b, second.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.success, first.status);
-    try std.testing.expectEqual(types.CompletionStatus.success, second.status);
-    try std.testing.expectEqual(@as(u8, 0x7A), first.buffer.bytes[0]);
+    try testing.expect(backend_impl.poll() == null);
+    try testing.expectEqual(id_a, first.operation_id);
+    try testing.expectEqual(id_b, second.operation_id);
+    try testing.expectEqual(types.CompletionStatus.success, first.status);
+    try testing.expectEqual(types.CompletionStatus.success, second.status);
+    try testing.expectEqual(@as(u8, 0x7A), first.buffer.bytes[0]);
 }
 
 test "iocp backend supports connect/accept and stream read/write" {
@@ -1242,11 +1244,11 @@ test "iocp backend supports connect/accept and stream read/write" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1258,14 +1260,14 @@ test "iocp backend supports connect/accept and stream read/write" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intFromPtr(listen_sock), true);
@@ -1274,7 +1276,7 @@ test "iocp backend supports connect/accept and stream read/write" {
 
     const bound = socketLocalEndpoint(listen_sock) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const server_stream = types.Stream{ .handle = .{ .index = 1, .generation = 1 } };
     const client_stream = types.Stream{ .handle = .{ .index = 2, .generation = 1 } };
@@ -1304,26 +1306,26 @@ test "iocp backend supports connect/accept and stream read/write" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             seen_accept = true;
-            try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(?types.Handle, server_stream.handle), completion.handle);
+            try testing.expectEqual(types.OperationTag.accept, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(?types.Handle, server_stream.handle), completion.handle);
             const peer = completion.endpoint orelse return error.MissingAcceptPeerEndpoint;
             switch (peer) {
                 .ipv4 => |ipv4| {
-                    try std.testing.expectEqual([4]u8{ 127, 0, 0, 1 }, ipv4.address.octets);
-                    try std.testing.expect(ipv4.port != 0);
-                    try std.testing.expect(ipv4.port != port);
+                    try testing.expectEqual([4]u8{ 127, 0, 0, 1 }, ipv4.address.octets);
+                    try testing.expect(ipv4.port != 0);
+                    try testing.expect(ipv4.port != port);
                 },
                 else => return error.UnexpectedAcceptPeerEndpoint,
             }
         } else if (completion.operation_id == connect_id) {
             seen_connect = true;
-            try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(?types.Handle, client_stream.handle), completion.handle);
+            try testing.expectEqual(types.OperationTag.connect, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(?types.Handle, client_stream.handle), completion.handle);
         }
     }
-    try std.testing.expect(seen_accept and seen_connect);
+    try testing.expect(seen_accept and seen_connect);
 
     var write_bytes: [5]u8 = .{ 'h', 'e', 'l', 'l', 'o' };
     var write_buf = types.Buffer{ .bytes = &write_bytes };
@@ -1352,18 +1354,18 @@ test "iocp backend supports connect/accept and stream read/write" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
         } else if (completion.operation_id == read_id) {
             got_read = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
-            try std.testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
         }
     }
-    try std.testing.expect(got_write and got_read);
+    try testing.expect(got_write and got_read);
 
     var timeout_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const timeout_read_buf = types.Buffer{ .bytes = &timeout_read_bytes };
@@ -1374,10 +1376,10 @@ test "iocp backend supports connect/accept and stream read/write" {
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const timeout_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(timeout_read_id, timeout_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, timeout_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
+    try testing.expectEqual(timeout_read_id, timeout_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, timeout_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
 
     const accept_timeout_stream = types.Stream{ .handle = .{ .index = 3, .generation = 1 } };
     const accept_timeout_id = try backend_impl.submit(.{ .accept = .{
@@ -1387,10 +1389,10 @@ test "iocp backend supports connect/accept and stream read/write" {
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const accept_timeout_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
+    try testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
 
     const accept_cancel_stream = types.Stream{ .handle = .{ .index = 4, .generation = 1 } };
     const accept_cancel_id = try backend_impl.submit(.{ .accept = .{
@@ -1401,10 +1403,10 @@ test "iocp backend supports connect/accept and stream read/write" {
     try backend_impl.cancel(accept_cancel_id);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const accept_cancel_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(accept_cancel_id, accept_cancel_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, accept_cancel_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.cancelled, accept_cancel_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), accept_cancel_completion.err);
+    try testing.expectEqual(accept_cancel_id, accept_cancel_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, accept_cancel_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.cancelled, accept_cancel_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), accept_cancel_completion.err);
 
     var close_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const close_read_buf = types.Buffer{ .bytes = &close_read_bytes };
@@ -1416,10 +1418,10 @@ test "iocp backend supports connect/accept and stream read/write" {
     backend_impl.notifyHandleClosed(server_stream.handle);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const close_read_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(close_read_id, close_read_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, close_read_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, close_read_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_read_completion.err);
+    try testing.expectEqual(close_read_id, close_read_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, close_read_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, close_read_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_read_completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1429,11 +1431,11 @@ test "iocp backend allows multiple in-flight reads on one stream" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1445,18 +1447,18 @@ test "iocp backend allows multiple in-flight reads on one stream" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const bound = socketLocalEndpoint(listen_sock) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intFromPtr(listen_sock), true);
@@ -1493,13 +1495,13 @@ test "iocp backend allows multiple in-flight reads on one stream" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             saw_accept = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         } else if (completion.operation_id == connect_id) {
             saw_connect = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         }
     }
-    try std.testing.expect(saw_accept and saw_connect);
+    try testing.expect(saw_accept and saw_connect);
 
     var read_a_bytes: [1]u8 = [_]u8{0};
     var read_b_bytes: [1]u8 = [_]u8{0};
@@ -1531,7 +1533,7 @@ test "iocp backend allows multiple in-flight reads on one stream" {
     while (attempts < 8 and pumped_total < 3) : (attempts += 1) {
         pumped_total += try backend_impl.waitForCompletions(3 - pumped_total, std.time.ns_per_s);
     }
-    try std.testing.expect(pumped_total >= 3);
+    try testing.expect(pumped_total >= 3);
 
     var got_write = false;
     var got_read_a = false;
@@ -1541,27 +1543,27 @@ test "iocp backend allows multiple in-flight reads on one stream" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 2), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 2), completion.bytes_transferred);
         } else if (completion.operation_id == read_a_id) {
             got_read_a = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
         } else if (completion.operation_id == read_b_id) {
             got_read_b = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 1), completion.bytes_transferred);
         }
     }
-    try std.testing.expect(got_write and got_read_a and got_read_b);
+    try testing.expect(got_write and got_read_a and got_read_b);
 
     const got_first = read_a_bytes[0];
     const got_second = read_b_bytes[0];
     const matches = (got_first == 'a' and got_second == 'b') or (got_first == 'b' and got_second == 'a');
-    try std.testing.expect(matches);
+    try testing.expect(matches);
 }
 
 test "iocp backend closes pending stream_write when stream handle closes" {
@@ -1569,11 +1571,11 @@ test "iocp backend closes pending stream_write when stream handle closes" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1585,19 +1587,19 @@ test "iocp backend closes pending stream_write when stream handle closes" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
     defer _ = windows.ws2_32.closesocket(listen_sock);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const bound = socketLocalEndpoint(listen_sock) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const client_sock = windows.ws2_32.WSASocketW(
         @intCast(af_inet_family),
@@ -1607,17 +1609,17 @@ test "iocp backend closes pending stream_write when stream handle closes" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(client_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(client_sock != windows.ws2_32.INVALID_SOCKET);
     errdefer _ = windows.ws2_32.closesocket(client_sock);
 
     var remote_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = port,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.connect(client_sock, remote_addr.ptr(), remote_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.connect(client_sock, remote_addr.ptr(), remote_addr.len()));
 
     const server_sock = windows.ws2_32.accept(listen_sock, null, null);
-    try std.testing.expect(server_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(server_sock != windows.ws2_32.INVALID_SOCKET);
     errdefer _ = windows.ws2_32.closesocket(server_sock);
 
     const so_sndbuf: i32 = 0x1001;
@@ -1669,11 +1671,11 @@ test "iocp backend closes pending stream_write when stream handle closes" {
 
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 }
 
 test "iocp backend closes pending accept when listener handle closes" {
@@ -1681,11 +1683,11 @@ test "iocp backend closes pending accept when listener handle closes" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1697,14 +1699,14 @@ test "iocp backend closes pending accept when listener handle closes" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intFromPtr(listen_sock), true);
@@ -1725,10 +1727,10 @@ test "iocp backend closes pending accept when listener handle closes" {
 
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(accept_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(accept_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
 }
 
 test "iocp backend maps connection refused on connect" {
@@ -1736,11 +1738,11 @@ test "iocp backend maps connection refused on connect" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1752,17 +1754,17 @@ test "iocp backend maps connection refused on connect" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(reserve_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(reserve_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(reserve_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(reserve_sock, bind_addr.ptr(), bind_addr.len()));
 
     const reserved = socketLocalEndpoint(reserve_sock) orelse return error.SkipZigTest;
     const port = endpointPort(reserved);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
     _ = windows.ws2_32.closesocket(reserve_sock);
     reserve_sock = windows.ws2_32.INVALID_SOCKET;
 
@@ -1780,10 +1782,10 @@ test "iocp backend maps connection refused on connect" {
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
 
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(connect_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.connection_refused, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .connection_refused), completion.err);
+    try testing.expectEqual(connect_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.connect, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.connection_refused, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .connection_refused), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1793,11 +1795,11 @@ test "iocp backend maps connection reset on stream read" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1809,18 +1811,18 @@ test "iocp backend maps connection reset on stream read" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const bound = socketLocalEndpoint(listen_sock) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intFromPtr(listen_sock), true);
@@ -1854,13 +1856,13 @@ test "iocp backend maps connection reset on stream read" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             saw_accept = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         } else if (completion.operation_id == connect_id) {
             saw_connect = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         }
     }
-    try std.testing.expect(saw_accept and saw_connect);
+    try testing.expect(saw_accept and saw_connect);
 
     const so_linger: i32 = 0x0080;
     const Linger = extern struct {
@@ -1869,7 +1871,7 @@ test "iocp backend maps connection reset on stream read" {
     };
 
     const server_native = backend_impl.handle_native[server_stream.handle.index];
-    try std.testing.expect(server_native != 0);
+    try testing.expect(server_native != 0);
     const server_sock: windows.ws2_32.SOCKET = @ptrFromInt(server_native);
     var linger_opt = Linger{ .l_onoff = 1, .l_linger = 0 };
     if (windows.ws2_32.setsockopt(
@@ -1894,10 +1896,10 @@ test "iocp backend maps connection reset on stream read" {
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
 
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.connection_reset, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .connection_reset), completion.err);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.connection_reset, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .connection_reset), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -1907,11 +1909,11 @@ test "iocp backend maps broken pipe on stream write after shutdown send" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
@@ -1923,19 +1925,19 @@ test "iocp backend maps broken pipe on stream write after shutdown send" {
         0,
         wsa_flag_overlapped,
     );
-    try std.testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
+    try testing.expect(listen_sock != windows.ws2_32.INVALID_SOCKET);
     defer _ = windows.ws2_32.closesocket(listen_sock);
 
     var bind_addr = SockaddrAny.fromEndpoint(.{ .ipv4 = .{
         .address = .init(127, 0, 0, 1),
         .port = 0,
     } });
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
-    try std.testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.bind(listen_sock, bind_addr.ptr(), bind_addr.len()));
+    try testing.expectEqual(@as(i32, 0), windows.ws2_32.listen(listen_sock, 16));
 
     const bound = socketLocalEndpoint(listen_sock) orelse return error.SkipZigTest;
     const port = endpointPort(bound);
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const client_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -1955,13 +1957,13 @@ test "iocp backend maps broken pipe on stream write after shutdown send" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id != connect_id) continue;
         saw_connect = true;
-        try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+        try testing.expectEqual(types.OperationTag.connect, completion.tag);
+        try testing.expectEqual(types.CompletionStatus.success, completion.status);
     }
-    try std.testing.expect(saw_connect);
+    try testing.expect(saw_connect);
 
     const client_native = backend_impl.handle_native[client_stream.handle.index];
-    try std.testing.expect(client_native != 0);
+    try testing.expect(client_native != 0);
     const client_sock: windows.ws2_32.SOCKET = @ptrFromInt(client_native);
     if (windows.ws2_32.shutdown(client_sock, windows.ws2_32.SD_SEND) == windows.ws2_32.SOCKET_ERROR) {
         return error.SkipZigTest;
@@ -1991,10 +1993,10 @@ test "iocp backend maps broken pipe on stream write after shutdown send" {
         _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     }
     const completion = completion_opt orelse return error.SkipZigTest;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.broken_pipe, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .broken_pipe), completion.err);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.broken_pipe, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .broken_pipe), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -2004,17 +2006,17 @@ test "iocp backend supports overlapped file write/read via adopted handle" {
     cfg.backend_kind = .windows_iocp;
 
     if (!io_caps.windowsBackendEnabled()) {
-        try std.testing.expectError(error.Unsupported, IocpBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, IocpBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try IocpBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try IocpBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const filename_utf8 = "static_io_iocp_file_io.tmp";
 
     var filename_w: [64:0]u16 = undefined;
-    std.debug.assert(filename_utf8.len + 1 <= filename_w.len);
+    assert(filename_utf8.len + 1 <= filename_w.len);
     for (filename_utf8, 0..) |byte, index| {
         filename_w[index] = byte;
     }
@@ -2037,7 +2039,7 @@ test "iocp backend supports overlapped file write/read via adopted handle" {
         flags_and_attributes,
         null,
     );
-    try std.testing.expect(native_handle != windows.INVALID_HANDLE_VALUE);
+    try testing.expect(native_handle != windows.INVALID_HANDLE_VALUE);
 
     const file_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(file_handle, .file, @intFromPtr(native_handle), true);
@@ -2056,11 +2058,11 @@ test "iocp backend supports overlapped file write/read via adopted handle" {
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const write_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, write_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_write_at, write_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, write_completion.status);
-    try std.testing.expectEqual(@as(u32, 4), write_completion.bytes_transferred);
-    try std.testing.expectEqual(@as(?types.Handle, file_handle), write_completion.handle);
+    try testing.expectEqual(write_id, write_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_write_at, write_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, write_completion.status);
+    try testing.expectEqual(@as(u32, 4), write_completion.bytes_transferred);
+    try testing.expectEqual(@as(?types.Handle, file_handle), write_completion.handle);
 
     var read_bytes: [8]u8 = [_]u8{0} ** 8;
     const read_buf = types.Buffer{ .bytes = &read_bytes };
@@ -2072,11 +2074,11 @@ test "iocp backend supports overlapped file write/read via adopted handle" {
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const read_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(read_id, read_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_read_at, read_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, read_completion.status);
-    try std.testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
-    try std.testing.expectEqual(@as(?types.Handle, file_handle), read_completion.handle);
+    try testing.expectEqual(read_id, read_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_read_at, read_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, read_completion.status);
+    try testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
+    try testing.expectEqual(@as(?types.Handle, file_handle), read_completion.handle);
 }
 
 extern "kernel32" fn DeleteFileW(lpFileName: windows.LPCWSTR) callconv(.winapi) windows.BOOL;

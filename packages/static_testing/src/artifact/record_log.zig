@@ -1,6 +1,7 @@
 //! Shared append-only binary record-log helpers.
 
 const std = @import("std");
+const testing = std.testing;
 
 pub const record_log_version: u16 = 1;
 
@@ -193,10 +194,10 @@ const BufferWriter = struct {
 };
 
 test "record log appends and retains bounded records" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -221,9 +222,9 @@ test "record log appends and retains bounded records" {
 
     const first = (try iter.next()).?;
     const second = (try iter.next()).?;
-    try std.testing.expectEqualStrings("two", first);
-    try std.testing.expectEqualStrings("three", second);
-    try std.testing.expect((try iter.next()) == null);
+    try testing.expectEqualStrings("two", first);
+    try testing.expectEqualStrings("three", second);
+    try testing.expect((try iter.next()) == null);
 }
 
 test "record log rejects unsupported header version" {
@@ -236,5 +237,5 @@ test "record log rejects unsupported header version" {
     @memcpy(invalid_file[0..valid_file.len], valid_file);
     std.mem.writeInt(u16, invalid_file[file_magic.len..][0..@sizeOf(u16)], record_log_version + 1, .little);
 
-    try std.testing.expectError(error.Unsupported, iterateRecords(invalid_file[0..valid_file.len]));
+    try testing.expectError(error.Unsupported, iterateRecords(invalid_file[0..valid_file.len]));
 }

@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_string = @import("static_string");
 const static_testing = @import("static_testing");
 
@@ -36,8 +38,8 @@ const ReferencePool = struct {
         self.token_indices = [_]u8{invalid_token_index} ** max_entries;
         self.len = 0;
         self.bytes_used = 0;
-        std.debug.assert(self.len == 0);
-        std.debug.assert(self.bytes_used == 0);
+        assert(self.len == 0);
+        assert(self.bytes_used == 0);
     }
 
     fn intern(self: *@This(), token_index: u8) static_string.InternError!static_string.Symbol {
@@ -51,8 +53,8 @@ const ReferencePool = struct {
         self.len += 1;
         self.bytes_used += value.len;
 
-        std.debug.assert(self.len <= max_entries);
-        std.debug.assert(self.bytes_used <= max_bytes);
+        assert(self.len <= max_entries);
+        assert(self.bytes_used <= max_bytes);
         return symbol;
     }
 
@@ -60,7 +62,7 @@ const ReferencePool = struct {
         const index: usize = symbol;
         if (index >= self.len) return error.NotFound;
         const token_index = self.token_indices[index];
-        std.debug.assert(token_index != invalid_token_index);
+        assert(token_index != invalid_token_index);
         return support.vocabulary[token_index];
     }
 
@@ -87,8 +89,8 @@ const Context = struct {
         @memset(self.byte_storage[0..], 0);
         self.pool = static_string.InternPool.init(self.entry_storage[0..], self.byte_storage[0..]) catch unreachable;
         self.reference.reset();
-        std.debug.assert(self.pool.len() == 0);
-        std.debug.assert(self.pool.bytesUsed() == 0);
+        assert(self.pool.len() == 0);
+        assert(self.pool.bytesUsed() == 0);
     }
 
     fn validate(self: *@This()) checker.CheckResult {
@@ -222,7 +224,7 @@ test "static_string intern pool sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 96), summary.executed_case_count);
+    try testing.expectEqual(@as(u32, 96), summary.executed_case_count);
     if (summary.failed_case) |failed_case| {
         var summary_buffer: [1536]u8 = undefined;
         const summary_text = try model.formatFailedCaseSummary(

@@ -4,6 +4,8 @@
 //! Thread safety: all operations are serialized by one mutex.
 //! Blocking behavior: non-blocking; returns `error.WouldBlock` when full or empty.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("ring_buffer.zig");
 const sync = @import("static_sync");
 const qi = @import("queue_internal.zig");
@@ -17,8 +19,8 @@ pub fn LockedQueue(comptime T: type) type {
     // addressable storage; ZST would make capacity and length calculations
     // meaningless.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -43,22 +45,22 @@ pub fn LockedQueue(comptime T: type) type {
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
             const self: Self = .{ .rb = try ring.RingBuffer(T).init(allocator, cfg) };
             // Postcondition: queue starts empty with a valid buffer.
-            std.debug.assert(self.rb.len() == 0);
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.len() == 0);
+            assert(self.rb.capacity() > 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: buffer must still be valid (not already freed).
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             self.rb.deinit();
             self.* = undefined;
         }
 
         pub fn capacity(self: *const Self) usize {
             // Invariant: capacity is always positive for a live queue.
-            std.debug.assert(self.rb.buf.len > 0);
-            std.debug.assert(@intFromPtr(self.rb.buf.ptr) != 0);
+            assert(self.rb.buf.len > 0);
+            assert(@intFromPtr(self.rb.buf.ptr) != 0);
             return self.rb.buf.len;
         }
 
@@ -67,7 +69,7 @@ pub fn LockedQueue(comptime T: type) type {
             defer guard.unlock();
             const l = self.rb.len();
             // Invariant: len cannot exceed capacity.
-            std.debug.assert(l <= self.rb.capacity());
+            assert(l <= self.rb.capacity());
             return l;
         }
 
@@ -91,13 +93,13 @@ pub fn LockedQueue(comptime T: type) type {
 
             self.mutex.lock();
             defer self.mutex.unlock();
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
 
             const old_len = self.rb.len();
             const sent_count = self.rb.tryPushBatch(values[0..items_limit]);
-            std.debug.assert(sent_count <= values.len);
-            std.debug.assert(sent_count <= items_limit);
-            std.debug.assert(self.rb.len() == old_len + sent_count);
+            assert(sent_count <= values.len);
+            assert(sent_count <= items_limit);
+            assert(self.rb.len() == old_len + sent_count);
             return sent_count;
         }
 
@@ -113,13 +115,13 @@ pub fn LockedQueue(comptime T: type) type {
 
             self.mutex.lock();
             defer self.mutex.unlock();
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
 
             const old_len = self.rb.len();
             const recv_count = self.rb.tryPopBatch(out[0..items_limit]);
-            std.debug.assert(recv_count <= out.len);
-            std.debug.assert(recv_count <= items_limit);
-            std.debug.assert(self.rb.len() + recv_count == old_len);
+            assert(recv_count <= out.len);
+            assert(recv_count <= items_limit);
+            assert(self.rb.len() + recv_count == old_len);
             return recv_count;
         }
 
@@ -127,108 +129,108 @@ pub fn LockedQueue(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
             // Precondition: capacity must be positive.
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             try self.rb.tryPush(value);
             // Postcondition: queue is non-empty after a successful push.
-            std.debug.assert(self.rb.len() > 0);
+            assert(self.rb.len() > 0);
         }
 
         pub fn tryRecv(self: *Self) TryRecvError!T {
             self.mutex.lock();
             defer self.mutex.unlock();
             // Precondition: capacity must be positive.
-            std.debug.assert(self.rb.capacity() > 0);
+            assert(self.rb.capacity() > 0);
             const old_len = self.rb.len();
             const value = try self.rb.tryPop();
             // Postcondition: len decreased by exactly one.
-            std.debug.assert(self.rb.len() == old_len - 1);
+            assert(self.rb.len() == old_len - 1);
             return value;
         }
     };
 }
 
 test "locked queue provides bounded trySend/tryRecv semantics" {
-    var q = try LockedQueue(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var q = try LockedQueue(u8).init(testing.allocator, .{ .capacity = 2 });
     defer q.deinit();
 
-    try std.testing.expect(q.isEmpty());
-    try std.testing.expect(!q.isFull());
+    try testing.expect(q.isEmpty());
+    try testing.expect(!q.isFull());
     try q.trySend(1);
-    try std.testing.expect(!q.isFull());
+    try testing.expect(!q.isFull());
     try q.trySend(2);
-    try std.testing.expect(q.isFull());
-    try std.testing.expectEqual(@as(usize, 2), q.capacity());
-    try std.testing.expectEqual(@as(usize, 2), q.len());
-    try std.testing.expect(!q.isEmpty());
-    try std.testing.expectError(error.WouldBlock, q.trySend(3));
-    try std.testing.expectEqual(@as(u8, 1), try q.tryRecv());
-    try std.testing.expect(!q.isFull());
-    try std.testing.expectEqual(@as(u8, 2), try q.tryRecv());
-    try std.testing.expect(q.isEmpty());
-    try std.testing.expectError(error.WouldBlock, q.tryRecv());
+    try testing.expect(q.isFull());
+    try testing.expectEqual(@as(usize, 2), q.capacity());
+    try testing.expectEqual(@as(usize, 2), q.len());
+    try testing.expect(!q.isEmpty());
+    try testing.expectError(error.WouldBlock, q.trySend(3));
+    try testing.expectEqual(@as(u8, 1), try q.tryRecv());
+    try testing.expect(!q.isFull());
+    try testing.expectEqual(@as(u8, 2), try q.tryRecv());
+    try testing.expect(q.isEmpty());
+    try testing.expectError(error.WouldBlock, q.tryRecv());
 }
 
 test "locked queue batch send and recv process contiguous prefix" {
-    var q = try LockedQueue(u8).init(std.testing.allocator, .{ .capacity = 3 });
+    var q = try LockedQueue(u8).init(testing.allocator, .{ .capacity = 3 });
     defer q.deinit();
 
     const sent = q.trySendBatch(&.{ 1, 2, 3, 4 });
-    try std.testing.expectEqual(@as(usize, 3), sent);
-    try std.testing.expect(q.isFull());
+    try testing.expectEqual(@as(usize, 3), sent);
+    try testing.expect(q.isFull());
 
     var recv_small: [2]u8 = undefined;
     const recv_first = q.tryRecvBatch(&recv_small);
-    try std.testing.expectEqual(@as(usize, 2), recv_first);
-    try std.testing.expectEqual(@as(u8, 1), recv_small[0]);
-    try std.testing.expectEqual(@as(u8, 2), recv_small[1]);
+    try testing.expectEqual(@as(usize, 2), recv_first);
+    try testing.expectEqual(@as(u8, 1), recv_small[0]);
+    try testing.expectEqual(@as(u8, 2), recv_small[1]);
 
     const sent_second = q.trySendBatch(&.{ 5, 6 });
-    try std.testing.expectEqual(@as(usize, 2), sent_second);
+    try testing.expectEqual(@as(usize, 2), sent_second);
 
     var recv_large: [4]u8 = undefined;
     const recv_second = q.tryRecvBatch(&recv_large);
-    try std.testing.expectEqual(@as(usize, 3), recv_second);
-    try std.testing.expectEqual(@as(u8, 3), recv_large[0]);
-    try std.testing.expectEqual(@as(u8, 5), recv_large[1]);
-    try std.testing.expectEqual(@as(u8, 6), recv_large[2]);
+    try testing.expectEqual(@as(usize, 3), recv_second);
+    try testing.expectEqual(@as(u8, 3), recv_large[0]);
+    try testing.expectEqual(@as(u8, 5), recv_large[1]);
+    try testing.expectEqual(@as(u8, 6), recv_large[2]);
 }
 
 test "locked queue batch options bound work and preserve empty no-op" {
-    var q = try LockedQueue(u8).init(std.testing.allocator, .{ .capacity = 3 });
+    var q = try LockedQueue(u8).init(testing.allocator, .{ .capacity = 3 });
     defer q.deinit();
 
     try q.trySend(1);
     try q.trySend(2);
 
     const sent_zero = q.trySendBatchWith(&.{ 7, 8 }, .{ .items_max = 0 });
-    try std.testing.expectEqual(@as(usize, 0), sent_zero);
-    try std.testing.expectEqual(@as(usize, 2), q.len());
+    try testing.expectEqual(@as(usize, 0), sent_zero);
+    try testing.expectEqual(@as(usize, 2), q.len());
 
     const sent_one = q.trySendBatchWith(&.{ 7, 8 }, .{ .items_max = 1 });
-    try std.testing.expectEqual(@as(usize, 1), sent_one);
-    try std.testing.expect(q.isFull());
+    try testing.expectEqual(@as(usize, 1), sent_one);
+    try testing.expect(q.isFull());
 
     var recv: [4]u8 = undefined;
     const recv_zero = q.tryRecvBatchWith(recv[0..0], .{ .items_max = 1 });
-    try std.testing.expectEqual(@as(usize, 0), recv_zero);
-    try std.testing.expect(q.isFull());
+    try testing.expectEqual(@as(usize, 0), recv_zero);
+    try testing.expect(q.isFull());
 
     const recv_two = q.tryRecvBatchWith(&recv, .{ .items_max = 2 });
-    try std.testing.expectEqual(@as(usize, 2), recv_two);
-    try std.testing.expectEqual(@as(u8, 1), recv[0]);
-    try std.testing.expectEqual(@as(u8, 2), recv[1]);
+    try testing.expectEqual(@as(usize, 2), recv_two);
+    try testing.expectEqual(@as(u8, 1), recv[0]);
+    try testing.expectEqual(@as(u8, 2), recv[1]);
 
     const recv_rest = q.tryRecvBatchWith(&recv, .{ .items_max = 9 });
-    try std.testing.expectEqual(@as(usize, 1), recv_rest);
-    try std.testing.expectEqual(@as(u8, 7), recv[0]);
-    try std.testing.expect(q.isEmpty());
+    try testing.expectEqual(@as(usize, 1), recv_rest);
+    try testing.expectEqual(@as(u8, 7), recv[0]);
+    try testing.expect(q.isEmpty());
 }
 
 test "locked queue len remains bounded during concurrent mutation" {
     if (caps.shouldSkipThreadedTests()) return error.SkipZigTest;
 
     const Q = LockedQueue(u16);
-    var q = try Q.init(std.testing.allocator, .{ .capacity = 16 });
+    var q = try Q.init(testing.allocator, .{ .capacity = 16 });
     defer q.deinit();
 
     const Worker = struct {
@@ -258,10 +260,10 @@ test "locked queue len remains bounded during concurrent mutation" {
     var checks: u32 = 0;
     while (checks < 20_000) : (checks += 1) {
         const queue_len = q.len();
-        try std.testing.expect(queue_len <= q.capacity());
+        try testing.expect(queue_len <= q.capacity());
         std.Thread.yield() catch {};
     }
     thread.join();
 
-    try std.testing.expect(q.len() <= q.capacity());
+    try testing.expect(q.len() <= q.capacity());
 }

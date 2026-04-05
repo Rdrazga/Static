@@ -25,6 +25,8 @@
 //! - Budgeted variants enforce explicit work limits on untrusted input.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const budget_mod = @import("budget.zig");
 const combine = @import("combine.zig");
@@ -140,7 +142,7 @@ fn combineOrdered(a: u64, b_val: u64) u64 {
 // and the compiler eliminates dead branches.
 fn MaybeError(comptime B: type, comptime T: type) type {
     comptime {
-        std.debug.assert(B == void or B == *HashBudget);
+        assert(B == void or B == *HashBudget);
     }
     return if (B == void) T else HashBudgetError!T;
 }
@@ -150,7 +152,7 @@ fn MaybeError(comptime B: type, comptime T: type) type {
 // =============================================================================
 
 fn hashTupleImpl(seed: u64, values: anytype, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     var result: u64 = seed;
     inline for (std.meta.fields(@TypeOf(values))) |field| {
         const value = @field(values, field.name);
@@ -170,7 +172,7 @@ fn hashTupleImpl(seed: u64, values: anytype, comptime policy: PointerHashPolicy,
 // =============================================================================
 
 fn hashAnyImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
 
     if (comptime B != void) try b.enter();
     defer if (comptime B != void) b.leave();
@@ -179,7 +181,7 @@ fn hashAnyImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, co
 
     // Fast path for byte slices - the most common case.
     if (T == []const u8 or T == []u8) {
-        std.debug.assert(value.len == 0 or @intFromPtr(value.ptr) != 0);
+        assert(value.len == 0 or @intFromPtr(value.ptr) != 0);
         if (comptime B != void) try b.chargeBytes(value.len);
         return Wyhash.hash(seed, value);
     }
@@ -196,14 +198,14 @@ fn hashAnyImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, co
             if (comptime B != void) try b.chargeBytes(1);
             const byte: u8 = if (value) 1 else 0;
             // Bool maps to exactly 0 or 1.
-            std.debug.assert(byte == 0 or byte == 1);
+            assert(byte == 0 or byte == 1);
             break :blk Wyhash.hash(seed, std.mem.asBytes(&byte));
         },
         .optional => hashOptionalImpl(seed, value, policy, B, b),
         .error_set => blk: {
             const code = @intFromError(value);
             // Error codes are never zero in Zig.
-            std.debug.assert(code != 0);
+            assert(code != 0);
             if (comptime B != void) try b.chargeBytes(@sizeOf(@TypeOf(code)));
             break :blk Wyhash.hash(seed, std.mem.asBytes(&code));
         },
@@ -216,7 +218,7 @@ fn hashAnyImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, co
         .@"enum" => blk: {
             const int_val = @intFromEnum(value);
             // Enum integer representation must have nonzero size.
-            std.debug.assert(@sizeOf(@TypeOf(int_val)) > 0);
+            assert(@sizeOf(@TypeOf(int_val)) > 0);
             if (comptime B != void) try b.chargeBytes(@sizeOf(@TypeOf(int_val)));
             break :blk Wyhash.hash(seed, std.mem.asBytes(&int_val));
         },
@@ -288,10 +290,10 @@ fn isHashAnyStrictSupportedType(comptime T: type) bool {
 }
 
 fn hashComptimeIntImpl(seed: u64, comptime value: anytype, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const s = std.fmt.comptimePrint("{}", .{value});
     // Comptime int string representation must be non-empty.
-    comptime std.debug.assert(s.len > 0);
+    comptime assert(s.len > 0);
     if (comptime B != void) try b.chargeBytes(s.len);
     return Wyhash.hash(seed, s);
 }
@@ -302,12 +304,12 @@ fn canonicalizeFloat(comptime F: type, value: F) F {
     if (std.math.isNan(canonical)) canonical = std.math.nan(F);
     if (canonical == 0) canonical = @as(F, 0);
     // Postcondition: no negative zero remains after canonicalization.
-    if (canonical == 0) std.debug.assert(!std.math.signbit(canonical));
+    if (canonical == 0) assert(!std.math.signbit(canonical));
     return canonical;
 }
 
 fn hashFloatImpl(seed: u64, value: anytype, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const F = @TypeOf(value);
     if (comptime B != void) try b.chargeBytes(@sizeOf(F));
     const canonical = canonicalizeFloat(F, value);
@@ -315,14 +317,14 @@ fn hashFloatImpl(seed: u64, value: anytype, comptime B: type, b: B) MaybeError(B
 }
 
 fn hashComptimeFloatImpl(seed: u64, comptime value: anytype, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     if (comptime B != void) try b.chargeBytes(@sizeOf(f64));
     const canonical = canonicalizeFloat(f64, @as(f64, value));
     return Wyhash.hash(seed, std.mem.asBytes(&canonical));
 }
 
 fn hashOptionalImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     if (comptime B != void) try b.chargeElems(1);
     if (value) |payload| {
         if (comptime B != void) {
@@ -339,7 +341,7 @@ fn hashOptionalImpl(seed: u64, value: anytype, comptime policy: PointerHashPolic
 }
 
 fn hashErrorUnionImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     if (comptime B != void) try b.chargeElems(1);
     if (value) |payload| {
         if (comptime B != void) {
@@ -358,10 +360,10 @@ fn hashErrorUnionImpl(seed: u64, value: anytype, comptime policy: PointerHashPol
 }
 
 fn hashPointerImpl(seed: u64, value: anytype, comptime ptr: std.builtin.Type.Pointer, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
 
     if (ptr.size == .slice) {
-        std.debug.assert(value.len == 0 or @intFromPtr(value.ptr) != 0);
+        assert(value.len == 0 or @intFromPtr(value.ptr) != 0);
         const Child = ptr.child;
         if (Child == u8 or (std.meta.hasUniqueRepresentation(Child) and
             (policy == .address or !typeContainsNonSlicePointer(Child))))
@@ -389,12 +391,12 @@ fn hashPointerImpl(seed: u64, value: anytype, comptime ptr: std.builtin.Type.Poi
 
     if (comptime B != void) try b.chargeBytes(@sizeOf(usize));
     const addr = @intFromPtr(value);
-    if (!ptr.is_allowzero) std.debug.assert(addr != 0);
+    if (!ptr.is_allowzero) assert(addr != 0);
     return Wyhash.hash(seed, std.mem.asBytes(&addr));
 }
 
 fn hashArrayImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
     if (std.meta.hasUniqueRepresentation(T) and
         (policy == .address or !typeContainsNonSlicePointer(T)))
@@ -417,7 +419,7 @@ fn hashArrayImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, 
 }
 
 fn hashVectorImpl(seed: u64, value: anytype, comptime vec: std.builtin.Type.Vector, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
     if (std.meta.hasUniqueRepresentation(T) and
         (policy == .address or !typeContainsNonSlicePointer(T)))
@@ -438,7 +440,7 @@ fn hashVectorImpl(seed: u64, value: anytype, comptime vec: std.builtin.Type.Vect
 }
 
 fn hashStructImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
     if (std.meta.hasUniqueRepresentation(T) and
         (policy == .address or !typeContainsNonSlicePointer(T)))
@@ -461,7 +463,7 @@ fn hashStructImpl(seed: u64, value: anytype, comptime policy: PointerHashPolicy,
 }
 
 fn hashUnionImpl(seed: u64, value: anytype, comptime u: std.builtin.Type.Union, comptime policy: PointerHashPolicy, comptime B: type, b: B) MaybeError(B, u64) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
     const Tag = u.tag_type orelse @compileError("Cannot hash untagged union type: " ++ @typeName(T));
     const tag: Tag = std.meta.activeTag(value);
@@ -503,24 +505,24 @@ test "hashAny integers" {
     const h1 = hashAny(@as(u32, 42));
     const h2 = hashAny(@as(u32, 42));
     const h3 = hashAny(@as(u32, 43));
-    try std.testing.expectEqual(h1, h2);
-    try std.testing.expect(h1 != h3);
+    try testing.expectEqual(h1, h2);
+    try testing.expect(h1 != h3);
 }
 
 test "hashTuple" {
     const h1 = hashTuple(.{ @as(u32, 1), @as(u32, 2), @as(u32, 3) });
     const h2 = hashTuple(.{ @as(u32, 1), @as(u32, 2), @as(u32, 3) });
     const h3 = hashTuple(.{ @as(u32, 3), @as(u32, 2), @as(u32, 1) });
-    try std.testing.expectEqual(h1, h2);
-    try std.testing.expect(h1 != h3);
+    try testing.expectEqual(h1, h2);
+    try testing.expect(h1 != h3);
 }
 
 test "hashTuple supports comptime_int fields" {
     const h1 = hashTuple(.{ 1, 2, 3 });
     const h2 = hashTuple(.{ 1, 2, 3 });
     const h3 = hashTuple(.{ 3, 2, 1 });
-    try std.testing.expectEqual(h1, h2);
-    try std.testing.expect(h1 != h3);
+    try testing.expectEqual(h1, h2);
+    try testing.expect(h1 != h3);
 }
 
 test "hashAny integer uses native byte order" {
@@ -528,7 +530,7 @@ test "hashAny integer uses native byte order" {
     var bytes: [4]u8 = undefined;
     std.mem.writeInt(u32, &bytes, value, builtin.cpu.arch.endian());
     const expected = Wyhash.hash(0, bytes[0..]);
-    try std.testing.expectEqual(expected, hashAny(value));
+    try testing.expectEqual(expected, hashAny(value));
 }
 
 test "hashAny avoids hashing padding (array of padded structs)" {
@@ -554,28 +556,28 @@ test "hashAny avoids hashing padding (array of padded structs)" {
         break :blk key;
     };
 
-    try std.testing.expect(std.meta.eql(k1, k2));
+    try testing.expect(std.meta.eql(k1, k2));
 
     const a1 = [_]Key{ k1, k1, k1 };
     const a2 = [_]Key{ k2, k2, k2 };
-    try std.testing.expectEqual(hashAny(a1), hashAny(a2));
+    try testing.expectEqual(hashAny(a1), hashAny(a2));
 
     const a3 = [_]Key{ k1, k1, .{ .a = 2, .b = 0x11223344 } };
-    try std.testing.expect(hashAny(a1) != hashAny(a3));
+    try testing.expect(hashAny(a1) != hashAny(a3));
 }
 
 test "hashAny optional" {
     const a: ?u32 = null;
     const b_val: ?u32 = 1;
-    try std.testing.expectEqual(hashAny(a), hashAny(a));
-    try std.testing.expectEqual(hashAny(b_val), hashAny(b_val));
-    try std.testing.expect(hashAny(a) != hashAny(b_val));
+    try testing.expectEqual(hashAny(a), hashAny(a));
+    try testing.expectEqual(hashAny(b_val), hashAny(b_val));
+    try testing.expect(hashAny(a) != hashAny(b_val));
 }
 
 test "hashAny error set" {
     const E = error{ A, B };
-    try std.testing.expectEqual(hashAny(E.A), hashAny(E.A));
-    try std.testing.expect(hashAny(E.A) != hashAny(E.B));
+    try testing.expectEqual(hashAny(E.A), hashAny(E.A));
+    try testing.expect(hashAny(E.A) != hashAny(E.B));
 }
 
 test "hashAny error union" {
@@ -583,9 +585,9 @@ test "hashAny error union" {
     const V = E!u32;
     const ok: V = 123;
     const err: V = E.A;
-    try std.testing.expectEqual(hashAny(ok), hashAny(ok));
-    try std.testing.expectEqual(hashAny(err), hashAny(err));
-    try std.testing.expect(hashAny(ok) != hashAny(err));
+    try testing.expectEqual(hashAny(ok), hashAny(ok));
+    try testing.expectEqual(hashAny(err), hashAny(err));
+    try testing.expect(hashAny(ok) != hashAny(err));
 }
 
 test "hashAny vector" {
@@ -593,23 +595,23 @@ test "hashAny vector" {
     const a: V = .{ 1, 2, 3, 4 };
     const b_val: V = .{ 1, 2, 3, 4 };
     const c: V = .{ 1, 2, 3, 5 };
-    try std.testing.expectEqual(hashAny(a), hashAny(b_val));
-    try std.testing.expect(hashAny(a) != hashAny(c));
+    try testing.expectEqual(hashAny(a), hashAny(b_val));
+    try testing.expect(hashAny(a) != hashAny(c));
 }
 
 test "hashAny float canonicalizes +/-0.0" {
     const a: f32 = 0.0;
     const b_val: f32 = -0.0;
-    try std.testing.expectEqual(hashAny(a), hashAny(b_val));
-    try std.testing.expectEqual(hashAny(0.0), hashAny(-0.0));
+    try testing.expectEqual(hashAny(a), hashAny(b_val));
+    try testing.expectEqual(hashAny(0.0), hashAny(-0.0));
 }
 
 test "hashAny float canonicalizes NaN payloads" {
     const nan1: f32 = std.math.nan(f32);
     const nan2: f32 = @bitCast(@as(u32, 0x7fc00001));
-    try std.testing.expect(std.math.isNan(nan1));
-    try std.testing.expect(std.math.isNan(nan2));
-    try std.testing.expectEqual(hashAny(nan1), hashAny(nan2));
+    try testing.expect(std.math.isNan(nan1));
+    try testing.expect(std.math.isNan(nan2));
+    try testing.expectEqual(hashAny(nan1), hashAny(nan2));
 }
 
 test "hashAny struct with slice field is content-based" {
@@ -621,8 +623,8 @@ test "hashAny struct with slice field is content-based" {
     const a: Key = .{ .bytes = a_storage[0..] };
     const b_val: Key = .{ .bytes = b_storage[0..] };
 
-    try std.testing.expect(std.meta.eql(a, b_val));
-    try std.testing.expectEqual(hashAny(a), hashAny(b_val));
+    try testing.expect(std.meta.eql(a, b_val));
+    try testing.expectEqual(hashAny(a), hashAny(b_val));
 }
 
 test "hashAny tagged union" {
@@ -631,26 +633,26 @@ test "hashAny tagged union" {
     const y: U = .{ .a = 1 };
     const z: U = .{ .a = 2 };
     const w: U = .{ .b = "a" };
-    try std.testing.expectEqual(hashAny(x), hashAny(y));
-    try std.testing.expect(hashAny(x) != hashAny(z));
-    try std.testing.expect(hashAny(x) != hashAny(w));
+    try testing.expectEqual(hashAny(x), hashAny(y));
+    try testing.expect(hashAny(x) != hashAny(z));
+    try testing.expect(hashAny(x) != hashAny(w));
 }
 
 test "hashAnyStrict hashes values without pointer addresses" {
     const h1 = hashAnyStrict(@as(u32, 123));
     const h2 = hashAnyStrict(@as(u32, 123));
-    try std.testing.expectEqual(h1, h2);
+    try testing.expectEqual(h1, h2);
 
     // Slices are hashed by contents (same as hashAny).
     const a: []const u8 = "abc";
-    try std.testing.expectEqual(hashAny(a), hashAnyStrict(a));
+    try testing.expectEqual(hashAny(a), hashAnyStrict(a));
 }
 
 test "hashAny pointer address policy hashes pointer addresses" {
     var x: u32 = 123;
     const ptr: *u32 = &x;
     const addr = @intFromPtr(ptr);
-    try std.testing.expectEqual(Wyhash.hash(0, std.mem.asBytes(&addr)), hashAny(ptr));
+    try testing.expectEqual(Wyhash.hash(0, std.mem.asBytes(&addr)), hashAny(ptr));
 }
 
 test "hashAnyBudgeted enforces max_bytes on byte slices" {
@@ -659,12 +661,12 @@ test "hashAnyBudgeted enforces max_bytes on byte slices" {
         .max_elems = std.math.maxInt(u64),
         .max_depth = std.math.maxInt(u16),
     });
-    try std.testing.expectError(error.ExceededBytes, hashAnySeededBudgeted(0, "abc", &b));
+    try testing.expectError(error.ExceededBytes, hashAnySeededBudgeted(0, "abc", &b));
 }
 
 test "hashAnyBudgeted enforces max_elems on structural slices" {
     const Elem = struct { a: u8, b: u32 };
-    comptime std.debug.assert(!std.meta.hasUniqueRepresentation(Elem));
+    comptime assert(!std.meta.hasUniqueRepresentation(Elem));
     const xs = [_]Elem{
         .{ .a = 1, .b = 2 },
         .{ .a = 3, .b = 4 },
@@ -676,7 +678,7 @@ test "hashAnyBudgeted enforces max_elems on structural slices" {
         .max_elems = 2,
         .max_depth = std.math.maxInt(u16),
     });
-    try std.testing.expectError(error.ExceededElems, hashAnySeededBudgeted(0, xs_slice, &b));
+    try testing.expectError(error.ExceededElems, hashAnySeededBudgeted(0, xs_slice, &b));
 }
 
 test "hashAnyBudgeted enforces max_depth" {
@@ -686,7 +688,7 @@ test "hashAnyBudgeted enforces max_depth" {
         .max_elems = std.math.maxInt(u64),
         .max_depth = 1,
     });
-    try std.testing.expectError(error.ExceededDepth, hashAnySeededBudgeted(0, value, &b));
+    try testing.expectError(error.ExceededDepth, hashAnySeededBudgeted(0, value, &b));
 }
 
 test "hashAny budgeted matches unbounded" {
@@ -694,25 +696,25 @@ test "hashAny budgeted matches unbounded" {
     // produce the same hash as the unbounded path.
     var b = HashBudget.unlimited();
 
-    try std.testing.expectEqual(hashAny(@as(u32, 42)), (try hashAnySeededBudgeted(0, @as(u32, 42), &b)));
+    try testing.expectEqual(hashAny(@as(u32, 42)), (try hashAnySeededBudgeted(0, @as(u32, 42), &b)));
 
     b = HashBudget.unlimited();
-    try std.testing.expectEqual(hashAny(true), (try hashAnySeededBudgeted(0, true, &b)));
+    try testing.expectEqual(hashAny(true), (try hashAnySeededBudgeted(0, true, &b)));
 
     b = HashBudget.unlimited();
-    try std.testing.expectEqual(hashAny(@as([]const u8, "hello")), (try hashAnySeededBudgeted(0, @as([]const u8, "hello"), &b)));
+    try testing.expectEqual(hashAny(@as([]const u8, "hello")), (try hashAnySeededBudgeted(0, @as([]const u8, "hello"), &b)));
 
     const E = enum { x, y };
     b = HashBudget.unlimited();
-    try std.testing.expectEqual(hashAny(E.x), (try hashAnySeededBudgeted(0, E.x, &b)));
+    try testing.expectEqual(hashAny(E.x), (try hashAnySeededBudgeted(0, E.x, &b)));
 
     b = HashBudget.unlimited();
     const opt: ?u32 = 42;
-    try std.testing.expectEqual(hashAny(opt), (try hashAnySeededBudgeted(0, opt, &b)));
+    try testing.expectEqual(hashAny(opt), (try hashAnySeededBudgeted(0, opt, &b)));
 
     b = HashBudget.unlimited();
     const arr = [_]u32{ 1, 2, 3 };
-    try std.testing.expectEqual(hashAny(arr), (try hashAnySeededBudgeted(0, arr, &b)));
+    try testing.expectEqual(hashAny(arr), (try hashAnySeededBudgeted(0, arr, &b)));
 }
 
 test "hashAny compile-time support predicates cover unsupported and strict surfaces" {
@@ -730,20 +732,20 @@ test "hashAny compile-time support predicates cover unsupported and strict surfa
     };
 
     comptime {
-        std.debug.assert(isHashAnySupportedType(u32));
-        std.debug.assert(isHashAnySupportedType(*u32));
-        std.debug.assert(isHashAnySupportedType(SliceOnly));
-        std.debug.assert(isHashAnySupportedType(struct { maybe: ?u32, err: anyerror!u8 }));
-        std.debug.assert(!isHashAnySupportedType(UnsupportedFn));
-        std.debug.assert(!isHashAnySupportedType(Untagged));
+        assert(isHashAnySupportedType(u32));
+        assert(isHashAnySupportedType(*u32));
+        assert(isHashAnySupportedType(SliceOnly));
+        assert(isHashAnySupportedType(struct { maybe: ?u32, err: anyerror!u8 }));
+        assert(!isHashAnySupportedType(UnsupportedFn));
+        assert(!isHashAnySupportedType(Untagged));
 
-        std.debug.assert(typeContainsNonSlicePointer(*u32));
-        std.debug.assert(typeContainsNonSlicePointer(NestedPointer));
-        std.debug.assert(!typeContainsNonSlicePointer(SliceOnly));
+        assert(typeContainsNonSlicePointer(*u32));
+        assert(typeContainsNonSlicePointer(NestedPointer));
+        assert(!typeContainsNonSlicePointer(SliceOnly));
 
-        std.debug.assert(!isHashAnyStrictSupportedType(*u32));
-        std.debug.assert(!isHashAnyStrictSupportedType(NestedPointer));
-        std.debug.assert(isHashAnyStrictSupportedType(SliceOnly));
-        std.debug.assert(isHashAnyStrictSupportedType(struct { payload: [2]u16 }));
+        assert(!isHashAnyStrictSupportedType(*u32));
+        assert(!isHashAnyStrictSupportedType(NestedPointer));
+        assert(isHashAnyStrictSupportedType(SliceOnly));
+        assert(isHashAnyStrictSupportedType(struct { payload: [2]u16 }));
     }
 }

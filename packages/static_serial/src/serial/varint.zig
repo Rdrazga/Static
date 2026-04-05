@@ -11,6 +11,8 @@
 //!   structured wire-format readers and writers.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const bits = @import("static_bits");
 
 pub const Error = error{
@@ -34,7 +36,7 @@ pub fn varintLen(value: anytype) usize {
         }
         // Comptime: max_bytes for any U is between 1 and 10 (u64 = 10 bytes max).
         const max_bytes_check = (@typeInfo(U).int.bits + 6) / 7;
-        std.debug.assert(max_bytes_check >= 1 and max_bytes_check <= 10);
+        assert(max_bytes_check >= 1 and max_bytes_check <= 10);
     }
     var x: U = @intCast(value);
     const max_bytes = (@typeInfo(U).int.bits + 6) / 7;
@@ -43,8 +45,8 @@ pub fn varintLen(value: anytype) usize {
         x >>= 7;
     }
     // Postcondition: encoded length is at least 1 and at most max_bytes (<= 10).
-    std.debug.assert(len >= 1);
-    std.debug.assert(len <= max_bytes);
+    assert(len >= 1);
+    assert(len <= max_bytes);
     return len;
 }
 
@@ -52,8 +54,8 @@ pub fn writeVarint(writer: *bits.cursor.ByteWriter, value: anytype) Error!void {
     const U = toUnsigned(@TypeOf(value));
     comptime {
         const max_bytes_check = (@typeInfo(U).int.bits + 6) / 7;
-        std.debug.assert(max_bytes_check >= 1);
-        std.debug.assert(max_bytes_check <= 10);
+        assert(max_bytes_check >= 1);
+        assert(max_bytes_check <= 10);
     }
     const value_u: U = bits.cast.castInt(U, value) catch |err| switch (err) {
         error.Overflow => return error.Overflow,
@@ -74,7 +76,7 @@ pub fn readVarint(reader: *bits.cursor.ByteReader, comptime T: type) Error!T {
     // Precondition: max_bytes for T must be in range [1, 10].
     comptime {
         const max_bytes_check = (info.int.bits + 6) / 7;
-        std.debug.assert(max_bytes_check >= 1 and max_bytes_check <= 10);
+        assert(max_bytes_check >= 1 and max_bytes_check <= 10);
     }
 
     const decoded = bits.varint.readUleb128(reader) catch |err| return switch (err) {
@@ -104,10 +106,10 @@ test "varint encode/decode canonical and atomic on failure" {
     try writeVarint(&writer, @as(u32, 300));
 
     const written_len = writer.position();
-    std.debug.assert(written_len > 0);
+    assert(written_len > 0);
     var reader = bits.cursor.ByteReader.init(buf[0..written_len]);
-    try std.testing.expectEqual(@as(u32, 300), try readVarint(&reader, u32));
-    try std.testing.expectError(error.EndOfStream, readVarint(&reader, u32));
+    try testing.expectEqual(@as(u32, 300), try readVarint(&reader, u32));
+    try testing.expectError(error.EndOfStream, readVarint(&reader, u32));
 }
 
 test "varint rejects non-canonical encoding (extra leading zero byte)" {
@@ -115,9 +117,9 @@ test "varint rejects non-canonical encoding (extra leading zero byte)" {
     // Non-canonical: 0x81, 0x00 — two bytes encoding 1 with a trailing zero.
     const non_canonical = [_]u8{ 0x81, 0x00 };
     var reader = bits.cursor.ByteReader.init(&non_canonical);
-    try std.testing.expectError(error.InvalidInput, readVarint(&reader, u32));
+    try testing.expectError(error.InvalidInput, readVarint(&reader, u32));
     // Cursor must be rolled back to start.
-    try std.testing.expectEqual(@as(usize, 0), reader.position());
+    try testing.expectEqual(@as(usize, 0), reader.position());
 }
 
 test "varint roundtrip boundary values" {
@@ -127,9 +129,9 @@ test "varint roundtrip boundary values" {
     for ([_]u32{ 0, 1, 127, 128, 255 }) |v| {
         var w = bits.cursor.ByteWriter.init(&buf);
         try writeVarint(&w, @as(u32, v));
-        std.debug.assert(w.position() > 0);
+        assert(w.position() > 0);
         var r = bits.cursor.ByteReader.init(buf[0..w.position()]);
-        try std.testing.expectEqual(v, try readVarint(&r, u32));
+        try testing.expectEqual(v, try readVarint(&r, u32));
     }
 }
 
@@ -137,8 +139,8 @@ test "varint write to short buffer rolls back position" {
     var buf = [_]u8{0} ** 1;
     var writer = bits.cursor.ByteWriter.init(&buf);
     // Value 300 requires 2 bytes; buffer only has 1.
-    try std.testing.expectError(error.NoSpaceLeft, writeVarint(&writer, @as(u32, 300)));
-    try std.testing.expectEqual(@as(usize, 0), writer.position());
+    try testing.expectError(error.NoSpaceLeft, writeVarint(&writer, @as(u32, 300)));
+    try testing.expectEqual(@as(usize, 0), writer.position());
 }
 
 test "SE-T2: varint u64 max roundtrip encodes to exactly 10 bytes" {
@@ -146,17 +148,17 @@ test "SE-T2: varint u64 max roundtrip encodes to exactly 10 bytes" {
     // Method: encode maxInt(u64), assert length == 10, then decode and compare.
     const max_u64: u64 = std.math.maxInt(u64);
     const encoded_len = varintLen(max_u64);
-    try std.testing.expectEqual(@as(usize, 10), encoded_len);
+    try testing.expectEqual(@as(usize, 10), encoded_len);
 
     var buf = [_]u8{0} ** 10;
     var writer = bits.cursor.ByteWriter.init(&buf);
     try writeVarint(&writer, max_u64);
-    try std.testing.expectEqual(@as(usize, 10), writer.position());
+    try testing.expectEqual(@as(usize, 10), writer.position());
 
     var reader = bits.cursor.ByteReader.init(&buf);
     const decoded = try readVarint(&reader, u64);
-    try std.testing.expectEqual(max_u64, decoded);
-    std.debug.assert(reader.position() == 10);
+    try testing.expectEqual(max_u64, decoded);
+    assert(reader.position() == 10);
 }
 
 test "SE-T4: readVarint returns EndOfStream on truncated data" {
@@ -165,9 +167,9 @@ test "SE-T4: readVarint returns EndOfStream on truncated data" {
     var buf = [_]u8{ 0xAC, 0x02 }; // value 300: two-byte encoding.
     // Expose only the first byte to simulate truncation.
     var reader = bits.cursor.ByteReader.init(buf[0..1]);
-    try std.testing.expectError(error.EndOfStream, readVarint(&reader, u32));
+    try testing.expectError(error.EndOfStream, readVarint(&reader, u32));
     // Rollback: position must be at 0.
-    try std.testing.expectEqual(@as(usize, 0), reader.position());
+    try testing.expectEqual(@as(usize, 0), reader.position());
 }
 
 test "SE-T4: writeVarint on full buffer returns NoSpaceLeft atomically" {
@@ -178,9 +180,9 @@ test "SE-T4: writeVarint on full buffer returns NoSpaceLeft atomically" {
     // Write 3 bytes to fill most of the buffer.
     try writer.write(&.{ 0x01, 0x02, 0x03 });
     // Value 300 requires 2 bytes; only 1 remains.
-    try std.testing.expectError(error.NoSpaceLeft, writeVarint(&writer, @as(u32, 300)));
+    try testing.expectError(error.NoSpaceLeft, writeVarint(&writer, @as(u32, 300)));
     // Position rolled back: still at 3 (pre-write position).
-    try std.testing.expectEqual(@as(usize, 3), writer.position());
+    try testing.expectEqual(@as(usize, 3), writer.position());
     // Atomicity check: the untouched trailing byte remains unchanged.
-    try std.testing.expectEqual(@as(u8, 0xFF), buf[3]);
+    try testing.expectEqual(@as(u8, 0xFF), buf[3]);
 }

@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -46,15 +48,15 @@ const PartialReadRunner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("read_policy"));
-        std.debug.assert(context.traceBufferPtr() != null);
-        std.debug.assert(self.pool.capacity() >= 2);
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("read_policy"));
+        assert(context.traceBufferPtr() != null);
+        assert(self.pool.capacity() >= 2);
 
         const stream = try support.connectStream(self.runtime, endpoint, context, &self.next_sequence_no);
         defer self.runtime.closeHandle(stream.handle) catch |err| {
-            std.debug.assert(err == error.Closed);
+            assert(err == error.Closed);
         };
 
         var write_buffer = try self.pool.acquire();
@@ -64,9 +66,9 @@ const PartialReadRunner = struct {
         const write_id = try self.runtime.submitStreamWrite(stream, write_buffer, null);
         _ = try self.runtime.pump(1);
         const write_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(write_id, write_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
-        try std.testing.expectEqual(@as(u32, 2), write_completion.bytes_transferred);
+        try testing.expectEqual(write_id, write_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
+        try testing.expectEqual(@as(u32, 2), write_completion.bytes_transferred);
         const write_seq = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -82,11 +84,11 @@ const PartialReadRunner = struct {
         const read_id = try self.runtime.submitStreamRead(stream, read_buffer, null);
         _ = try self.runtime.pump(1);
         const read_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(read_id, read_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
-        try std.testing.expectEqual(@as(u32, 2), read_completion.bytes_transferred);
-        try std.testing.expect(read_completion.bytes_transferred < read_completion.buffer.capacity());
-        try std.testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
+        try testing.expectEqual(read_id, read_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
+        try testing.expectEqual(@as(u32, 2), read_completion.bytes_transferred);
+        try testing.expect(read_completion.bytes_transferred < read_completion.buffer.capacity());
+        try testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
         const read_seq = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -102,9 +104,9 @@ const PartialReadRunner = struct {
         const timeout_id = try self.runtime.submitStreamRead(stream, drain_buffer, 0);
         _ = try self.runtime.pump(1);
         const timeout_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(timeout_id, timeout_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
-        try std.testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
+        try testing.expectEqual(timeout_id, timeout_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
+        try testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
         _ = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -160,15 +162,15 @@ const CancelRunner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("cancel_policy"));
-        std.debug.assert(context.traceBufferPtr() != null);
-        std.debug.assert(self.pool.capacity() >= 3);
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("cancel_policy"));
+        assert(context.traceBufferPtr() != null);
+        assert(self.pool.capacity() >= 3);
 
         const stream = try support.connectStream(self.runtime, endpoint, context, &self.next_sequence_no);
         defer self.runtime.closeHandle(stream.handle) catch |err| {
-            std.debug.assert(err == error.Closed);
+            assert(err == error.Closed);
         };
 
         const pending_buffer = try self.pool.acquire();
@@ -196,11 +198,11 @@ const CancelRunner = struct {
 
         _ = try self.runtime.pump(1);
         const cancelled_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(pending_id, cancelled_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.cancelled, cancelled_completion.status);
-        try std.testing.expectEqual(@as(?static_io.types.CompletionErrorTag, .cancelled), cancelled_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), cancelled_completion.bytes_transferred);
-        try std.testing.expectEqual(@as(usize, 0), cancelled_completion.buffer.usedSlice().len);
+        try testing.expectEqual(pending_id, cancelled_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.cancelled, cancelled_completion.status);
+        try testing.expectEqual(@as(?static_io.types.CompletionErrorTag, .cancelled), cancelled_completion.err);
+        try testing.expectEqual(@as(u32, 0), cancelled_completion.bytes_transferred);
+        try testing.expectEqual(@as(usize, 0), cancelled_completion.buffer.usedSlice().len);
         const cancelled_seq = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -227,8 +229,8 @@ const CancelRunner = struct {
         const write_id = try self.runtime.submitStreamWrite(stream, write_buffer, null);
         _ = try self.runtime.pump(1);
         const write_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(write_id, write_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
+        try testing.expectEqual(write_id, write_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
         const write_seq = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -244,9 +246,9 @@ const CancelRunner = struct {
         const read_id = try self.runtime.submitStreamRead(stream, read_buffer, null);
         _ = try self.runtime.pump(1);
         const read_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(read_id, read_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
-        try std.testing.expectEqualStrings("go", read_completion.buffer.usedSlice());
+        try testing.expectEqual(read_id, read_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
+        try testing.expectEqualStrings("go", read_completion.buffer.usedSlice());
         _ = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -257,7 +259,7 @@ const CancelRunner = struct {
             read_completion.bytes_transferred,
         );
         try self.pool.release(read_completion.buffer);
-        try std.testing.expect(self.runtime.poll() == null);
+        try testing.expect(self.runtime.poll() == null);
 
         const snapshot = context.traceSnapshot().?;
         const submit_before_cancel = try temporal.checkHappensBefore(
@@ -295,7 +297,7 @@ const CancelRunner = struct {
 
 fn initFixture(fixture: *Fixture) !void {
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(91),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -308,14 +310,14 @@ test "static_io runtime flow records partial completion under testing.system" {
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 3,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
@@ -335,10 +337,10 @@ test "static_io runtime flow records partial completion under testing.system" {
         .components = &partial_components,
     }, &runner, PartialReadRunner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(usize, partial_components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 4);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(usize, partial_components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 4);
+    try testing.expect(execution.retained_bundle == null);
 }
 
 test "static_io runtime flow records cancellation and recovery under testing.system" {
@@ -346,14 +348,14 @@ test "static_io runtime flow records cancellation and recovery under testing.sys
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 4,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
@@ -374,10 +376,10 @@ test "static_io runtime flow records cancellation and recovery under testing.sys
         .components = &cancel_components,
     }, &runner, CancelRunner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(usize, cancel_components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 5);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(usize, cancel_components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 5);
+    try testing.expect(execution.retained_bundle == null);
 }
 
 test "static_io cancellation failure persists retained provenance through testing.system" {
@@ -385,24 +387,24 @@ test "static_io cancellation failure persists retained provenance through testin
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 4,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
     var entry_name_buffer: [128]u8 = undefined;
@@ -443,8 +445,8 @@ test "static_io cancellation failure persists retained provenance through testin
         },
     }, &runner, CancelRunner.run);
 
-    try std.testing.expect(!execution.check_result.passed);
-    try std.testing.expect(execution.retained_bundle != null);
+    try testing.expect(!execution.check_result.passed);
+    try testing.expect(execution.retained_bundle != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -474,10 +476,10 @@ test "static_io cancellation failure persists retained provenance through testin
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("system_runtime_cancel_flow_failure", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expect(bundle.trace_document.?.has_provenance);
-    try std.testing.expect(bundle.trace_document.?.caused_event_count > 0);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqualStrings("temporal_eventually", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_runtime_cancel_flow_failure", bundle.manifest_document.run_name);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expect(bundle.trace_document.?.has_provenance);
+    try testing.expect(bundle.trace_document.?.caused_event_count > 0);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqualStrings("temporal_eventually", bundle.violations_document.violations[0].code);
 }

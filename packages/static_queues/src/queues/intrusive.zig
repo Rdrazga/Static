@@ -6,6 +6,8 @@
 //!   IntrusiveMpscQueue serializes all access with an internal mutex.
 //! Blocking behavior: non-blocking; operations return `error.WouldBlock` rather than block.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const sync = @import("static_sync");
 const qi = @import("queue_internal.zig");
 const contracts = @import("../contracts.zig");
@@ -47,9 +49,9 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
         pub fn init() Self {
             const self: Self = .{};
             // Postcondition: an empty list has no head, no tail, and zero length.
-            std.debug.assert(self.head == null);
-            std.debug.assert(self.tail == null);
-            std.debug.assert(self.len_value == 0);
+            assert(self.head == null);
+            assert(self.tail == null);
+            assert(self.len_value == 0);
             return self;
         }
 
@@ -64,15 +66,15 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
 
         pub fn isEmpty(self: Self) bool {
             // Invariant: head and tail are either both null or both non-null.
-            if (self.head == null) std.debug.assert(self.tail == null);
-            if (self.head != null) std.debug.assert(self.tail != null);
+            if (self.head == null) assert(self.tail == null);
+            if (self.head != null) assert(self.tail != null);
             return self.head == null;
         }
 
         pub fn len(self: Self) usize {
             // Invariant: a zero len_value implies both head and tail are null.
-            if (self.len_value == 0) std.debug.assert(self.head == null);
-            if (self.len_value == 0) std.debug.assert(self.tail == null);
+            if (self.len_value == 0) assert(self.head == null);
+            if (self.len_value == 0) assert(self.tail == null);
             return self.len_value;
         }
 
@@ -89,10 +91,10 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
             self.head = null;
             self.tail = null;
             self.len_value = 0;
-            std.debug.assert(cleared_count == old_len);
-            std.debug.assert(self.head == null);
-            std.debug.assert(self.tail == null);
-            std.debug.assert(self.len_value == 0);
+            assert(cleared_count == old_len);
+            assert(self.head == null);
+            assert(self.tail == null);
+            assert(self.len_value == 0);
         }
 
         pub fn pushFront(self: *Self, item: *T) void {
@@ -110,8 +112,8 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
             self.head = node;
             self.len_value += 1;
             // Postcondition: the list is non-empty and head points to the inserted node.
-            std.debug.assert(self.head == node);
-            std.debug.assert(self.len_value > 0);
+            assert(self.head == node);
+            assert(self.len_value > 0);
         }
 
         pub fn pushBack(self: *Self, item: *T) void {
@@ -129,8 +131,8 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
             self.tail = node;
             self.len_value += 1;
             // Postcondition: the list is non-empty and tail points to the inserted node.
-            std.debug.assert(self.tail == node);
-            std.debug.assert(self.len_value > 0);
+            assert(self.tail == node);
+            assert(self.len_value > 0);
         }
 
         pub fn popFront(self: *Self) ?*T {
@@ -138,8 +140,8 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
             self.removeNode(node);
             const item = nodeToItem(node);
             // Postcondition: the removed node is now fully detached (no list membership).
-            std.debug.assert(node.prev == null);
-            std.debug.assert(node.next == null);
+            assert(node.prev == null);
+            assert(node.next == null);
             return item;
         }
 
@@ -148,15 +150,15 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
             self.removeNode(node);
             const item = nodeToItem(node);
             // Postcondition: the removed node is now fully detached (no list membership).
-            std.debug.assert(node.prev == null);
-            std.debug.assert(node.next == null);
+            assert(node.prev == null);
+            assert(node.next == null);
             return item;
         }
 
         pub fn remove(self: *Self, item: *T) void {
             const node = nodePtr(item);
             // Precondition: len must be positive before remove (the node must be in the list).
-            std.debug.assert(self.len_value > 0);
+            assert(self.len_value > 0);
             self.removeNode(node);
         }
 
@@ -167,7 +169,7 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
                 const node = self.cursor orelse return null;
                 // Invariant: a node in the list must not point to itself in the next
                 // field -- that would form a cycle and loop this iterator forever.
-                std.debug.assert(node.next != node);
+                assert(node.next != node);
                 self.cursor = node.next;
                 return nodeToItem(node);
             }
@@ -178,7 +180,7 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
 
             pub fn next(self: *ReverseIterator) ?*T {
                 const node = self.cursor orelse return null;
-                std.debug.assert(node.prev != node);
+                assert(node.prev != node);
                 self.cursor = node.prev;
                 return nodeToItem(node);
             }
@@ -186,20 +188,20 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
 
         pub fn iter(self: *const Self) Iterator {
             // Invariant: head and tail are either both null or both non-null.
-            if (self.head == null) std.debug.assert(self.tail == null);
-            if (self.head != null) std.debug.assert(self.tail != null);
+            if (self.head == null) assert(self.tail == null);
+            if (self.head != null) assert(self.tail != null);
             return .{ .cursor = self.head };
         }
 
         pub fn iterBack(self: *const Self) ReverseIterator {
-            if (self.head == null) std.debug.assert(self.tail == null);
-            if (self.head != null) std.debug.assert(self.tail != null);
+            if (self.head == null) assert(self.tail == null);
+            if (self.head != null) assert(self.tail != null);
             return .{ .cursor = self.tail };
         }
 
         fn removeNode(self: *Self, node: *Node) void {
             // Precondition: can only remove from a non-empty list.
-            std.debug.assert(self.len_value > 0);
+            assert(self.len_value > 0);
             if (node.prev) |prev| {
                 prev.next = node.next;
             } else {
@@ -216,8 +218,8 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
             node.prev = null;
             node.next = null;
             // Postcondition: the removed node is now fully detached.
-            std.debug.assert(node.prev == null);
-            std.debug.assert(node.next == null);
+            assert(node.prev == null);
+            assert(node.next == null);
         }
 
         fn nodePtr(item: *T) *Node {
@@ -229,8 +231,8 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
         }
 
         fn assertDetached(node: *Node) void {
-            std.debug.assert(node.prev == null);
-            std.debug.assert(node.next == null);
+            assert(node.prev == null);
+            assert(node.next == null);
         }
     };
 }
@@ -275,9 +277,9 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
         pub fn init() Self {
             const self: Self = .{};
             // Postcondition: a freshly initialized queue has no head and no tail.
-            std.debug.assert(self.head == null);
-            std.debug.assert(self.tail == null);
-            std.debug.assert(self.len_value == 0);
+            assert(self.head == null);
+            assert(self.tail == null);
+            assert(self.len_value == 0);
             return self;
         }
 
@@ -294,8 +296,8 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
             // Invariant: len_value is consistent with the linked structure.
-            if (self.len_value == 0) std.debug.assert(self.head == null);
-            if (self.len_value > 0) std.debug.assert(self.head != null);
+            if (self.len_value == 0) assert(self.head == null);
+            if (self.len_value > 0) assert(self.head != null);
             return self.len_value;
         }
 
@@ -303,8 +305,8 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
             // Invariant: head and tail are either both null or both non-null.
-            if (self.head == null) std.debug.assert(self.tail == null);
-            if (self.head != null) std.debug.assert(self.tail != null);
+            if (self.head == null) assert(self.tail == null);
+            if (self.head != null) assert(self.tail != null);
             return self.head == null;
         }
 
@@ -312,7 +314,7 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
             if (self.max_len) |limit| {
-                std.debug.assert(limit > 0);
+                assert(limit > 0);
                 return limit;
             }
             return std.math.maxInt(usize);
@@ -321,17 +323,17 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
         pub fn trySend(self: *Self, item: *T) TrySendError!void {
             const node = nodePtr(item);
             // Precondition: node must be detached before enqueueing.
-            std.debug.assert(node.prev == null);
-            std.debug.assert(node.next == null);
+            assert(node.prev == null);
+            assert(node.next == null);
 
             self.mutex.lock();
             defer self.mutex.unlock();
 
             if (self.max_len) |limit| {
                 // Precondition: limit must be positive; a zero-capacity queue is unusable.
-                std.debug.assert(limit > 0);
+                assert(limit > 0);
                 if (self.len_value >= limit) return error.WouldBlock;
-                std.debug.assert(self.len_value < limit);
+                assert(self.len_value < limit);
             }
 
             if (self.tail) |tail| {
@@ -343,9 +345,9 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
             }
             self.len_value += 1;
             // Postcondition: the queue is non-empty and tail points to the new node.
-            std.debug.assert(self.tail == node);
-            std.debug.assert(self.head != null);
-            std.debug.assert(self.len_value > 0);
+            assert(self.tail == node);
+            assert(self.head != null);
+            assert(self.len_value > 0);
         }
 
         pub fn tryRecv(self: *Self) TryRecvError!*T {
@@ -360,9 +362,9 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
             node.prev = null;
             self.len_value -= 1;
             // Postcondition: the dequeued node is fully detached.
-            std.debug.assert(node.next == null);
-            std.debug.assert(node.prev == null);
-            std.debug.assert(self.len_value == old_len - 1);
+            assert(node.next == null);
+            assert(node.prev == null);
+            assert(self.len_value == old_len - 1);
             return @fieldParentPtr(node_field, node);
         }
 
@@ -386,12 +388,12 @@ test "intrusive list push/pop order and remove" {
     list.pushBack(&a);
     list.pushBack(&b);
     list.pushFront(&c);
-    try std.testing.expectEqual(@as(usize, 3), list.len());
+    try testing.expectEqual(@as(usize, 3), list.len());
 
-    try std.testing.expectEqual(@as(u8, 3), list.popFront().?.value);
+    try testing.expectEqual(@as(u8, 3), list.popFront().?.value);
     list.remove(&b);
-    try std.testing.expectEqual(@as(usize, 1), list.len());
-    try std.testing.expectEqual(@as(u8, 1), list.popBack().?.value);
+    try testing.expectEqual(@as(usize, 1), list.len());
+    try testing.expectEqual(@as(u8, 1), list.popBack().?.value);
 }
 
 test "intrusive list clear empties list and detaches nodes" {
@@ -410,14 +412,14 @@ test "intrusive list clear empties list and detaches nodes" {
     list.pushBack(&c);
     list.clear();
 
-    try std.testing.expectEqual(@as(usize, 0), list.len());
-    try std.testing.expect(list.isEmpty());
-    try std.testing.expect(a.node.prev == null);
-    try std.testing.expect(a.node.next == null);
-    try std.testing.expect(b.node.prev == null);
-    try std.testing.expect(b.node.next == null);
-    try std.testing.expect(c.node.prev == null);
-    try std.testing.expect(c.node.next == null);
+    try testing.expectEqual(@as(usize, 0), list.len());
+    try testing.expect(list.isEmpty());
+    try testing.expect(a.node.prev == null);
+    try testing.expect(a.node.next == null);
+    try testing.expect(b.node.prev == null);
+    try testing.expect(b.node.next == null);
+    try testing.expect(c.node.prev == null);
+    try testing.expect(c.node.next == null);
 }
 
 test "intrusive list reverse iteration walks tail to head" {
@@ -436,10 +438,10 @@ test "intrusive list reverse iteration walks tail to head" {
     list.pushBack(&c);
 
     var reverse = list.iterBack();
-    try std.testing.expectEqual(@as(u8, 3), reverse.next().?.value);
-    try std.testing.expectEqual(@as(u8, 2), reverse.next().?.value);
-    try std.testing.expectEqual(@as(u8, 1), reverse.next().?.value);
-    try std.testing.expect(reverse.next() == null);
+    try testing.expectEqual(@as(u8, 3), reverse.next().?.value);
+    try testing.expectEqual(@as(u8, 2), reverse.next().?.value);
+    try testing.expectEqual(@as(u8, 1), reverse.next().?.value);
+    try testing.expect(reverse.next() == null);
 }
 
 test "intrusive mpsc queue returns WouldBlock when empty" {
@@ -454,9 +456,9 @@ test "intrusive mpsc queue returns WouldBlock when empty" {
 
     try q.trySend(&a);
     try q.trySend(&b);
-    try std.testing.expectEqual(@as(u8, 11), (try q.tryRecv()).value);
-    try std.testing.expectEqual(@as(u8, 12), (try q.tryRecv()).value);
-    try std.testing.expectError(error.WouldBlock, q.tryRecv());
+    try testing.expectEqual(@as(u8, 11), (try q.tryRecv()).value);
+    try testing.expectEqual(@as(u8, 12), (try q.tryRecv()).value);
+    try testing.expectError(error.WouldBlock, q.tryRecv());
 }
 
 test "intrusive mpsc queue respects max_len bound" {
@@ -472,8 +474,8 @@ test "intrusive mpsc queue respects max_len bound" {
     var b = Item{ .value = 2 };
 
     try q.trySend(&a);
-    try std.testing.expectError(error.WouldBlock, q.trySend(&b));
-    try std.testing.expectEqual(@as(usize, 1), q.len());
+    try testing.expectError(error.WouldBlock, q.trySend(&b));
+    try testing.expectEqual(@as(usize, 1), q.len());
     _ = try q.tryRecv();
     // After draining, should accept again.
     try q.trySend(&b);
@@ -486,10 +488,10 @@ test "intrusive mpsc queue capacity reports max_len or unbounded sentinel" {
     };
 
     var bounded = IntrusiveMpscQueue(Item, "node"){ .max_len = 3 };
-    try std.testing.expectEqual(@as(usize, 3), bounded.capacity());
+    try testing.expectEqual(@as(usize, 3), bounded.capacity());
 
     var unbounded = IntrusiveMpscQueue(Item, "node").init();
-    try std.testing.expectEqual(std.math.maxInt(usize), unbounded.capacity());
+    try testing.expectEqual(std.math.maxInt(usize), unbounded.capacity());
 }
 
 test "intrusive mpsc queue unbounded when max_len is null" {
@@ -502,7 +504,7 @@ test "intrusive mpsc queue unbounded when max_len is null" {
 
     var q = IntrusiveMpscQueue(Item, "node").init();
     // max_len defaults to null, so this must succeed.
-    std.debug.assert(q.max_len == null);
+    assert(q.max_len == null);
     var items: [4]Item = .{
         .{ .value = 1 },
         .{ .value = 2 },
@@ -512,5 +514,5 @@ test "intrusive mpsc queue unbounded when max_len is null" {
     for (&items) |*item| {
         try q.trySend(item);
     }
-    try std.testing.expectEqual(@as(usize, 4), q.len());
+    try testing.expectEqual(@as(usize, 4), q.len());
 }

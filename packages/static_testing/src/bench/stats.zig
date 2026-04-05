@@ -1,6 +1,8 @@
 //! Derived statistics over benchmark samples without heap allocation.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const runner = @import("runner.zig");
 
@@ -31,7 +33,7 @@ pub const BenchmarkStats = struct {
 
 comptime {
     core.errors.assertVocabularySubset(BenchmarkStatsError);
-    std.debug.assert(stats_inline_samples_max > 0);
+    assert(stats_inline_samples_max > 0);
 }
 
 /// Derive min/max/mean/median/percentiles for one raw case result.
@@ -149,14 +151,14 @@ pub fn percentileElapsedNs(
     }
 
     const rank_1based = try nearestRank1Based(samples.len, percentile_percent);
-    std.debug.assert(rank_1based > 0);
-    std.debug.assert(rank_1based <= samples.len);
+    assert(rank_1based > 0);
+    assert(rank_1based <= samples.len);
 
     return nthSmallestElapsedNs(samples, rank_1based - 1);
 }
 
 fn percentileFromSorted(sorted_elapsed_ns: []const u64, percentile_percent: u8) BenchmarkStatsError!u64 {
-    std.debug.assert(sorted_elapsed_ns.len > 0);
+    assert(sorted_elapsed_ns.len > 0);
     if (percentile_percent > 100) return error.InvalidInput;
 
     if (percentile_percent == 0) {
@@ -167,16 +169,16 @@ fn percentileFromSorted(sorted_elapsed_ns: []const u64, percentile_percent: u8) 
     }
 
     const rank_1based = try nearestRank1Based(sorted_elapsed_ns.len, percentile_percent);
-    std.debug.assert(rank_1based > 0);
-    std.debug.assert(rank_1based <= sorted_elapsed_ns.len);
+    assert(rank_1based > 0);
+    assert(rank_1based <= sorted_elapsed_ns.len);
 
     return sorted_elapsed_ns[rank_1based - 1];
 }
 
 fn nearestRank1Based(sample_len: usize, percentile_percent: u8) BenchmarkStatsError!usize {
-    std.debug.assert(sample_len > 0);
-    std.debug.assert(percentile_percent > 0);
-    std.debug.assert(percentile_percent < 100);
+    assert(sample_len > 0);
+    assert(percentile_percent > 0);
+    assert(percentile_percent < 100);
 
     const numerator = std.math.mul(usize, sample_len, percentile_percent) catch {
         return error.Overflow;
@@ -201,14 +203,14 @@ fn computeMean(samples: []const runner.BenchmarkSample) BenchmarkStatsError!u64 
 }
 
 fn meanFromSum(elapsed_sum_ns: u128, sample_len: usize) error{Overflow}!u64 {
-    std.debug.assert(sample_len > 0);
+    assert(sample_len > 0);
     const mean_elapsed_ns = @divFloor(elapsed_sum_ns, sample_len);
     if (mean_elapsed_ns > std.math.maxInt(u64)) return error.Overflow;
     return @as(u64, @intCast(mean_elapsed_ns));
 }
 
 fn computeMinMax(samples: []const runner.BenchmarkSample) struct { u64, u64 } {
-    std.debug.assert(samples.len > 0);
+    assert(samples.len > 0);
 
     var min_elapsed_ns = samples[0].elapsed_ns;
     var max_elapsed_ns = samples[0].elapsed_ns;
@@ -217,13 +219,13 @@ fn computeMinMax(samples: []const runner.BenchmarkSample) struct { u64, u64 } {
         if (sample.elapsed_ns > max_elapsed_ns) max_elapsed_ns = sample.elapsed_ns;
     }
 
-    std.debug.assert(min_elapsed_ns <= max_elapsed_ns);
+    assert(min_elapsed_ns <= max_elapsed_ns);
     return .{ min_elapsed_ns, max_elapsed_ns };
 }
 
 fn nthSmallestElapsedNs(samples: []const runner.BenchmarkSample, nth_index: usize) u64 {
-    std.debug.assert(samples.len > 0);
-    std.debug.assert(nth_index < samples.len);
+    assert(samples.len > 0);
+    assert(nth_index < samples.len);
 
     for (samples) |candidate| {
         var less_total: usize = 0;
@@ -263,14 +265,14 @@ test "computeStats returns min mean median max and percentiles" {
 
     const derived = try computeStats(case_result);
 
-    try std.testing.expectEqual(@as(u32, 5), derived.sample_count);
-    try std.testing.expectEqual(@as(u64, 10), derived.min_elapsed_ns);
-    try std.testing.expectEqual(@as(u64, 50), derived.max_elapsed_ns);
-    try std.testing.expectEqual(@as(u64, 30), derived.mean_elapsed_ns);
-    try std.testing.expectEqual(@as(u64, 30), derived.median_elapsed_ns);
-    try std.testing.expectEqual(@as(u64, 50), derived.p90_elapsed_ns);
-    try std.testing.expectEqual(@as(u64, 50), derived.p95_elapsed_ns);
-    try std.testing.expectEqual(@as(?u64, 50), derived.p99_elapsed_ns);
+    try testing.expectEqual(@as(u32, 5), derived.sample_count);
+    try testing.expectEqual(@as(u64, 10), derived.min_elapsed_ns);
+    try testing.expectEqual(@as(u64, 50), derived.max_elapsed_ns);
+    try testing.expectEqual(@as(u64, 30), derived.mean_elapsed_ns);
+    try testing.expectEqual(@as(u64, 30), derived.median_elapsed_ns);
+    try testing.expectEqual(@as(u64, 50), derived.p90_elapsed_ns);
+    try testing.expectEqual(@as(u64, 50), derived.p95_elapsed_ns);
+    try testing.expectEqual(@as(?u64, 50), derived.p99_elapsed_ns);
 }
 
 test "percentileElapsedNs accepts edge percentiles and rejects invalid inputs" {
@@ -281,11 +283,11 @@ test "percentileElapsedNs accepts edge percentiles and rejects invalid inputs" {
         .{ .elapsed_ns = 3, .iteration_count = 1 },
     };
 
-    try std.testing.expectEqual(@as(u64, 1), try percentileElapsedNs(&samples, 0));
-    try std.testing.expectEqual(@as(u64, 4), try percentileElapsedNs(&samples, 100));
-    try std.testing.expectEqual(@as(u64, 2), try percentileElapsedNs(&samples, 50));
-    try std.testing.expectError(error.InvalidInput, percentileElapsedNs(&samples, 101));
-    try std.testing.expectError(error.InvalidInput, percentileElapsedNs(&.{}, 50));
+    try testing.expectEqual(@as(u64, 1), try percentileElapsedNs(&samples, 0));
+    try testing.expectEqual(@as(u64, 4), try percentileElapsedNs(&samples, 100));
+    try testing.expectEqual(@as(u64, 2), try percentileElapsedNs(&samples, 50));
+    try testing.expectError(error.InvalidInput, percentileElapsedNs(&samples, 101));
+    try testing.expectError(error.InvalidInput, percentileElapsedNs(&.{}, 50));
 }
 
 test "computeStatsWithScratch matches computeStats and rejects undersized scratch" {
@@ -307,19 +309,19 @@ test "computeStatsWithScratch matches computeStats and rejects undersized scratc
     var scratch: [4]u64 = undefined;
     const derived_scratch = try computeStatsWithScratch(case_result, &scratch);
 
-    try std.testing.expectEqual(derived_default.min_elapsed_ns, derived_scratch.min_elapsed_ns);
-    try std.testing.expectEqual(derived_default.max_elapsed_ns, derived_scratch.max_elapsed_ns);
-    try std.testing.expectEqual(derived_default.mean_elapsed_ns, derived_scratch.mean_elapsed_ns);
-    try std.testing.expectEqual(derived_default.median_elapsed_ns, derived_scratch.median_elapsed_ns);
-    try std.testing.expectEqual(derived_default.p90_elapsed_ns, derived_scratch.p90_elapsed_ns);
-    try std.testing.expectEqual(derived_default.p99_elapsed_ns, derived_scratch.p99_elapsed_ns);
+    try testing.expectEqual(derived_default.min_elapsed_ns, derived_scratch.min_elapsed_ns);
+    try testing.expectEqual(derived_default.max_elapsed_ns, derived_scratch.max_elapsed_ns);
+    try testing.expectEqual(derived_default.mean_elapsed_ns, derived_scratch.mean_elapsed_ns);
+    try testing.expectEqual(derived_default.median_elapsed_ns, derived_scratch.median_elapsed_ns);
+    try testing.expectEqual(derived_default.p90_elapsed_ns, derived_scratch.p90_elapsed_ns);
+    try testing.expectEqual(derived_default.p99_elapsed_ns, derived_scratch.p99_elapsed_ns);
 
     var tiny: [0]u64 = .{};
-    try std.testing.expectError(error.InvalidInput, computeStatsWithScratch(case_result, &tiny));
+    try testing.expectError(error.InvalidInput, computeStatsWithScratch(case_result, &tiny));
 }
 
 test "nearest-rank percentile detects adjustment overflow" {
-    try std.testing.expectError(
+    try testing.expectError(
         error.Overflow,
         nearestRank1Based(std.math.maxInt(usize), 1),
     );

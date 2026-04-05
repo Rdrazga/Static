@@ -7,6 +7,8 @@
 //! - `zig build bench -Doptimize=ReleaseFast` (from `packages/static_testing`).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -31,12 +33,12 @@ const RecordContext = struct {
             .{ .strategy = context.strategy },
             null,
         ) catch |err| {
-            std.debug.panic("Scheduler.init failed: {s}", .{@errorName(err)});
+            panic("Scheduler.init failed: {s}", .{@errorName(err)});
         };
 
         for (context.ready_items) |ready_item| {
             scheduler.enqueueReady(ready_item) catch |err| {
-                std.debug.panic("Scheduler.enqueueReady failed: {s}", .{@errorName(err)});
+                panic("Scheduler.enqueueReady failed: {s}", .{@errorName(err)});
             };
         }
 
@@ -44,13 +46,13 @@ const RecordContext = struct {
         var decisions_total: usize = 0;
         while (scheduler.hasReady()) {
             const decision = scheduler.nextDecision() catch |err| {
-                std.debug.panic("Scheduler.nextDecision failed: {s}", .{@errorName(err)});
+                panic("Scheduler.nextDecision failed: {s}", .{@errorName(err)});
             };
             chosen_id_sum +%= decision.chosen_id;
             decisions_total += 1;
         }
 
-        std.debug.assert(decisions_total == ready_items_count);
+        assert(decisions_total == ready_items_count);
         context.sink +%= chosen_id_sum;
         _ = bench.case.blackBox(context.sink);
     }
@@ -72,24 +74,24 @@ const ReplayContext = struct {
             .{ .strategy = .first },
             null,
         ) catch |err| {
-            std.debug.panic("Scheduler.init failed: {s}", .{@errorName(err)});
+            panic("Scheduler.init failed: {s}", .{@errorName(err)});
         };
 
         for (context.ready_items) |ready_item| {
             scheduler.enqueueReady(ready_item) catch |err| {
-                std.debug.panic("Scheduler.enqueueReady failed: {s}", .{@errorName(err)});
+                panic("Scheduler.enqueueReady failed: {s}", .{@errorName(err)});
             };
         }
 
         var chosen_id_sum: u64 = 0;
         for (context.recorded_decisions) |recorded| {
             const replayed = scheduler.applyRecordedDecision(recorded) catch |err| {
-                std.debug.panic("Scheduler.applyRecordedDecision failed: {s}", .{@errorName(err)});
+                panic("Scheduler.applyRecordedDecision failed: {s}", .{@errorName(err)});
             };
             chosen_id_sum +%= replayed.chosen_id;
         }
 
-        std.debug.assert(!scheduler.hasReady());
+        assert(!scheduler.hasReady());
         context.sink +%= chosen_id_sum;
         _ = bench.case.blackBox(context.sink);
     }
@@ -129,7 +131,7 @@ fn buildRecordedDecisions(
 
     for (ready_items) |ready_item| try scheduler.enqueueReady(ready_item);
     while (scheduler.hasReady()) _ = try scheduler.nextDecision();
-    std.debug.assert(scheduler.recordedDecisions().len == ready_items_count);
+    assert(scheduler.recordedDecisions().len == ready_items_count);
 
     var recorded: [ready_items_count]scheduler_mod.ScheduleDecision = undefined;
     std.mem.copyForwards(
@@ -152,14 +154,14 @@ fn verifySchedulerBenchmarkInputs(
         .ready_items = ready_items,
     };
     RecordContext.run(&record_context);
-    std.debug.assert(record_context.sink == expected_sum);
+    assert(record_context.sink == expected_sum);
 
     var replay_context = ReplayContext{
         .ready_items = ready_items,
         .recorded_decisions = recorded_decisions,
     };
     ReplayContext.run(&replay_context);
-    std.debug.assert(replay_context.sink == expected_sum);
+    assert(replay_context.sink == expected_sum);
 }
 
 fn runBenchmarkGroup(

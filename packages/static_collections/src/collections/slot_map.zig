@@ -11,6 +11,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const memory = @import("static_memory");
 const handle_mod = @import("handle.zig");
 const assert = std.debug.assert;
@@ -404,21 +405,21 @@ pub fn SlotMap(comptime T: type) type {
 test "slot map generation checks reject stale handles" {
     // Goal: stale handles must fail after remove due to generation mismatch.
     // Method: insert-get-remove and assert old handle lookup returns null.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const h = try sm.insert(7);
-    std.debug.assert(sm.len() == 1);
-    try std.testing.expectEqual(@as(u32, 7), sm.get(h).?.*);
+    assert(sm.len() == 1);
+    try testing.expectEqual(@as(u32, 7), sm.get(h).?.*);
     _ = try sm.remove(h);
-    try std.testing.expect(sm.get(h) == null);
-    try std.testing.expectEqual(@as(usize, 0), sm.len());
+    try testing.expect(sm.get(h) == null);
+    try testing.expectEqual(@as(usize, 0), sm.len());
 }
 
 test "slot map slot is reused and old handle is stale after reuse" {
     // Goal: confirm free-list slot reuse bumps generation for safety.
     // Method: remove a handle, insert again, and compare index/generation.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const h1 = try sm.insert(10);
@@ -427,74 +428,74 @@ test "slot map slot is reused and old handle is stale after reuse" {
     const h2 = try sm.insert(20);
     assert(h1.index == h2.index);
     assert(h2.generation != h1.generation);
-    try std.testing.expect(sm.get(h1) == null);
-    try std.testing.expectEqual(@as(u32, 20), sm.get(h2).?.*);
+    try testing.expect(sm.get(h1) == null);
+    try testing.expectEqual(@as(u32, 20), sm.get(h2).?.*);
 }
 
 test "slot map remove on stale handle returns NotFound" {
     // Goal: remove must reject stale generation values.
     // Method: remove once, then remove same handle again and expect NotFound.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const h = try sm.insert(99);
     _ = try sm.remove(h);
-    try std.testing.expectError(error.NotFound, sm.remove(h));
+    try testing.expectError(error.NotFound, sm.remove(h));
 }
 
 test "slot map multiple inserts and removes" {
     // Goal: validate live-count tracking through mixed insert/remove operations.
     // Method: insert three values, remove middle, and assert survivors are intact.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const a = try sm.insert(1);
     const b = try sm.insert(2);
     const c = try sm.insert(3);
-    try std.testing.expectEqual(@as(usize, 3), sm.len());
+    try testing.expectEqual(@as(usize, 3), sm.len());
 
     _ = try sm.remove(b);
-    try std.testing.expectEqual(@as(usize, 2), sm.len());
-    try std.testing.expectEqual(@as(u32, 1), sm.get(a).?.*);
-    try std.testing.expectEqual(@as(u32, 3), sm.get(c).?.*);
-    try std.testing.expect(sm.get(b) == null);
+    try testing.expectEqual(@as(usize, 2), sm.len());
+    try testing.expectEqual(@as(u32, 1), sm.get(a).?.*);
+    try testing.expectEqual(@as(u32, 3), sm.get(c).?.*);
+    try testing.expect(sm.get(b) == null);
 }
 
 test "slot map invalid sentinel handle is rejected" {
     // Goal: reject invalid handle sentinel across read and remove paths.
     // Method: query and remove Handle.invalid() and assert safe failure.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const invalid = handle_mod.Handle.invalid();
-    try std.testing.expect(sm.get(invalid) == null);
-    try std.testing.expectError(error.NotFound, sm.remove(invalid));
+    try testing.expect(sm.get(invalid) == null);
+    try testing.expectError(error.NotFound, sm.remove(invalid));
 }
 
 test "slot map clear invalidates all handles and allows reuse" {
     // Goal: confirm clear resets length and stales all handles while preserving capacity.
     // Method: insert values, clear, verify old handles are stale, then insert again.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const a = try sm.insert(1);
     const b = try sm.insert(2);
-    try std.testing.expectEqual(@as(usize, 2), sm.len());
+    try testing.expectEqual(@as(usize, 2), sm.len());
 
     sm.clear();
-    try std.testing.expectEqual(@as(usize, 0), sm.len());
-    try std.testing.expect(sm.get(a) == null);
-    try std.testing.expect(sm.get(b) == null);
+    try testing.expectEqual(@as(usize, 0), sm.len());
+    try testing.expect(sm.get(a) == null);
+    try testing.expect(sm.get(b) == null);
 
     const c = try sm.insert(3);
-    try std.testing.expectEqual(@as(usize, 1), sm.len());
-    try std.testing.expectEqual(@as(u32, 3), sm.get(c).?.*);
+    try testing.expectEqual(@as(usize, 1), sm.len());
+    try testing.expectEqual(@as(u32, 3), sm.get(c).?.*);
 }
 
 test "slot map iterator yields all live entries" {
     // Goal: verify iterator visits all live entries and skips freed slots.
     // Method: insert three values, remove middle, iterate and sum remaining.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     _ = try sm.insert(10);
@@ -507,11 +508,11 @@ test "slot map iterator yields all live entries" {
     var count: usize = 0;
     while (it.next()) |entry| {
         sum += entry.value_ptr.*;
-        try std.testing.expect(sm.get(entry.handle) != null);
+        try testing.expect(sm.get(entry.handle) != null);
         count += 1;
     }
-    try std.testing.expectEqual(@as(usize, 2), count);
-    try std.testing.expectEqual(@as(u32, 40), sum);
+    try testing.expectEqual(@as(usize, 2), count);
+    try testing.expectEqual(@as(u32, 40), sum);
 }
 
 test "slot map budget tracks actual capacity" {
@@ -521,7 +522,7 @@ test "slot map budget tracks actual capacity" {
     var budget = try memory.budget.Budget.init(slot_size * 16);
 
     {
-        var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = &budget });
+        var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = &budget });
         defer sm.deinit();
 
         _ = try sm.insert(1);
@@ -529,15 +530,15 @@ test "slot map budget tracks actual capacity" {
         _ = try sm.insert(3);
 
         const expected_bytes = sm.slots.capacity * slot_size;
-        try std.testing.expectEqual(@as(u64, expected_bytes), budget.used());
+        try testing.expectEqual(@as(u64, expected_bytes), budget.used());
     }
-    try std.testing.expectEqual(@as(u64, 0), budget.used());
+    try testing.expectEqual(@as(u64, 0), budget.used());
 }
 
 test "slot map clone produces independent copy" {
     // Goal: verify clone creates a separate copy with intact free list.
     // Method: clone after insert+remove, verify both work independently.
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const a = try sm.insert(10);
@@ -546,17 +547,17 @@ test "slot map clone produces independent copy" {
 
     var c = try sm.clone();
     defer c.deinit();
-    try std.testing.expectEqual(@as(usize, 1), c.len());
+    try testing.expectEqual(@as(usize, 1), c.len());
 
     // Clone's free list should work independently.
     const d = try c.insert(30);
-    try std.testing.expectEqual(@as(u32, 30), c.get(d).?.*);
-    try std.testing.expectEqual(@as(usize, 2), c.len());
-    try std.testing.expectEqual(@as(usize, 1), sm.len());
+    try testing.expectEqual(@as(u32, 30), c.get(d).?.*);
+    try testing.expectEqual(@as(usize, 2), c.len());
+    try testing.expectEqual(@as(usize, 1), sm.len());
 }
 
 test "slot map clone after clear preserves reusable free-list state" {
-    var sm = try SlotMap(u32).init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     _ = try sm.insert(10);
@@ -566,7 +567,7 @@ test "slot map clone after clear preserves reusable free-list state" {
     var clone = try sm.clone();
     defer clone.deinit();
 
-    try std.testing.expectEqual(@as(usize, 0), clone.len());
+    try testing.expectEqual(@as(usize, 0), clone.len());
     const handle = try clone.insert(30);
-    try std.testing.expectEqual(@as(u32, 30), clone.get(handle).?.*);
+    try testing.expectEqual(@as(u32, 30), clone.get(handle).?.*);
 }

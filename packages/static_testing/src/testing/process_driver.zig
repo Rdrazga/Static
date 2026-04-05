@@ -6,6 +6,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const driver_protocol = @import("driver_protocol.zig");
 
 /// Operating errors surfaced by process driver lifecycle and protocol I/O.
@@ -77,8 +79,8 @@ pub const ProcessDriver = struct {
         }) catch |err| return mapSpawnError(err);
         errdefer child.kill(io);
 
-        std.debug.assert(child.stdin != null);
-        std.debug.assert(child.stdout != null);
+        assert(child.stdin != null);
+        assert(child.stdout != null);
         return .{
             .io = io,
             .config = config,
@@ -263,7 +265,7 @@ pub const ProcessDriver = struct {
             self.stderr_capture_truncated = true;
         }
 
-        std.debug.assert(bytes_captured <= capture_buffer.len);
+        assert(bytes_captured <= capture_buffer.len);
         self.stderr_capture_len = @intCast(bytes_captured);
     }
 
@@ -374,8 +376,8 @@ fn waitForChildWithTimeout(
     child: *std.process.Child,
     timeout_ns_max: u64,
 ) ProcessDriverError!std.process.Child.Term {
-    std.debug.assert(child.id != null);
-    std.debug.assert(timeout_ns_max > 0);
+    assert(child.id != null);
+    assert(timeout_ns_max > 0);
 
     const child_id = child.id.?;
     var wait_state = WaitThreadState{
@@ -525,10 +527,10 @@ fn mapWaitError(err: std.process.Child.WaitError) ProcessDriverError {
 }
 
 test "process driver config rejects empty argv and zero timeout" {
-    try std.testing.expectError(error.InvalidConfig, validateConfig(.{
+    try testing.expectError(error.InvalidConfig, validateConfig(.{
         .argv = &.{},
     }));
-    try std.testing.expectError(error.InvalidConfig, validateConfig(.{
+    try testing.expectError(error.InvalidConfig, validateConfig(.{
         .argv = &[_][]const u8{"child"},
         .timeout_ns_max = 0,
     }));
@@ -536,7 +538,7 @@ test "process driver config rejects empty argv and zero timeout" {
 
 test "process driver deinit is idempotent after empty session" {
     var driver = ProcessDriver{
-        .io = std.testing.io,
+        .io = testing.io,
         .config = .{
             .argv = &[_][]const u8{"child"},
         },
@@ -544,5 +546,5 @@ test "process driver deinit is idempotent after empty session" {
     };
     driver.deinit();
     driver.deinit();
-    try std.testing.expect(driver.child == null);
+    try testing.expect(driver.child == null);
 }

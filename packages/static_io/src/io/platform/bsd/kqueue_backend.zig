@@ -10,6 +10,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const io_caps = @import("../../caps.zig");
 const static_queues = @import("static_queues");
 
@@ -425,23 +427,23 @@ const BsdKqueueBackend = struct {
     }
 
     fn allocSlot(self: *BsdKqueueBackend) backend.SubmitError!u32 {
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
         if (self.free_len == 0) return error.WouldBlock;
         self.free_len -= 1;
         const slot_index = self.free_slots[self.free_len];
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.slots[slot_index].state == .free);
+        assert(slot_index < self.slots.len);
+        assert(self.slots[slot_index].state == .free);
         return slot_index;
     }
 
     fn freeSlot(self: *BsdKqueueBackend, slot_index: u32) void {
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.free_len < self.free_slots.len);
+        assert(slot_index < self.slots.len);
+        assert(self.free_len < self.free_slots.len);
         const next_gen = nextGeneration(self.slots[slot_index].generation);
         self.slots[slot_index] = .{ .generation = next_gen };
         self.free_slots[self.free_len] = slot_index;
         self.free_len += 1;
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
     }
 
     fn pushReady(self: *BsdKqueueBackend, slot_index: u32) void {
@@ -452,7 +454,7 @@ const BsdKqueueBackend = struct {
     fn completeImmediate(self: *BsdKqueueBackend, op: types.Operation, completion: types.Completion) backend.SubmitError!types.OperationId {
         const slot_index = try self.allocSlot();
         var slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .free);
+        assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);
         var out_completion = completion;
@@ -606,7 +608,7 @@ const BsdKqueueBackend = struct {
                 self.file_in_flight -= 1;
                 return err;
             };
-            std.debug.assert((inner_id & file_backend_flag) == 0);
+            assert((inner_id & file_backend_flag) == 0);
             return inner_id | file_backend_flag;
         }
 
@@ -621,7 +623,7 @@ const BsdKqueueBackend = struct {
         errdefer self.freeSlot(slot_index);
 
         var slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .free);
+        assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);
         slot.* = .{
@@ -1213,7 +1215,7 @@ const BsdKqueueBackend = struct {
         };
         const slot = &self.slots[slot_index];
         if (slot.state != .ready) {
-            std.debug.assert(slot.state == .ready);
+            assert(slot.state == .ready);
             return null;
         }
         const completion = slot.completion;
@@ -1494,11 +1496,11 @@ test "kqueue backend supports bounded nop/fill completions" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (!io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     var storage_a: [8]u8 = [_]u8{0} ** 8;
@@ -1512,17 +1514,17 @@ test "kqueue backend supports bounded nop/fill completions" {
         .byte = 0x7A,
     } });
     const id_b = try backend_impl.submit(.{ .nop = buf_b });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
 
     _ = try backend_impl.pump(8);
     const first = backend_impl.poll().?;
     const second = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
-    try std.testing.expectEqual(id_a, first.operation_id);
-    try std.testing.expectEqual(id_b, second.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.success, first.status);
-    try std.testing.expectEqual(types.CompletionStatus.success, second.status);
-    try std.testing.expectEqual(@as(u8, 0x7A), first.buffer.bytes[0]);
+    try testing.expect(backend_impl.poll() == null);
+    try testing.expectEqual(id_a, first.operation_id);
+    try testing.expectEqual(id_b, second.operation_id);
+    try testing.expectEqual(types.CompletionStatus.success, first.status);
+    try testing.expectEqual(types.CompletionStatus.success, second.status);
+    try testing.expectEqual(@as(u8, 0x7A), first.buffer.bytes[0]);
 }
 
 test "kqueue backend supports connect/accept, stream read/write, and stream read timeout" {
@@ -1530,11 +1532,11 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
     cfg.backend_kind = .bsd_kqueue;
 
     if (!io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const listen_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -1549,17 +1551,17 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
         .port = 0,
     } });
     const bind_rc = posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const listen_rc2 = posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port: u16 = switch (bound) {
         .ipv4 => |ipv4| ipv4.port,
         .ipv6 => |ipv6| ipv6.port,
     };
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1594,26 +1596,26 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             seen_accept = true;
-            try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(?types.Handle, server_stream.handle), completion.handle);
+            try testing.expectEqual(types.OperationTag.accept, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(?types.Handle, server_stream.handle), completion.handle);
             const peer = completion.endpoint orelse return error.MissingAcceptPeerEndpoint;
             switch (peer) {
                 .ipv4 => |ipv4| {
-                    try std.testing.expectEqual([4]u8{ 127, 0, 0, 1 }, ipv4.address.octets);
-                    try std.testing.expect(ipv4.port != 0);
-                    try std.testing.expect(ipv4.port != port);
+                    try testing.expectEqual([4]u8{ 127, 0, 0, 1 }, ipv4.address.octets);
+                    try testing.expect(ipv4.port != 0);
+                    try testing.expect(ipv4.port != port);
                 },
                 else => return error.UnexpectedAcceptPeerEndpoint,
             }
         } else if (completion.operation_id == connect_id) {
             seen_connect = true;
-            try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(?types.Handle, client_stream.handle), completion.handle);
+            try testing.expectEqual(types.OperationTag.connect, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(?types.Handle, client_stream.handle), completion.handle);
         }
     }
-    try std.testing.expect(seen_accept and seen_connect);
+    try testing.expect(seen_accept and seen_connect);
 
     var write_bytes: [5]u8 = .{ 'h', 'e', 'l', 'l', 'o' };
     var write_buf = types.Buffer{ .bytes = &write_bytes };
@@ -1642,18 +1644,18 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == write_id) {
             got_write = true;
-            try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
         } else if (completion.operation_id == read_id) {
             got_read = true;
-            try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-            try std.testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
-            try std.testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
+            try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(@as(u32, 5), completion.bytes_transferred);
+            try testing.expectEqualSlices(u8, "hello", completion.buffer.usedSlice());
         }
     }
-    try std.testing.expect(got_write and got_read);
+    try testing.expect(got_write and got_read);
 
     var cancel_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const cancel_read_buf = types.Buffer{ .bytes = &cancel_read_bytes };
@@ -1665,10 +1667,10 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
     try backend_impl.cancel(cancel_read_id);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const cancel_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(cancel_read_id, cancel_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, cancel_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.cancelled, cancel_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancel_completion.err);
+    try testing.expectEqual(cancel_read_id, cancel_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, cancel_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.cancelled, cancel_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancel_completion.err);
 
     var timeout_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const timeout_read_buf = types.Buffer{ .bytes = &timeout_read_bytes };
@@ -1679,10 +1681,10 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const timeout_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(timeout_read_id, timeout_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, timeout_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
+    try testing.expectEqual(timeout_read_id, timeout_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, timeout_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.timeout, timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
 
     const accept_timeout_stream = types.Stream{ .handle = .{ .index = 3, .generation = 1 } };
     const accept_timeout_id = try backend_impl.submit(.{ .accept = .{
@@ -1692,10 +1694,10 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
     } });
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const accept_timeout_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
+    try testing.expectEqual(accept_timeout_id, accept_timeout_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, accept_timeout_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.timeout, accept_timeout_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), accept_timeout_completion.err);
 
     var close_read_bytes: [8]u8 = [_]u8{0} ** 8;
     const close_read_buf = types.Buffer{ .bytes = &close_read_bytes };
@@ -1707,10 +1709,10 @@ test "kqueue backend supports connect/accept, stream read/write, and stream read
     backend_impl.notifyHandleClosed(server_stream.handle);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const close_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(close_read_id, close_completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, close_completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, close_completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_completion.err);
+    try testing.expectEqual(close_read_id, close_completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, close_completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, close_completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
     posix.close(listen_fd);
@@ -1721,11 +1723,11 @@ test "kqueue backend enforces one pending read and one pending write per stream"
     cfg.backend_kind = .bsd_kqueue;
 
     if (comptime !io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const listen_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -1740,17 +1742,17 @@ test "kqueue backend enforces one pending read and one pending write per stream"
         .port = 0,
     } });
     const bind_rc = posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const listen_rc2 = posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port: u16 = switch (bound) {
         .ipv4 => |ipv4| ipv4.port,
         .ipv6 => |ipv6| ipv6.port,
     };
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1803,7 +1805,7 @@ test "kqueue backend enforces one pending read and one pending write per stream"
         .buffer = write_buf,
         .timeout_ns = null,
     } });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .stream_write = .{
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .stream_write = .{
         .stream = client_stream,
         .buffer = write_buf,
         .timeout_ns = null,
@@ -1820,7 +1822,7 @@ test "kqueue backend enforces one pending read and one pending write per stream"
         .buffer = read_buf,
         .timeout_ns = null,
     } });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .stream_read = .{
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .stream_read = .{
         .stream = server_stream,
         .buffer = read_buf,
         .timeout_ns = null,
@@ -1834,11 +1836,11 @@ test "kqueue backend closes pending accept when listener handle closes" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (comptime !io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const listen_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -1853,10 +1855,10 @@ test "kqueue backend closes pending accept when listener handle closes" {
         .port = 0,
     } });
     const bind_rc = posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const listen_rc2 = posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1873,12 +1875,12 @@ test "kqueue backend closes pending accept when listener handle closes" {
     backend_impl.notifyHandleClosed(listener_handle);
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(accept_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.accept, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(?types.Handle, null), completion.handle);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(accept_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.accept, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(?types.Handle, null), completion.handle);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 
     posix.close(listen_fd);
 }
@@ -1888,11 +1890,11 @@ test "kqueue backend closes pending stream_write when stream handle closes" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (comptime !io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const listen_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -1907,17 +1909,17 @@ test "kqueue backend closes pending stream_write when stream handle closes" {
         .port = 0,
     } });
     const bind_rc = posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const listen_rc2 = posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port: u16 = switch (bound) {
         .ipv4 => |ipv4| ipv4.port,
         .ipv6 => |ipv6| ipv6.port,
     };
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
     backend_impl.registerHandle(listener_handle, .listener, @intCast(listen_fd), false);
@@ -1947,13 +1949,13 @@ test "kqueue backend closes pending stream_write when stream handle closes" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id == accept_id) {
             saw_accept = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         } else if (completion.operation_id == connect_id) {
             saw_connect = true;
-            try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+            try testing.expectEqual(types.CompletionStatus.success, completion.status);
         }
     }
-    try std.testing.expect(saw_accept and saw_connect);
+    try testing.expect(saw_accept and saw_connect);
 
     const server_fd: posix.fd_t = backend_impl.handle_native[server_stream.handle.index];
     const client_fd: posix.fd_t = backend_impl.handle_native[client_stream.handle.index];
@@ -1992,11 +1994,11 @@ test "kqueue backend closes pending stream_write when stream handle closes" {
 
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.closed, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
-    try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.closed, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), completion.err);
+    try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
 
     backend_impl.notifyHandleClosed(server_stream.handle);
     posix.close(listen_fd);
@@ -2007,11 +2009,11 @@ test "kqueue backend maps connection refused on connect" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (!io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const reserve_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -2025,14 +2027,14 @@ test "kqueue backend maps connection refused on connect" {
         .port = 0,
     } });
     const bind_rc = posix.system.bind(reserve_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const reserved = socketLocalEndpoint(reserve_fd) orelse return error.SkipZigTest;
     const port: u16 = switch (reserved) {
         .ipv4 => |ipv4| ipv4.port,
         .ipv6 => |ipv6| ipv6.port,
     };
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
     posix.close(reserve_fd);
 
     const client_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
@@ -2049,10 +2051,10 @@ test "kqueue backend maps connection refused on connect" {
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
 
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(connect_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.connection_refused, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .connection_refused), completion.err);
+    try testing.expectEqual(connect_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.connect, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.connection_refused, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .connection_refused), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -2062,11 +2064,11 @@ test "kqueue backend maps connection reset on stream read" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (!io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const listen_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -2082,17 +2084,17 @@ test "kqueue backend maps connection reset on stream read" {
         .port = 0,
     } });
     const bind_rc = posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const listen_rc2 = posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port: u16 = switch (bound) {
         .ipv4 => |ipv4| ipv4.port,
         .ipv6 => |ipv6| ipv6.port,
     };
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const Server = struct {
         fn run(server_listen_fd: posix.fd_t) void {
@@ -2156,10 +2158,10 @@ test "kqueue backend maps connection reset on stream read" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id != connect_id) continue;
         saw_connect = true;
-        try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+        try testing.expectEqual(types.OperationTag.connect, completion.tag);
+        try testing.expectEqual(types.CompletionStatus.success, completion.status);
     }
-    try std.testing.expect(saw_connect);
+    try testing.expect(saw_connect);
 
     var read_bytes: [8]u8 = [_]u8{0} ** 8;
     const read_buf = types.Buffer{ .bytes = &read_bytes };
@@ -2171,10 +2173,10 @@ test "kqueue backend maps connection reset on stream read" {
     _ = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
 
     const completion = backend_impl.poll() orelse return error.SkipZigTest;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_read, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.connection_reset, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .connection_reset), completion.err);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_read, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.connection_reset, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .connection_reset), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -2184,11 +2186,11 @@ test "kqueue backend maps broken pipe on stream write after shutdown send" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (!io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const listen_rc = posix.system.socket(posix.AF.INET, posix.SOCK.STREAM, 0);
@@ -2203,17 +2205,17 @@ test "kqueue backend maps broken pipe on stream write after shutdown send" {
         .port = 0,
     } });
     const bind_rc = posix.system.bind(listen_fd, bind_addr.ptr(), bind_addr.len());
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(bind_rc));
 
     const listen_rc2 = posix.system.listen(listen_fd, 16);
-    try std.testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
+    try testing.expectEqual(posix.E.SUCCESS, posix.errno(listen_rc2));
 
     const bound = socketLocalEndpoint(listen_fd) orelse return error.SkipZigTest;
     const port: u16 = switch (bound) {
         .ipv4 => |ipv4| ipv4.port,
         .ipv6 => |ipv6| ipv6.port,
     };
-    try std.testing.expect(port != 0);
+    try testing.expect(port != 0);
 
     const client_stream = types.Stream{ .handle = .{ .index = 0, .generation = 1 } };
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -2233,13 +2235,13 @@ test "kqueue backend maps broken pipe on stream write after shutdown send" {
         const completion = backend_impl.poll() orelse break;
         if (completion.operation_id != connect_id) continue;
         saw_connect = true;
-        try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-        try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
+        try testing.expectEqual(types.OperationTag.connect, completion.tag);
+        try testing.expectEqual(types.CompletionStatus.success, completion.status);
     }
-    try std.testing.expect(saw_connect);
+    try testing.expect(saw_connect);
 
     const client_fd = backend_impl.handle_native[client_stream.handle.index];
-    try std.testing.expect(client_fd >= 0);
+    try testing.expect(client_fd >= 0);
     const shutdown_rc = posix.system.shutdown(client_fd, posix.SHUT.WR);
     if (posix.errno(shutdown_rc) != .SUCCESS) return error.SkipZigTest;
 
@@ -2263,10 +2265,10 @@ test "kqueue backend maps broken pipe on stream write after shutdown send" {
         }
     }
     const completion = completion_opt orelse return error.SkipZigTest;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.stream_write, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.broken_pipe, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .broken_pipe), completion.err);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.stream_write, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.broken_pipe, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .broken_pipe), completion.err);
 
     backend_impl.notifyHandleClosed(client_stream.handle);
 }
@@ -2276,11 +2278,11 @@ test "kqueue backend waitForCompletions returns delegated file completions" {
     cfg.backend_kind = .bsd_kqueue;
 
     if (!io_caps.bsdBackendEnabled(builtin.os.tag)) {
-        try std.testing.expectError(error.Unsupported, KqueueBackend.init(std.testing.allocator, cfg));
+        try testing.expectError(error.Unsupported, KqueueBackend.init(testing.allocator, cfg));
         return;
     }
 
-    var backend_impl = try KqueueBackend.init(std.testing.allocator, cfg);
+    var backend_impl = try KqueueBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
     const filename = "static_io_kqueue_file_io.tmp";
@@ -2315,11 +2317,11 @@ test "kqueue backend waitForCompletions returns delegated file completions" {
     } });
 
     const waited = try backend_impl.waitForCompletions(1, std.time.ns_per_s);
-    try std.testing.expect(waited > 0);
+    try testing.expect(waited > 0);
 
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(write_id, completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.file_write_at, completion.tag);
-    try std.testing.expectEqual(types.CompletionStatus.success, completion.status);
-    try std.testing.expectEqual(@as(u32, 4), completion.bytes_transferred);
+    try testing.expectEqual(write_id, completion.operation_id);
+    try testing.expectEqual(types.OperationTag.file_write_at, completion.tag);
+    try testing.expectEqual(types.CompletionStatus.success, completion.status);
+    try testing.expectEqual(@as(u32, 4), completion.bytes_transferred);
 }

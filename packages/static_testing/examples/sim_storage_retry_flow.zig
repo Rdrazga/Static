@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const network = testing.testing.sim.network_link;
@@ -52,31 +53,31 @@ pub fn main() !void {
     try link.send(sim_fixture.sim_clock.now(), 1, 11, 41);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 11, &request_mailbox, sim_fixture.traceBufferPtr());
-    std.debug.assert(try request_mailbox.recv() == 41);
+    assert(try request_mailbox.recv() == 41);
 
     try storage_lane.submitFailure(sim_fixture.sim_clock.now(), 41, 500);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try storage_lane.deliverDueToMailbox(sim_fixture.sim_clock.now(), &completion_mailbox, sim_fixture.traceBufferPtr());
     const failed = try completion_mailbox.recv();
-    std.debug.assert(failed.status == .failed);
+    assert(failed.status == .failed);
 
     const retry_decision = try retry_queue.scheduleNext(sim_fixture.sim_clock.now(), 0, failed.request_id, failed.request_id);
-    std.debug.assert(retry_decision == .queued);
+    assert(retry_decision == .queued);
     _ = try sim_fixture.sim_clock.advance(.init(1));
-    std.debug.assert(try retry_queue.emitDueToMailbox(sim_fixture.sim_clock.now(), &retry_mailbox, sim_fixture.traceBufferPtr()) == 1);
+    assert(try retry_queue.emitDueToMailbox(sim_fixture.sim_clock.now(), &retry_mailbox, sim_fixture.traceBufferPtr()) == 1);
     const retry = try retry_mailbox.recv();
-    std.debug.assert(retry.attempt == 1);
+    assert(retry.attempt == 1);
 
     try link.send(sim_fixture.sim_clock.now(), 1, 11, retry.payload);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 11, &request_mailbox, sim_fixture.traceBufferPtr());
-    std.debug.assert(try request_mailbox.recv() == 41);
+    assert(try request_mailbox.recv() == 41);
 
     try storage_lane.submitSuccess(sim_fixture.sim_clock.now(), 41, 200);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try storage_lane.deliverDueToMailbox(sim_fixture.sim_clock.now(), &completion_mailbox, sim_fixture.traceBufferPtr());
     const success = try completion_mailbox.recv();
-    std.debug.assert(success.status == .success);
+    assert(success.status == .success);
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const retry_before_success = try temporal.checkHappensBefore(
@@ -84,7 +85,7 @@ pub fn main() !void {
         .{ .label = "retry_queue.emit", .surface_label = "retry_queue" },
         .{ .label = "storage_lane.success", .surface_label = "storage_lane" },
     );
-    std.debug.assert(retry_before_success.check_result.passed);
+    assert(retry_before_success.check_result.passed);
 
     std.debug.print("composed flow reached storage success after one retry\n", .{});
 }

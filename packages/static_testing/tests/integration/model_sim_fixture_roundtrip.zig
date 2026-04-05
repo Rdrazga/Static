@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -17,10 +19,10 @@ const ActionTag = enum(u32) {
 };
 
 test "model harness drives sim fixture, retains provenance, and replays recorded actions" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -75,8 +77,8 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
             context.saw_secondary = false;
             context.delivery_count = 0;
 
-            std.debug.assert(context.sim_fixture.traceBufferPtr() != null);
-            std.debug.assert(context.mailbox.len() == 0);
+            assert(context.sim_fixture.traceBufferPtr() != null);
+            assert(context.mailbox.len() == 0);
         }
 
         fn nextAction(
@@ -103,7 +105,7 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
             action: model.RecordedAction,
         ) TargetError!model.ModelStep {
             const context: *@This() = @ptrCast(@alignCast(context_ptr));
-            std.debug.assert(context.initialized);
+            assert(context.initialized);
 
             switch (@as(ActionTag, @enumFromInt(action.tag))) {
                 .schedule_primary => {
@@ -156,12 +158,12 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         }
 
         fn scheduleAfter(self: *@This(), chosen_id: u32, delay_ticks: u64) TargetError!void {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
             _ = try self.sim_fixture.scheduleAfter(.{ .id = chosen_id }, .init(delay_ticks));
         }
 
         fn deliverNext(self: *@This()) TargetError!?u32 {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
 
             var attempts: u32 = 0;
             while (attempts < 8) : (attempts += 1) {
@@ -178,7 +180,7 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         }
 
         fn recvExpected(self: *@This(), expected: u32) TargetError!void {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
 
             const received = self.mailbox.recv() catch |err| switch (err) {
                 error.WouldBlock => return,
@@ -195,7 +197,7 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         }
 
         fn roundtripComplete(self: *@This()) bool {
-            std.debug.assert(self.initialized);
+            assert(self.initialized);
 
             const provenance = self.sim_fixture.traceProvenanceSummary() orelse return false;
             return self.delivery_count == 2 and
@@ -209,7 +211,7 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         fn appendLinkedTraceEvent(self: *@This(), label: []const u8, value: u32) TargetError!void {
             const trace_buffer = self.sim_fixture.traceBufferPtr().?;
             const snapshot = trace_buffer.snapshot();
-            std.debug.assert(snapshot.items.len != 0);
+            assert(snapshot.items.len != 0);
             const cause_sequence_no = snapshot.items[snapshot.items.len - 1].sequence_no;
             try trace_buffer.append(.{
                 .timestamp_ns = self.sim_fixture.sim_clock.now().tick,
@@ -228,7 +230,7 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
     const Target = model.ModelTarget(TargetError);
     const Runner = model.ModelRunner(TargetError);
     var context = Context{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
     };
     defer context.deinit();
 
@@ -288,21 +290,21 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expectEqual(@as(usize, 7), failed_case.recorded_actions.len);
-    try std.testing.expectEqual(@as(u32, 7), failed_case.original_action_count);
-    try std.testing.expectEqual(@as(?u32, 6), failed_case.failing_action_index);
-    try std.testing.expect(failed_case.trace_provenance_summary != null);
-    try std.testing.expect(failed_case.trace_provenance_summary.?.has_provenance);
-    try std.testing.expectEqual(@as(u32, 2), context.delivery_count);
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expectEqual(@as(usize, 7), failed_case.recorded_actions.len);
+    try testing.expectEqual(@as(u32, 7), failed_case.original_action_count);
+    try testing.expectEqual(@as(?u32, 6), failed_case.failing_action_index);
+    try testing.expect(failed_case.trace_provenance_summary != null);
+    try testing.expect(failed_case.trace_provenance_summary.?.has_provenance);
+    try testing.expectEqual(@as(u32, 2), context.delivery_count);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     var summary_buffer: [1024]u8 = undefined;
     const summary_text = try model.formatFailedCaseSummary(TargetError, &summary_buffer, target, failed_case);
-    try std.testing.expect(std.mem.indexOf(u8, summary_text, "trace_events=") != null);
-    try std.testing.expect(std.mem.indexOf(u8, summary_text, "first_bad_action=6") != null);
-    try std.testing.expect(std.mem.indexOf(u8, summary_text, "assert_roundtrip") != null);
+    try testing.expect(std.mem.indexOf(u8, summary_text, "trace_events=") != null);
+    try testing.expect(std.mem.indexOf(u8, summary_text, "first_bad_action=6") != null);
+    try testing.expect(std.mem.indexOf(u8, summary_text, "assert_roundtrip") != null);
 
     var replay_actions: [8]model.RecordedAction = undefined;
     var replay_action_bytes: [512]u8 = undefined;
@@ -319,10 +321,10 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
             .action_document_parse_buffer = &replay_action_document_parse,
         },
     );
-    try std.testing.expect(recorded.action_document != null);
-    try std.testing.expectEqual(@as(usize, 7), recorded.actions.len);
-    try std.testing.expectEqualStrings("schedule_primary", recorded.action_document.?.actions[0].label);
-    try std.testing.expectEqualStrings(
+    try testing.expect(recorded.action_document != null);
+    try testing.expectEqual(@as(usize, 7), recorded.actions.len);
+    try testing.expectEqualStrings("schedule_primary", recorded.action_document.?.actions[0].label);
+    try testing.expectEqualStrings(
         "assert_roundtrip",
         recorded.action_document.?.actions[recorded.action_document.?.actions.len - 1].label,
     );
@@ -357,9 +359,9 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    try std.testing.expect(retained_bundle.trace_document != null);
-    try std.testing.expect(retained_bundle.retained_trace != null);
-    try std.testing.expect(retained_bundle.trace_document.?.has_provenance);
+    try testing.expect(retained_bundle.trace_document != null);
+    try testing.expect(retained_bundle.retained_trace != null);
+    try testing.expect(retained_bundle.trace_document.?.has_provenance);
 
     var saw_mailbox_surface = false;
     var saw_mailbox_send = false;
@@ -373,9 +375,9 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         if (std.mem.eql(u8, event.label, "mailbox_send")) saw_mailbox_send = true;
         if (std.mem.eql(u8, event.label, "mailbox_recv")) saw_mailbox_recv = true;
     }
-    try std.testing.expect(saw_mailbox_surface);
-    try std.testing.expect(saw_mailbox_send);
-    try std.testing.expect(saw_mailbox_recv);
+    try testing.expect(saw_mailbox_surface);
+    try testing.expect(saw_mailbox_send);
+    try testing.expect(saw_mailbox_recv);
 
     const replay_execution = try model.replayRecordedActions(
         TargetError,
@@ -383,11 +385,11 @@ test "model harness drives sim fixture, retains provenance, and replays recorded
         failed_case.run_identity,
         recorded.actions,
     );
-    try std.testing.expect(!replay_execution.check_result.passed);
-    try std.testing.expectEqual(@as(u32, 7), replay_execution.executed_action_count);
-    try std.testing.expectEqual(@as(?u32, 6), replay_execution.failing_action_index);
-    try std.testing.expect(replay_execution.trace_provenance_summary != null);
-    try std.testing.expect(replay_execution.trace_provenance_summary.?.has_provenance);
-    try std.testing.expect(replay_execution.retained_trace_snapshot != null);
-    try std.testing.expectEqual(@as(usize, 2), context.sim_fixture.recordedDecisions().len);
+    try testing.expect(!replay_execution.check_result.passed);
+    try testing.expectEqual(@as(u32, 7), replay_execution.executed_action_count);
+    try testing.expectEqual(@as(?u32, 6), replay_execution.failing_action_index);
+    try testing.expect(replay_execution.trace_provenance_summary != null);
+    try testing.expect(replay_execution.trace_provenance_summary.?.has_provenance);
+    try testing.expect(replay_execution.retained_trace_snapshot != null);
+    try testing.expectEqual(@as(usize, 2), context.sim_fixture.recordedDecisions().len);
 }

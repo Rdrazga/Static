@@ -12,6 +12,8 @@
 //! All operations: no allocation (stack/register only).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// FNV-1a 32-bit hash.
 ///
@@ -28,8 +30,8 @@ pub const Fnv1a32 = struct {
     /// Postconditions: state is offset_basis ^ seed.
     pub fn init(seed: u32) Fnv1a32 {
         comptime {
-            std.debug.assert(offset_basis != 0);
-            std.debug.assert(prime != 0);
+            assert(offset_basis != 0);
+            assert(prime != 0);
         }
         return .{ .state = offset_basis ^ seed };
     }
@@ -46,7 +48,7 @@ pub const Fnv1a32 = struct {
     /// Preconditions: if data.len > 0, data.ptr must be non-null.
     /// Postconditions: internal state updated with every byte of data.
     pub fn update(self: *Fnv1a32, data: []const u8) void {
-        std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+        assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
         for (data) |byte| {
             self.state ^= byte;
             self.state *%= prime;
@@ -85,8 +87,8 @@ pub const Fnv1a64 = struct {
     /// Postconditions: state is offset_basis ^ seed.
     pub fn init(seed: u64) Fnv1a64 {
         comptime {
-            std.debug.assert(offset_basis != 0);
-            std.debug.assert(prime != 0);
+            assert(offset_basis != 0);
+            assert(prime != 0);
         }
         return .{ .state = offset_basis ^ seed };
     }
@@ -103,7 +105,7 @@ pub const Fnv1a64 = struct {
     /// Preconditions: if data.len > 0, data.ptr must be non-null.
     /// Postconditions: internal state updated with every byte of data.
     pub fn update(self: *Fnv1a64, data: []const u8) void {
-        std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+        assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
         for (data) |byte| {
             self.state ^= byte;
             self.state *%= prime;
@@ -153,38 +155,38 @@ pub fn hash64(seed: u64, bytes: []const u8) u64 {
 
 test "fnv1a vectors are stable" {
     // Known FNV-1a vectors. These values must never change.
-    try std.testing.expectEqual(@as(u32, 0x4F9F2CAB), hash32(0, "hello"));
-    try std.testing.expectEqual(@as(u64, 0xA430D84680AABD0B), hash64(0, "hello"));
+    try testing.expectEqual(@as(u32, 0x4F9F2CAB), hash32(0, "hello"));
+    try testing.expectEqual(@as(u64, 0xA430D84680AABD0B), hash64(0, "hello"));
 }
 
 test "fnv1a empty input returns offset basis" {
     // FNV-1a of empty input with seed 0 is the unmodified offset basis.
-    try std.testing.expectEqual(@as(u32, 0x811C9DC5), hash32(0, ""));
-    try std.testing.expectEqual(@as(u64, 0xCBF29CE484222325), hash64(0, ""));
+    try testing.expectEqual(@as(u32, 0x811C9DC5), hash32(0, ""));
+    try testing.expectEqual(@as(u64, 0xCBF29CE484222325), hash64(0, ""));
 }
 
 test "fnv1a different inputs produce different hashes" {
     const a = hash32(0, "hello");
     const b = hash32(0, "world");
-    try std.testing.expect(a != b);
+    try testing.expect(a != b);
 }
 
 test "fnv1a seed changes output" {
     const seeded = hash64(1, "hello");
     const default = hash64(0, "hello");
-    try std.testing.expect(seeded != default);
+    try testing.expect(seeded != default);
 }
 
 test "fnv1a incremental update matches one-shot" {
     var h = Fnv1a32.initDefault();
     h.update("hel");
     h.update("lo");
-    try std.testing.expectEqual(hash32(0, "hello"), h.final());
+    try testing.expectEqual(hash32(0, "hello"), h.final());
 }
 
 test "fnv1a64 static hash matches module-level hash" {
-    try std.testing.expectEqual(Fnv1a64.hash("hello"), hash64(0, "hello"));
-    try std.testing.expectEqual(Fnv1a32.hash("hello"), hash32(0, "hello"));
+    try testing.expectEqual(Fnv1a64.hash("hello"), hash64(0, "hello"));
+    try testing.expectEqual(Fnv1a32.hash("hello"), hash32(0, "hello"));
 }
 
 test "fnv1a64 streaming matches one-shot" {
@@ -192,7 +194,7 @@ test "fnv1a64 streaming matches one-shot" {
     var hasher = Fnv1a64.initDefault();
     hasher.update(data[0..5]);
     hasher.update(data[5..]);
-    try std.testing.expectEqual(Fnv1a64.hash(data), hasher.final());
+    try testing.expectEqual(Fnv1a64.hash(data), hasher.final());
 }
 
 test "fnv1a streaming equivalence at random split points" {
@@ -211,11 +213,11 @@ test "fnv1a streaming equivalence at random split points" {
         var h32 = Fnv1a32.initDefault();
         h32.update(input[0..split]);
         h32.update(input[split..]);
-        try std.testing.expectEqual(expected32, h32.final());
+        try testing.expectEqual(expected32, h32.final());
 
         var h64 = Fnv1a64.initDefault();
         h64.update(input[0..split]);
         h64.update(input[split..]);
-        try std.testing.expectEqual(expected64, h64.final());
+        try testing.expectEqual(expected64, h64.final());
     }
 }

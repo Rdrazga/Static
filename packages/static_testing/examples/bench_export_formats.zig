@@ -1,6 +1,7 @@
 //! Demonstrates JSON, CSV, and Markdown export for one benchmark run result.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -29,17 +30,17 @@ pub fn main() !void {
     var markdown = try renderFormat(testing.bench.exports.writeMarkdown, run_result);
     defer markdown.deinit(std.heap.page_allocator);
 
-    std.debug.assert(std.mem.eql(
+    assert(std.mem.eql(
         u8,
         json.items,
         "{\"mode\":\"smoke\",\"cases\":[{\"name\":\"export_case\",\"warmup_iterations\":1,\"measure_iterations\":4,\"total_elapsed_ns\":220,\"samples\":[{\"elapsed_ns\":100,\"iteration_count\":4},{\"elapsed_ns\":120,\"iteration_count\":4}]}]}",
     ));
-    std.debug.assert(std.mem.eql(
+    assert(std.mem.eql(
         u8,
         csv.items,
         "case_name,sample_index,iteration_count,elapsed_ns\nexport_case,0,4,100\nexport_case,1,4,120\n",
     ));
-    std.debug.assert(std.mem.eql(
+    assert(std.mem.eql(
         u8,
         markdown.items,
         "| case | sample | iteration_count | elapsed_ns |\n| --- | ---: | ---: | ---: |\n| export_case | 0 | 4 | 100 |\n| export_case | 1 | 4 | 120 |\n",

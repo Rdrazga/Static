@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -9,10 +10,10 @@ const seed = static_testing.testing.seed;
 const trace = static_testing.testing.trace;
 
 test "model harness persists recorded actions and replays them" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -169,9 +170,9 @@ test "model harness persists recorded actions and replays them" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     var replay_actions: [8]model.RecordedAction = undefined;
     var replay_action_bytes: [256]u8 = undefined;
@@ -188,8 +189,8 @@ test "model harness persists recorded actions and replays them" {
             .action_document_parse_buffer = &replay_action_document_parse,
         },
     );
-    try std.testing.expect(recorded.action_document != null);
-    try std.testing.expectEqualStrings(
+    try testing.expect(recorded.action_document != null);
+    try testing.expectEqualStrings(
         "force_fail",
         recorded.action_document.?.actions[recorded.action_document.?.actions.len - 1].label,
     );
@@ -224,11 +225,11 @@ test "model harness persists recorded actions and replays them" {
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    try std.testing.expect(retained_bundle.trace_document != null);
-    try std.testing.expect(retained_bundle.retained_trace != null);
-    try std.testing.expect(retained_bundle.trace_document.?.has_provenance);
-    try std.testing.expectEqual(@as(usize, 3), retained_bundle.retained_trace.?.items.len);
-    try std.testing.expectEqualStrings(
+    try testing.expect(retained_bundle.trace_document != null);
+    try testing.expect(retained_bundle.retained_trace != null);
+    try testing.expect(retained_bundle.trace_document.?.has_provenance);
+    try testing.expectEqual(@as(usize, 3), retained_bundle.retained_trace.?.items.len);
+    try testing.expectEqualStrings(
         "model_roundtrip",
         retained_bundle.retained_trace.?.items[1].lineage.surface_label.?,
     );
@@ -247,8 +248,8 @@ test "model harness persists recorded actions and replays them" {
         failed_case.run_identity,
         recorded.actions,
     );
-    try std.testing.expect(!replay_execution.check_result.passed);
-    try std.testing.expectEqual(failed_case.recorded_actions.len, recorded.actions.len);
-    try std.testing.expect(replay_execution.trace_provenance_summary != null);
-    try std.testing.expect(replay_execution.retained_trace_snapshot != null);
+    try testing.expect(!replay_execution.check_result.passed);
+    try testing.expectEqual(failed_case.recorded_actions.len, recorded.actions.len);
+    try testing.expect(replay_execution.trace_provenance_summary != null);
+    try testing.expect(replay_execution.retained_trace_snapshot != null);
 }

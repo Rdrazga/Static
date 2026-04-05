@@ -6,6 +6,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const memory = @import("static_memory");
 const assert = std.debug.assert;
 
@@ -332,55 +333,55 @@ test "sorted vec map keeps deterministic key order" {
     // Goal: verify insertion order is normalized to sorted key order.
     // Method: insert unsorted keys and assert internal order by value mapping.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(10, 1);
     try m.put(5, 2);
     try m.put(7, 3);
     assert(m.len() == 3);
-    try std.testing.expectEqual(@as(u32, 2), m.entries.items[0].value);
-    try std.testing.expectEqual(@as(u32, 3), m.entries.items[1].value);
-    try std.testing.expectEqual(@as(u32, 1), m.entries.items[2].value);
+    try testing.expectEqual(@as(u32, 2), m.entries.items[0].value);
+    try testing.expectEqual(@as(u32, 3), m.entries.items[1].value);
+    try testing.expectEqual(@as(u32, 1), m.entries.items[2].value);
 }
 
 test "sorted vec map put updates existing key" {
     // Goal: ensure put overwrites existing keys without duplication.
     // Method: write same key twice and confirm len stays one.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(3, 100);
     try m.put(3, 200);
     assert(m.len() == 1);
-    try std.testing.expectEqual(@as(u32, 200), m.get(3).?.*);
+    try testing.expectEqual(@as(u32, 200), m.get(3).?.*);
 }
 
 test "sorted vec map remove maintains order" {
     // Goal: remove must preserve sorted order of remaining keys.
     // Method: remove middle key and validate neighbors and missing lookup.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try m.put(2, 20);
     try m.put(3, 30);
 
     const removed = try m.remove(2);
-    try std.testing.expectEqual(@as(u32, 20), removed);
+    try testing.expectEqual(@as(u32, 20), removed);
     assert(m.len() == 2);
-    try std.testing.expect(m.get(2) == null);
-    try std.testing.expectEqual(@as(u32, 10), m.get(1).?.*);
-    try std.testing.expectEqual(@as(u32, 30), m.get(3).?.*);
+    try testing.expect(m.get(2) == null);
+    try testing.expectEqual(@as(u32, 10), m.get(1).?.*);
+    try testing.expectEqual(@as(u32, 30), m.get(3).?.*);
 }
 
 test "sorted vec map remove missing key returns NotFound" {
     // Goal: invalid-data removal must return a precise error.
     // Method: remove a key never inserted and assert NotFound.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
-    try std.testing.expectError(error.NotFound, m.remove(99));
+    try testing.expectError(error.NotFound, m.remove(99));
 }
 
 test "sorted vec map honors custom comparator" {
@@ -391,34 +392,34 @@ test "sorted vec map honors custom comparator" {
             return a > b;
         }
     };
-    var m = try SortedVecMap(u32, u32, Desc).init(std.testing.allocator, .{ .budget = null });
+    var m = try SortedVecMap(u32, u32, Desc).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try m.put(3, 30);
     try m.put(2, 20);
 
-    try std.testing.expectEqual(@as(u32, 3), m.entries.items[0].key);
-    try std.testing.expectEqual(@as(u32, 2), m.entries.items[1].key);
-    try std.testing.expectEqual(@as(u32, 1), m.entries.items[2].key);
+    try testing.expectEqual(@as(u32, 3), m.entries.items[0].key);
+    try testing.expectEqual(@as(u32, 2), m.entries.items[1].key);
+    try testing.expectEqual(@as(u32, 1), m.entries.items[2].key);
 }
 
 test "sorted vec map clear resets length and allows reuse" {
     // Goal: confirm clear empties the map while preserving capacity.
     // Method: insert values, clear, verify empty, then reinsert.
     const Cmp = struct {};
-    var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = null });
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
     try m.put(1, 10);
     try m.put(2, 20);
     assert(m.len() == 2);
 
     m.clear();
-    try std.testing.expectEqual(@as(usize, 0), m.len());
-    try std.testing.expect(m.get(1) == null);
+    try testing.expectEqual(@as(usize, 0), m.len());
+    try testing.expect(m.get(1) == null);
 
     try m.put(3, 30);
-    try std.testing.expectEqual(@as(usize, 1), m.len());
-    try std.testing.expectEqual(@as(u32, 30), m.get(3).?.*);
+    try testing.expectEqual(@as(usize, 1), m.len());
+    try testing.expectEqual(@as(u32, 30), m.get(3).?.*);
 }
 
 test "sorted vec map budget tracks capacity" {
@@ -429,12 +430,12 @@ test "sorted vec map budget tracks capacity" {
     var budget = try memory.budget.Budget.init(entry_size * 16);
 
     {
-        var m = try SortedVecMap(u32, u32, Cmp).init(std.testing.allocator, .{ .budget = &budget });
+        var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = &budget });
         defer m.deinit();
 
         try m.put(1, 10);
         try m.put(2, 20);
-        try std.testing.expect(budget.used() > 0);
+        try testing.expect(budget.used() > 0);
     }
-    try std.testing.expectEqual(@as(u64, 0), budget.used());
+    try testing.expectEqual(@as(u64, 0), budget.used());
 }

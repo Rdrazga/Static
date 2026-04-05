@@ -8,6 +8,8 @@
 //! - caller-assigned case/run indexes.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const seed_mod = @import("seed.zig");
 
 /// Version tag persisted into replay artifacts.
@@ -56,16 +58,16 @@ pub const RunIdentity = struct {
 };
 
 comptime {
-    std.debug.assert(@intFromEnum(ArtifactVersion.v1) == 1);
-    std.debug.assert(std.meta.fields(BuildMode).len == 4);
+    assert(@intFromEnum(ArtifactVersion.v1) == 1);
+    assert(std.meta.fields(BuildMode).len == 4);
 }
 
 /// Construct one run identity from caller-provided bounded metadata.
 pub fn makeRunIdentity(options: MakeRunIdentityOptions) RunIdentity {
-    std.debug.assert(options.package_name.len > 0);
-    std.debug.assert(options.run_name.len > 0);
-    std.debug.assert(options.package_name.len <= std.math.maxInt(u16));
-    std.debug.assert(options.run_name.len <= std.math.maxInt(u16));
+    assert(options.package_name.len > 0);
+    assert(options.run_name.len > 0);
+    assert(options.package_name.len <= std.math.maxInt(u16));
+    assert(options.run_name.len <= std.math.maxInt(u16));
 
     return .{
         .artifact_version = options.artifact_version,
@@ -114,7 +116,7 @@ fn hashInteger(hasher: *std.hash.Fnv1a_64, comptime T: type, value: T) void {
 }
 
 fn hashString(hasher: *std.hash.Fnv1a_64, text: []const u8) void {
-    std.debug.assert(text.len > 0);
+    assert(text.len > 0);
     hashU64(hasher, text.len);
     hasher.update(text);
 }
@@ -127,9 +129,9 @@ test "makeRunIdentity preserves required fields" {
         .build_mode = .debug,
     });
 
-    try std.testing.expectEqual(ArtifactVersion.v1, identity.artifact_version);
-    try std.testing.expectEqual(BuildMode.debug, identity.build_mode);
-    try std.testing.expectEqual(@as(u64, 9), identity.seed.value);
+    try testing.expectEqual(ArtifactVersion.v1, identity.artifact_version);
+    try testing.expectEqual(BuildMode.debug, identity.build_mode);
+    try testing.expectEqual(@as(u64, 9), identity.seed.value);
 }
 
 test "identityHash is stable for identical identities" {
@@ -142,7 +144,7 @@ test "identityHash is stable for identical identities" {
         .run_index = 2,
     });
 
-    try std.testing.expectEqual(identityHash(identity), identityHash(identity));
+    try testing.expectEqual(identityHash(identity), identityHash(identity));
 }
 
 test "identityHash changes when seed or run metadata changes" {
@@ -165,8 +167,8 @@ test "identityHash changes when seed or run metadata changes" {
         .build_mode = .debug,
     });
 
-    try std.testing.expect(identityHash(a) != identityHash(b));
-    try std.testing.expect(identityHash(a) != identityHash(c));
+    try testing.expect(identityHash(a) != identityHash(b));
+    try testing.expect(identityHash(a) != identityHash(c));
 }
 
 test "identityHash changes across remaining persisted fields" {
@@ -211,8 +213,8 @@ test "identityHash changes across remaining persisted fields" {
         .run_index = 4,
     });
 
-    try std.testing.expect(identityHash(base) != identityHash(package_delta));
-    try std.testing.expect(identityHash(base) != identityHash(build_mode_delta));
-    try std.testing.expect(identityHash(base) != identityHash(case_index_delta));
-    try std.testing.expect(identityHash(base) != identityHash(run_index_delta));
+    try testing.expect(identityHash(base) != identityHash(package_delta));
+    try testing.expect(identityHash(base) != identityHash(build_mode_delta));
+    try testing.expect(identityHash(base) != identityHash(case_index_delta));
+    try testing.expect(identityHash(base) != identityHash(run_index_delta));
 }

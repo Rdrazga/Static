@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_meta = @import("static_meta");
 const static_testing = @import("static_testing");
 
@@ -70,8 +72,8 @@ const ReferenceRegistry = struct {
 
     fn reset(self: *@This()) void {
         self.len = 0;
-        std.debug.assert(self.len == 0);
-        std.debug.assert(self.len <= max_entries);
+        assert(self.len == 0);
+        assert(self.len <= max_entries);
     }
 
     fn register(self: *@This(), kind: RegistryKind) meta.RegistryError!void {
@@ -80,8 +82,8 @@ const ReferenceRegistry = struct {
         if (self.len >= max_entries) return error.NoSpaceLeft;
         self.kinds[self.len] = kind;
         self.len += 1;
-        std.debug.assert(self.len <= max_entries);
-        std.debug.assert(self.containsId(id));
+        assert(self.len <= max_entries);
+        assert(self.containsId(id));
     }
 
     fn containsId(self: *const @This(), id: meta.TypeId) bool {
@@ -97,7 +99,7 @@ const ReferenceRegistry = struct {
     }
 
     fn list(self: *const @This()) []const RegistryKind {
-        std.debug.assert(self.len <= max_entries);
+        assert(self.len <= max_entries);
         return self.kinds[0..self.len];
     }
 };
@@ -110,8 +112,8 @@ const Context = struct {
     fn resetState(self: *@This()) void {
         self.registry = meta.TypeRegistry.init(self.entry_storage[0..]) catch unreachable;
         self.reference.reset();
-        std.debug.assert(self.registry.len() == 0);
-        std.debug.assert(self.registry.capacity() == max_entries);
+        assert(self.registry.len() == 0);
+        assert(self.registry.capacity() == max_entries);
     }
 
     fn validate(self: *@This()) checker.CheckResult {
@@ -268,7 +270,7 @@ test "static_meta registry runtime sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 96), summary.executed_case_count);
+    try testing.expectEqual(@as(u32, 96), summary.executed_case_count);
     if (summary.failed_case) |failed_case| {
         var summary_buffer: [1536]u8 = undefined;
         const summary_text = try model.formatFailedCaseSummary(
@@ -413,18 +415,18 @@ fn expectEntryMatchesKind(kind: RegistryKind, entry: meta.Entry) !void {
 }
 
 fn expectEntryMatchesType(comptime T: type, entry: meta.Entry) !void {
-    try std.testing.expectEqual(meta.type_id.fromType(T), entry.type_id);
-    try std.testing.expectEqualStrings(@typeName(T), entry.runtime_name);
-    try std.testing.expectEqual(meta.type_fingerprint.runtime64(T), entry.runtime_fingerprint64);
-    try std.testing.expectEqualStrings(@field(T, "static_name"), entry.stable_name.?);
-    try std.testing.expectEqual(@field(T, "static_version"), entry.stable_version.?);
-    try std.testing.expectEqual(meta.type_fingerprint.stable64Required(T), entry.stable_fingerprint64.?);
+    try testing.expectEqual(meta.type_id.fromType(T), entry.type_id);
+    try testing.expectEqualStrings(@typeName(T), entry.runtime_name);
+    try testing.expectEqual(meta.type_fingerprint.runtime64(T), entry.runtime_fingerprint64);
+    try testing.expectEqualStrings(@field(T, "static_name"), entry.stable_name.?);
+    try testing.expectEqual(@field(T, "static_version"), entry.stable_version.?);
+    try testing.expectEqual(meta.type_fingerprint.stable64Required(T), entry.stable_fingerprint64.?);
 }
 
 fn foldDigest(digest: u128, value: anytype) u128 {
     const widened: u128 = @as(u128, @intCast(value));
     const next = (digest ^ (widened +% 0x9e37_79b9_7f4a_7c15)) *% 0x0000_0001_0000_01b3;
-    std.debug.assert(next == (digest ^ (widened +% 0x9e37_79b9_7f4a_7c15)) *% 0x0000_0001_0000_01b3);
-    std.debug.assert(next != digest or widened == 0);
+    assert(next == (digest ^ (widened +% 0x9e37_79b9_7f4a_7c15)) *% 0x0000_0001_0000_01b3);
+    assert(next != digest or widened == 0);
     return next;
 }

@@ -9,6 +9,8 @@
 //! - `violations.zon` with checker result details.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const artifact = @import("../artifact/root.zig");
 const checker = @import("checker.zig");
@@ -229,7 +231,7 @@ comptime {
         NoSpaceLeft,
         Overflow,
     });
-    std.debug.assert(bundle_version == 3);
+    assert(bundle_version == 3);
 }
 
 /// Write one deterministic directory bundle for a failing run.
@@ -658,31 +660,31 @@ fn validateBundleAgainstReplay(
 
 fn assertTraceMetadata(metadata: trace.TraceMetadata) void {
     if (metadata.event_count == 0) {
-        std.debug.assert(!metadata.has_range);
-        std.debug.assert(metadata.first_sequence_no == 0);
-        std.debug.assert(metadata.last_sequence_no == 0);
-        std.debug.assert(metadata.first_timestamp_ns == 0);
-        std.debug.assert(metadata.last_timestamp_ns == 0);
+        assert(!metadata.has_range);
+        assert(metadata.first_sequence_no == 0);
+        assert(metadata.last_sequence_no == 0);
+        assert(metadata.first_timestamp_ns == 0);
+        assert(metadata.last_timestamp_ns == 0);
     } else {
-        std.debug.assert(metadata.has_range);
-        std.debug.assert(metadata.first_sequence_no <= metadata.last_sequence_no);
-        std.debug.assert(metadata.first_timestamp_ns <= metadata.last_timestamp_ns);
+        assert(metadata.has_range);
+        assert(metadata.first_sequence_no <= metadata.last_sequence_no);
+        assert(metadata.first_timestamp_ns <= metadata.last_timestamp_ns);
     }
 }
 
 fn assertCheckResult(result: checker.CheckResult) void {
     if (result.passed) {
-        std.debug.assert(result.violations.len == 0);
+        assert(result.violations.len == 0);
     } else {
-        std.debug.assert(result.violations.len > 0);
+        assert(result.violations.len > 0);
     }
 }
 
 test "writeFailureBundle and readFailureBundle preserve replay artifact and sidecars" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -761,10 +763,10 @@ test "writeFailureBundle and readFailureBundle preserve replay artifact and side
         },
     });
 
-    try std.testing.expect(std.mem.endsWith(u8, written.entry_name, ".bundle"));
-    try std.testing.expect(written.manifest_bytes_len > 0);
-    try std.testing.expectEqual(@as(u32, stdout_capture.len), written.stdout_bytes_len);
-    try std.testing.expectEqual(@as(u32, stderr_capture.len), written.stderr_bytes_len);
+    try testing.expect(std.mem.endsWith(u8, written.entry_name, ".bundle"));
+    try testing.expect(written.manifest_bytes_len > 0);
+    try testing.expectEqual(@as(u32, stdout_capture.len), written.stdout_bytes_len);
+    try testing.expectEqual(@as(u32, stderr_capture.len), written.stderr_bytes_len);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [recommended_manifest_source_len]u8 = undefined;
@@ -791,36 +793,36 @@ test "writeFailureBundle and readFailureBundle preserve replay artifact and side
         .stderr_buffer = &read_stderr_buffer,
     });
 
-    try std.testing.expectEqual(run_identity.seed.value, bundle.replay_artifact_view.identity.seed.value);
-    try std.testing.expectEqualStrings("stress", bundle.manifest_document.campaign_profile.?);
-    try std.testing.expectEqual(@as(u32, 5), bundle.manifest_document.scenario_variant_id.?);
-    try std.testing.expectEqualStrings("seeded", bundle.manifest_document.schedule_mode.?);
-    try std.testing.expectEqual(@as(u64, 9), bundle.manifest_document.schedule_seed.?);
-    try std.testing.expect(bundle.manifest_document.pending_reason != null);
-    try std.testing.expectEqual(liveness.PendingReason.reply_sequence_gap, bundle.manifest_document.pending_reason.?.reason);
-    try std.testing.expectEqual(@as(u32, 2), bundle.manifest_document.pending_reason.?.count);
-    try std.testing.expectEqual(@as(u64, 17), bundle.manifest_document.pending_reason.?.value);
-    try std.testing.expectEqualStrings("reply_window", bundle.manifest_document.pending_reason.?.label.?);
-    try std.testing.expectEqualStrings(stdout_file_name, bundle.manifest_document.stdout_file.?);
-    try std.testing.expectEqual(true, bundle.manifest_document.stdout_truncated.?);
-    try std.testing.expectEqualStrings(stderr_file_name, bundle.manifest_document.stderr_file.?);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expectEqual(@as(u32, 2), bundle.trace_document.?.event_count);
-    try std.testing.expect(bundle.trace_document.?.has_provenance);
-    try std.testing.expectEqual(@as(u32, 1), bundle.trace_document.?.caused_event_count);
-    try std.testing.expectEqual(@as(u16, 1), bundle.trace_document.?.max_causal_depth);
-    try std.testing.expectEqualStrings("failed", bundle.violations_document.violations[0].code);
-    try std.testing.expect(bundle.stdout_capture != null);
-    try std.testing.expect(bundle.stderr_capture != null);
-    try std.testing.expectEqualStrings(stdout_capture, bundle.stdout_capture.?);
-    try std.testing.expectEqualStrings(stderr_capture, bundle.stderr_capture.?);
+    try testing.expectEqual(run_identity.seed.value, bundle.replay_artifact_view.identity.seed.value);
+    try testing.expectEqualStrings("stress", bundle.manifest_document.campaign_profile.?);
+    try testing.expectEqual(@as(u32, 5), bundle.manifest_document.scenario_variant_id.?);
+    try testing.expectEqualStrings("seeded", bundle.manifest_document.schedule_mode.?);
+    try testing.expectEqual(@as(u64, 9), bundle.manifest_document.schedule_seed.?);
+    try testing.expect(bundle.manifest_document.pending_reason != null);
+    try testing.expectEqual(liveness.PendingReason.reply_sequence_gap, bundle.manifest_document.pending_reason.?.reason);
+    try testing.expectEqual(@as(u32, 2), bundle.manifest_document.pending_reason.?.count);
+    try testing.expectEqual(@as(u64, 17), bundle.manifest_document.pending_reason.?.value);
+    try testing.expectEqualStrings("reply_window", bundle.manifest_document.pending_reason.?.label.?);
+    try testing.expectEqualStrings(stdout_file_name, bundle.manifest_document.stdout_file.?);
+    try testing.expectEqual(true, bundle.manifest_document.stdout_truncated.?);
+    try testing.expectEqualStrings(stderr_file_name, bundle.manifest_document.stderr_file.?);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expectEqual(@as(u32, 2), bundle.trace_document.?.event_count);
+    try testing.expect(bundle.trace_document.?.has_provenance);
+    try testing.expectEqual(@as(u32, 1), bundle.trace_document.?.caused_event_count);
+    try testing.expectEqual(@as(u16, 1), bundle.trace_document.?.max_causal_depth);
+    try testing.expectEqualStrings("failed", bundle.violations_document.violations[0].code);
+    try testing.expect(bundle.stdout_capture != null);
+    try testing.expect(bundle.stderr_capture != null);
+    try testing.expectEqualStrings(stdout_capture, bundle.stdout_capture.?);
+    try testing.expectEqualStrings(stderr_capture, bundle.stderr_capture.?);
 }
 
 test "writeFailureBundle can omit the trace summary when callers select replay-only retention" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -868,7 +870,7 @@ test "writeFailureBundle can omit the trace summary when callers select replay-o
         .artifact_selection = .{ .trace_artifact = .none },
     });
 
-    try std.testing.expectEqual(@as(u32, 0), written.trace_bytes_len);
+    try testing.expectEqual(@as(u32, 0), written.trace_bytes_len);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [recommended_manifest_source_len]u8 = undefined;
@@ -887,16 +889,16 @@ test "writeFailureBundle can omit the trace summary when callers select replay-o
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expect(bundle.trace_document == null);
-    try std.testing.expect(bundle.manifest_document.trace_file == null);
-    try std.testing.expectEqualStrings("failed", bundle.violations_document.violations[0].code);
+    try testing.expect(bundle.trace_document == null);
+    try testing.expect(bundle.manifest_document.trace_file == null);
+    try testing.expectEqualStrings("failed", bundle.violations_document.violations[0].code);
 }
 
 test "writeFailureBundle can retain binary trace events beside the summary" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -966,8 +968,8 @@ test "writeFailureBundle can retain binary trace events beside the summary" {
         .retained_trace_snapshot = retained_snapshot,
     });
 
-    try std.testing.expect(written.trace_bytes_len > 0);
-    try std.testing.expect(written.retained_trace_bytes_len > 0);
+    try testing.expect(written.trace_bytes_len > 0);
+    try testing.expect(written.retained_trace_bytes_len > 0);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [recommended_manifest_source_len]u8 = undefined;
@@ -996,18 +998,18 @@ test "writeFailureBundle can retain binary trace events beside the summary" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings(retained_trace_file_name, bundle.manifest_document.retained_trace_file.?);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqual(@as(usize, 2), bundle.retained_trace.?.items.len);
-    try std.testing.expectEqual(@as(?u32, 30), bundle.retained_trace.?.items[1].lineage.cause_sequence_no);
-    try std.testing.expectEqualStrings("mailbox", bundle.retained_trace.?.items[1].lineage.surface_label.?);
+    try testing.expectEqualStrings(retained_trace_file_name, bundle.manifest_document.retained_trace_file.?);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqual(@as(usize, 2), bundle.retained_trace.?.items.len);
+    try testing.expectEqual(@as(?u32, 30), bundle.retained_trace.?.items[1].lineage.cause_sequence_no);
+    try testing.expectEqualStrings("mailbox", bundle.retained_trace.?.items[1].lineage.surface_label.?);
 }
 
 test "readFailureBundle selection can skip optional sidecars" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1068,16 +1070,16 @@ test "readFailureBundle selection can skip optional sidecars" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expect(bundle.trace_document == null);
-    try std.testing.expect(bundle.retained_trace == null);
-    try std.testing.expectEqualStrings("failed", bundle.violations_document.violations[0].code);
+    try testing.expect(bundle.trace_document == null);
+    try testing.expect(bundle.retained_trace == null);
+    try testing.expectEqualStrings("failed", bundle.violations_document.violations[0].code);
 }
 
 test "readFailureBundle rejects unsupported manifest version" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1141,7 +1143,7 @@ test "readFailureBundle rejects unsupported manifest version" {
     var read_violations_source: [recommended_violations_source_len]u8 = undefined;
     var read_violations_parse: [recommended_violations_parse_len]u8 = undefined;
 
-    try std.testing.expectError(error.Unsupported, readFailureBundle(io, tmp_dir.dir, written.entry_name, .{
+    try testing.expectError(error.Unsupported, readFailureBundle(io, tmp_dir.dir, written.entry_name, .{
         .selection = .{
             .trace_artifact = .summary,
             .text_capture = .none,

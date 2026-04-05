@@ -18,6 +18,8 @@
 //!   CRC32 and CRC32C are hardware-accelerated.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 
 /// Direct std re-export for callers that need the raw IEEE CRC32 type.
@@ -48,7 +50,7 @@ pub const Crc32 = struct {
     /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
     /// Postconditions: internal state updated with bytes.
     pub fn update(self: *Crc32, bytes: []const u8) void {
-        std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+        assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
         self.ctx.update(bytes);
     }
 
@@ -93,7 +95,7 @@ pub const Crc32c = struct {
     /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
     /// Postconditions: internal state updated with bytes.
     pub fn update(self: *Crc32c, bytes: []const u8) void {
-        std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+        assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
         self.ctx.update(bytes);
     }
 
@@ -141,70 +143,70 @@ pub fn hasCrc32Hardware() bool {
 
 test "crc32 known vector" {
     // Check value from the CRC-32/ISO-HDLC standard: "123456789" -> 0xCBF43926.
-    try std.testing.expectEqual(@as(u32, 0xCBF43926), checksum("123456789"));
+    try testing.expectEqual(@as(u32, 0xCBF43926), checksum("123456789"));
 }
 
 test "crc32 empty input is stable" {
     const v = checksum("");
-    try std.testing.expectEqual(v, checksum(""));
+    try testing.expectEqual(v, checksum(""));
 }
 
 test "crc32 incremental matches one-shot" {
     var ctx = Crc32.init();
     ctx.update("123456");
     ctx.update("789");
-    try std.testing.expectEqual(checksum("123456789"), ctx.final());
+    try testing.expectEqual(checksum("123456789"), ctx.final());
 }
 
 test "crc32 different inputs differ" {
-    try std.testing.expect(checksum("hello") != checksum("world"));
+    try testing.expect(checksum("hello") != checksum("world"));
 }
 
 test "crc32c one-shot is deterministic" {
     const a = checksumCastagnoli("hello");
     const b = checksumCastagnoli("hello");
-    try std.testing.expectEqual(a, b);
+    try testing.expectEqual(a, b);
 }
 
 test "crc32c incremental matches one-shot" {
     var ctx = Crc32c.init();
     ctx.update("hel");
     ctx.update("lo");
-    try std.testing.expectEqual(checksumCastagnoli("hello"), ctx.final());
+    try testing.expectEqual(checksumCastagnoli("hello"), ctx.final());
 }
 
 test "crc32c differs from crc32 ieee" {
     // The two polynomials must produce different results for non-trivial input.
     const ieee = checksum("hello");
     const castagnoli = checksumCastagnoli("hello");
-    try std.testing.expect(ieee != castagnoli);
+    try testing.expect(ieee != castagnoli);
 }
 
 test "crc32c known vector" {
     // Check value from the CRC-32C/iSCSI standard: "123456789" -> 0xE3069283.
-    try std.testing.expectEqual(@as(u32, 0xE3069283), checksumCastagnoli("123456789"));
+    try testing.expectEqual(@as(u32, 0xE3069283), checksumCastagnoli("123456789"));
 }
 
 test "crc32 wrappers match raw std implementations" {
     var raw_ieee = StdCrc32.init();
     raw_ieee.update("static ");
     raw_ieee.update("hash");
-    try std.testing.expectEqual(checksum("static hash"), raw_ieee.final());
+    try testing.expectEqual(checksum("static hash"), raw_ieee.final());
 
     var raw_castagnoli = StdCrc32c.init();
     raw_castagnoli.update("static ");
     raw_castagnoli.update("hash");
-    try std.testing.expectEqual(checksumCastagnoli("static hash"), raw_castagnoli.final());
+    try testing.expectEqual(checksumCastagnoli("static hash"), raw_castagnoli.final());
 }
 
 test "crc32 raw std re-exports remain available" {
     var raw_ieee = StdCrc32.init();
     raw_ieee.update("hello");
-    try std.testing.expectEqual(checksum("hello"), raw_ieee.final());
+    try testing.expectEqual(checksum("hello"), raw_ieee.final());
 
     var raw_castagnoli = StdCrc32c.init();
     raw_castagnoli.update("hello");
-    try std.testing.expectEqual(checksumCastagnoli("hello"), raw_castagnoli.final());
+    try testing.expectEqual(checksumCastagnoli("hello"), raw_castagnoli.final());
 }
 
 test "hasCrc32Hardware compiles" {

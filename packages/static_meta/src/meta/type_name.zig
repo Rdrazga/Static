@@ -7,6 +7,8 @@
 //! Thread safety: unrestricted — all functions are pure and comptime-driven.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const StableIdentity = struct {
     name: []const u8,
@@ -19,7 +21,7 @@ pub const StableIdentity = struct {
 pub fn runtimeTypeName(comptime T: type) []const u8 {
     const name = @typeName(T);
     // Postcondition: the compiler never produces an empty type name for valid types.
-    std.debug.assert(name.len > 0);
+    assert(name.len > 0);
     return name;
 }
 
@@ -46,13 +48,13 @@ pub fn tryStableIdentity(comptime T: type) ?StableIdentity {
         }
 
         // Postcondition: the stable name must be non-empty.
-        std.debug.assert(stable_name.len > 0);
+        assert(stable_name.len > 0);
         const result: StableIdentity = .{
             .name = stable_name,
             .version = stable_version,
         };
         // Postcondition: returned identity name matches the declaration.
-        std.debug.assert(result.name.len > 0);
+        assert(result.name.len > 0);
         return result;
     }
     return null;
@@ -71,7 +73,7 @@ pub fn requireStableIdentity(comptime T: type) StableIdentity {
 
     const identity = tryStableIdentity(T) orelse unreachable;
     // Postcondition: required identity must have a non-empty name.
-    std.debug.assert(identity.name.len > 0);
+    assert(identity.name.len > 0);
     return identity;
 }
 
@@ -79,8 +81,8 @@ test "runtimeTypeName is deterministic for same type" {
     const A = struct {};
     const first = runtimeTypeName(A);
     const second = runtimeTypeName(A);
-    try std.testing.expectEqualStrings(first, second);
-    try std.testing.expect(first.len > 0);
+    try testing.expectEqualStrings(first, second);
+    try testing.expect(first.len > 0);
 }
 
 test "hasStableIdentity detects opt in declarations" {
@@ -90,14 +92,14 @@ test "hasStableIdentity detects opt in declarations" {
     };
     const WithoutStable = struct {};
 
-    try std.testing.expect(hasStableIdentity(WithStable));
-    try std.testing.expect(!hasStableIdentity(WithoutStable));
+    try testing.expect(hasStableIdentity(WithStable));
+    try testing.expect(!hasStableIdentity(WithoutStable));
 }
 
 test "tryStableIdentity returns null for non opted in types" {
     const WithoutStable = struct {};
     const identity = tryStableIdentity(WithoutStable);
-    try std.testing.expect(identity == null);
+    try testing.expect(identity == null);
 }
 
 test "tryStableIdentity returns declarations for opted in type" {
@@ -106,6 +108,6 @@ test "tryStableIdentity returns declarations for opted in type" {
         pub const static_version: u32 = 9;
     };
     const identity = tryStableIdentity(WithStable).?;
-    try std.testing.expectEqualStrings("tests/with_stable", identity.name);
-    try std.testing.expectEqual(@as(u32, 9), identity.version);
+    try testing.expectEqualStrings("tests/with_stable", identity.name);
+    try testing.expectEqual(@as(u32, 9), identity.version);
 }

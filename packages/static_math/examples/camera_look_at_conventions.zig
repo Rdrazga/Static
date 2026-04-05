@@ -1,10 +1,11 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const math = @import("static_math");
 
 const tolerance: f32 = 1.0e-4;
 
 fn assertVec3Approx(actual: math.Vec3, expected: math.Vec3) void {
-    std.debug.assert(math.Vec3.approxEqual(actual, expected, tolerance));
+    assert(math.Vec3.approxEqual(actual, expected, tolerance));
 }
 
 pub fn main() void {
@@ -29,12 +30,12 @@ pub fn main() void {
     assertVec3Approx(eye_in_view, math.Vec3.zero);
 
     const target_in_view = math.Mat4.transformPoint(view, target);
-    std.debug.assert(@abs(target_in_view.x) <= tolerance);
-    std.debug.assert(@abs(target_in_view.y) <= tolerance);
-    std.debug.assert(target_in_view.z < 0.0);
+    assert(@abs(target_in_view.x) <= tolerance);
+    assert(@abs(target_in_view.y) <= tolerance);
+    assert(target_in_view.z < 0.0);
 
     // For a camera transform with unit scale, the view matrix is the inverse
     // of the world transform built under the same `-Z` forward convention.
     const view_from_transform = math.Transform.inverseMat4(camera_world);
-    std.debug.assert(math.Mat4.approxEqual(view, view_from_transform, tolerance));
+    assert(math.Mat4.approxEqual(view, view_from_transform, tolerance));
 }

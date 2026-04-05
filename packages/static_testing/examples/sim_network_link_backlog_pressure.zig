@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -32,12 +33,12 @@ pub fn main() !void {
     try link.send(.init(0), 3, 17, 90);
 
     const to_13 = try link.deliverDueToMailbox(.init(1), 13, &mailbox_13, null);
-    std.debug.assert(to_13.delivered_count == 1);
-    std.debug.assert(try mailbox_13.recv() == 80);
+    assert(to_13.delivered_count == 1);
+    assert(try mailbox_13.recv() == 80);
 
     const to_17 = try link.deliverDueToMailbox(.init(1), 17, &mailbox_17, null);
-    std.debug.assert(to_17.delivered_count == 1);
-    std.debug.assert(try mailbox_17.recv() == 90);
+    assert(to_17.delivered_count == 1);
+    assert(try mailbox_17.recv() == 90);
 
     std.debug.print(
         "network link backlog pressure evicted the oldest destination=13 delivery and preserved the unrelated route\n",

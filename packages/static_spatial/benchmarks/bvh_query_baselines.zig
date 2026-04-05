@@ -4,6 +4,7 @@
 //! and the canonical query surfaces admitted by the active plan.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_spatial = @import("static_spatial");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -182,8 +183,8 @@ fn runBuild(context_ptr: *anyopaque) void {
     ) catch unreachable;
     defer bvh.deinit(std.heap.page_allocator);
 
-    std.debug.assert(bvh.items.len == context.items.len);
-    std.debug.assert(bvh.nodes.len > 0);
+    assert(bvh.items.len == context.items.len);
+    assert(bvh.nodes.len > 0);
     _ = bench.case.blackBox(@as(u32, @intCast(bvh.nodes.len)));
 }
 
@@ -192,7 +193,7 @@ fn runQueryAABB(context_ptr: *anyopaque) void {
     const query = spatialAABBQuery();
     var hits: [item_count]u32 = undefined;
     const count = context.bvh.queryAABB(query, &hits);
-    std.debug.assert(count > 0);
+    assert(count > 0);
     _ = bench.case.blackBox(count);
 }
 
@@ -201,7 +202,7 @@ fn runQueryRay(context_ptr: *anyopaque) void {
     const ray = spatialRayQuery();
     var hits: [item_count]u32 = undefined;
     const count = context.bvh.queryRay(ray, &hits);
-    std.debug.assert(count > 0);
+    assert(count > 0);
     _ = bench.case.blackBox(count);
 }
 
@@ -215,7 +216,7 @@ fn runQueryRaySorted(context_ptr: *anyopaque) void {
     while (i < @min(@as(usize, @intCast(count)), hits.len)) : (i += 1) {
         sink += hits[i].t + @as(f32, @floatFromInt(hits[i].value));
     }
-    std.debug.assert(count > 0);
+    assert(count > 0);
     _ = bench.case.blackBox(sink);
 }
 
@@ -224,7 +225,7 @@ fn runQueryFrustum(context_ptr: *anyopaque) void {
     const frustum = spatialFrustumQuery();
     var hits: [item_count]u32 = undefined;
     const count = context.bvh.queryFrustum(frustum, &hits);
-    std.debug.assert(count > 0);
+    assert(count > 0);
     _ = bench.case.blackBox(count);
 }
 
@@ -298,7 +299,7 @@ fn fillGeometry(items: *[item_count]IntBVH.Item) void {
             }
         }
     }
-    std.debug.assert(index == item_count);
+    assert(index == item_count);
 }
 
 fn spatialAABBQuery() static_spatial.AABB3 {

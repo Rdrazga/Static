@@ -5,6 +5,8 @@
 //! Blocking behavior: non-blocking; methods query monotonic time only.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const errors = @import("errors.zig");
 
 pub const TimeoutBudgetError = error{
@@ -32,7 +34,7 @@ pub const TimeoutBudget = struct {
         timeout_ns: u64,
         now_fn: *const fn () error{Unsupported}!std.time.Instant,
     ) TimeoutBudgetError!TimeoutBudget {
-        std.debug.assert(timeout_ns <= std.math.maxInt(u64));
+        assert(timeout_ns <= std.math.maxInt(u64));
         if (timeout_ns == 0) return error.Timeout;
 
         const start_instant = try now_fn();
@@ -46,7 +48,7 @@ pub const TimeoutBudget = struct {
         self: *const TimeoutBudget,
         now_fn: *const fn () error{Unsupported}!std.time.Instant,
     ) TimeoutBudgetError!u64 {
-        std.debug.assert(self.timeout_ns > 0);
+        assert(self.timeout_ns > 0);
 
         const now = try now_fn();
         const elapsed_ns = now.since(self.start_instant);
@@ -57,12 +59,12 @@ pub const TimeoutBudget = struct {
         self: *const TimeoutBudget,
         elapsed_ns: u64,
     ) TimeoutBudgetError!u64 {
-        std.debug.assert(self.timeout_ns > 0);
+        assert(self.timeout_ns > 0);
         if (elapsed_ns >= self.timeout_ns) return error.Timeout;
 
         const remaining_ns = self.timeout_ns - elapsed_ns;
-        std.debug.assert(remaining_ns > 0);
-        std.debug.assert(remaining_ns <= self.timeout_ns);
+        assert(remaining_ns > 0);
+        assert(remaining_ns <= self.timeout_ns);
         return remaining_ns;
     }
 };
@@ -72,15 +74,15 @@ fn monotonicNow() error{Unsupported}!std.time.Instant {
 }
 
 test "timeout budget rejects zero timeout at init" {
-    try std.testing.expectError(error.Timeout, TimeoutBudget.init(0));
+    try testing.expectError(error.Timeout, TimeoutBudget.init(0));
 }
 
 test "timeout budget returns bounded remaining for positive timeout" {
     const timeout_ns: u64 = std.time.ns_per_ms;
     var timeout_budget = try TimeoutBudget.init(timeout_ns);
     const remaining_ns = try timeout_budget.remainingOrTimeout();
-    try std.testing.expect(remaining_ns <= timeout_ns);
-    try std.testing.expect(remaining_ns > 0);
+    try testing.expect(remaining_ns <= timeout_ns);
+    try testing.expect(remaining_ns > 0);
 }
 
 test "timeout budget surfaces unsupported clock from init" {
@@ -90,7 +92,7 @@ test "timeout budget surfaces unsupported clock from init" {
         }
     };
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.Unsupported,
         TimeoutBudget.initWithNowFn(std.time.ns_per_ms, FailingClock.now),
     );
@@ -104,7 +106,7 @@ test "timeout budget surfaces unsupported clock from remaining" {
     };
 
     var timeout_budget = try TimeoutBudget.init(std.time.ns_per_ms);
-    try std.testing.expectError(
+    try testing.expectError(
         error.Unsupported,
         timeout_budget.remainingOrTimeoutWithNowFn(FailingClock.now),
     );
@@ -116,8 +118,8 @@ test "timeout budget computes exact remaining from elapsed time" {
         .timeout_ns = 10,
     };
 
-    try std.testing.expectEqual(@as(u64, 9), try timeout_budget.remainingOrTimeoutFromElapsed(1));
-    try std.testing.expectEqual(@as(u64, 1), try timeout_budget.remainingOrTimeoutFromElapsed(9));
+    try testing.expectEqual(@as(u64, 9), try timeout_budget.remainingOrTimeoutFromElapsed(1));
+    try testing.expectEqual(@as(u64, 1), try timeout_budget.remainingOrTimeoutFromElapsed(9));
 }
 
 test "timeout budget times out at the exact boundary" {
@@ -126,6 +128,6 @@ test "timeout budget times out at the exact boundary" {
         .timeout_ns = 10,
     };
 
-    try std.testing.expectError(error.Timeout, timeout_budget.remainingOrTimeoutFromElapsed(10));
-    try std.testing.expectError(error.Timeout, timeout_budget.remainingOrTimeoutFromElapsed(11));
+    try testing.expectError(error.Timeout, timeout_budget.remainingOrTimeoutFromElapsed(10));
+    try testing.expectError(error.Timeout, timeout_budget.remainingOrTimeoutFromElapsed(11));
 }

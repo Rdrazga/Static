@@ -12,6 +12,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const CapacityReport = @import("capacity_report.zig").CapacityReport;
 
 pub const Error = error{
@@ -32,17 +34,17 @@ pub const Budget = struct {
         // usize fits in u64 on all supported platforms; the widening is always safe.
         const out: Budget = .{ .limit_bytes = @as(u64, limit_bytes) };
         // Postcondition: the configured limit must be non-zero in the returned struct.
-        std.debug.assert(out.limit_bytes != 0);
+        assert(out.limit_bytes != 0);
         // Postcondition: used bytes must start at zero; no reservations have been made yet.
-        std.debug.assert(out.used_bytes == 0);
+        assert(out.used_bytes == 0);
         return out;
     }
 
     pub fn lock(self: *Budget) void {
-        std.debug.assert(self.limit_bytes != 0);
+        assert(self.limit_bytes != 0);
         self.locked = true;
         // Postcondition: lock must be observable immediately after setting it.
-        std.debug.assert(self.locked);
+        assert(self.locked);
     }
 
     pub fn lockIn(self: *Budget) void {
@@ -50,57 +52,57 @@ pub const Budget = struct {
     }
 
     pub fn isLocked(self: *const Budget) bool {
-        std.debug.assert(self.limit_bytes != 0);
+        assert(self.limit_bytes != 0);
         const locked = self.locked;
         // Pair assertion: the returned value must be consistent with the field from both
         // the true and false directions. A torn read or aliasing bug here could allow
         // reservations to bypass the lock check entirely.
-        std.debug.assert(locked == self.locked);
+        assert(locked == self.locked);
         return locked;
     }
 
     pub fn used(self: *const Budget) u64 {
-        std.debug.assert(self.limit_bytes != 0);
+        assert(self.limit_bytes != 0);
         // Postcondition: used bytes must never exceed the configured limit. An exceedance
         // means a reservation bypassed the bounds check in tryReserve.
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
+        assert(self.used_bytes <= self.limit_bytes);
         return self.used_bytes;
     }
 
     pub fn limit(self: *const Budget) u64 {
-        std.debug.assert(self.limit_bytes != 0);
+        assert(self.limit_bytes != 0);
         // Postcondition: the limit must be at least as large as the bytes already reserved.
         // A limit smaller than used_bytes indicates the accounting is corrupt because
         // tryReserve enforces this invariant on every reservation.
-        std.debug.assert(self.limit_bytes >= self.used_bytes);
+        assert(self.limit_bytes >= self.used_bytes);
         return self.limit_bytes;
     }
 
     pub fn remaining(self: *const Budget) u64 {
-        std.debug.assert(self.limit_bytes != 0);
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
-        std.debug.assert(self.high_water_bytes >= self.used_bytes);
+        assert(self.limit_bytes != 0);
+        assert(self.used_bytes <= self.limit_bytes);
+        assert(self.high_water_bytes >= self.used_bytes);
         return self.limit_bytes - self.used_bytes;
     }
 
     pub fn overflowCount(self: *const Budget) u32 {
-        std.debug.assert(self.limit_bytes != 0);
+        assert(self.limit_bytes != 0);
         // Pair assertion: if any overflow was recorded, the high-water mark must exceed
         // the limit, because an overflow only occurs when the requested next value surpasses
         // limit_bytes inside tryReserve.
-        if (self.overflow_count > 0) std.debug.assert(self.high_water_bytes > self.limit_bytes);
+        if (self.overflow_count > 0) assert(self.high_water_bytes > self.limit_bytes);
         return self.overflow_count;
     }
 
     pub fn highWater(self: *const Budget) u64 {
-        std.debug.assert(self.limit_bytes != 0);
-        std.debug.assert(self.high_water_bytes >= self.used_bytes);
+        assert(self.limit_bytes != 0);
+        assert(self.high_water_bytes >= self.used_bytes);
         return self.high_water_bytes;
     }
 
     pub fn tryReserve(self: *Budget, bytes: usize) Error!void {
-        std.debug.assert(self.limit_bytes != 0);
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
+        assert(self.limit_bytes != 0);
+        assert(self.used_bytes <= self.limit_bytes);
         if (bytes == 0) return;
 
         // usize fits in u64 on all supported platforms; the widening is always safe.
@@ -114,24 +116,24 @@ pub const Budget = struct {
         self.used_bytes = next;
         if (self.used_bytes > self.high_water_bytes) self.high_water_bytes = self.used_bytes;
         // Postcondition: used must not exceed limit after a successful reservation.
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
+        assert(self.used_bytes <= self.limit_bytes);
     }
 
     pub fn release(self: *Budget, bytes: usize) void {
-        std.debug.assert(self.limit_bytes != 0);
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
+        assert(self.limit_bytes != 0);
+        assert(self.used_bytes <= self.limit_bytes);
         if (bytes == 0) return;
         // usize fits in u64 on all supported platforms; the widening is always safe.
         const release_bytes = @as(u64, bytes);
         if (release_bytes > self.used_bytes) @panic("Budget.release: over-release");
         self.used_bytes -= release_bytes;
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
+        assert(self.used_bytes <= self.limit_bytes);
     }
 
     pub fn reportBytes(self: *const Budget) CapacityReport {
-        std.debug.assert(self.limit_bytes != 0);
-        std.debug.assert(self.used_bytes <= self.limit_bytes);
-        std.debug.assert(self.high_water_bytes >= self.used_bytes);
+        assert(self.limit_bytes != 0);
+        assert(self.used_bytes <= self.limit_bytes);
+        assert(self.high_water_bytes >= self.used_bytes);
         return .{
             .unit = .bytes,
             .used = self.used_bytes,
@@ -158,22 +160,22 @@ pub const BudgetedAllocator = struct {
 
     pub fn init(parent: std.mem.Allocator, budget: *Budget) Self {
         // Precondition: budget must be a valid non-null pointer.
-        std.debug.assert(@intFromPtr(budget) != 0);
+        assert(@intFromPtr(budget) != 0);
         const out: Self = .{
             .parent = parent,
             .budget = budget,
             .denied_last = false,
         };
         // Postcondition: denied_last must start false since no allocation has been attempted.
-        std.debug.assert(!out.denied_last);
+        assert(!out.denied_last);
         return out;
     }
 
     pub fn allocator(self: *Self) std.mem.Allocator {
-        std.debug.assert(@intFromPtr(self) != 0);
+        assert(@intFromPtr(self) != 0);
         const alloc_if: std.mem.Allocator = .{ .ptr = self, .vtable = &vtable };
         // Postcondition: the vtable must be the one associated with this type.
-        std.debug.assert(alloc_if.vtable == &vtable);
+        assert(alloc_if.vtable == &vtable);
         return alloc_if;
     }
 
@@ -182,13 +184,13 @@ pub const BudgetedAllocator = struct {
         const value = self.denied_last;
         self.denied_last = false;
         // Postcondition: denied_last must be false after consumption.
-        std.debug.assert(!self.denied_last);
+        assert(!self.denied_last);
         return value;
     }
 
     pub fn takeDeniedFromAllocator(a: std.mem.Allocator) bool {
         // Precondition: the allocator pointer must be non-null.
-        std.debug.assert(@intFromPtr(a.ptr) != 0);
+        assert(@intFromPtr(a.ptr) != 0);
         if (a.vtable != &vtable) return false;
         const self: *Self = @ptrCast(@alignCast(a.ptr));
         return self.takeDeniedLast();
@@ -196,7 +198,7 @@ pub const BudgetedAllocator = struct {
 
     fn reserveGrowth(self: *Self, old_len: usize, new_len: usize) bool {
         // Precondition: budget must be non-null.
-        std.debug.assert(@intFromPtr(self.budget) != 0);
+        assert(@intFromPtr(self.budget) != 0);
         if (new_len <= old_len) return true;
         const delta = new_len - old_len;
         self.budget.tryReserve(delta) catch {
@@ -204,7 +206,7 @@ pub const BudgetedAllocator = struct {
             return false;
         };
         // Postcondition: on success, denied_last must be false (a successful reserve is not a denial).
-        std.debug.assert(!self.denied_last);
+        assert(!self.denied_last);
         return true;
     }
 
@@ -268,10 +270,10 @@ pub const BudgetedAllocator = struct {
 
 pub fn budgetedAllocator(parent: std.mem.Allocator, budget: *Budget) BudgetedAllocator {
     // Precondition: budget must be non-null.
-    std.debug.assert(@intFromPtr(budget) != 0);
+    assert(@intFromPtr(budget) != 0);
     const out = BudgetedAllocator.init(parent, budget);
     // Postcondition: the wrapper must reference the same budget pointer passed in.
-    std.debug.assert(out.budget == budget);
+    assert(out.budget == budget);
     return out;
 }
 
@@ -279,21 +281,21 @@ test "budget reserve/release and lock-in is deterministic" {
     // Verifies budget accounting and lock flag behavior without depending on allocator plumbing.
     var budget = try Budget.init(16);
     try budget.tryReserve(8);
-    try std.testing.expectEqual(@as(u64, 8), budget.used());
+    try testing.expectEqual(@as(u64, 8), budget.used());
     budget.lock();
-    try std.testing.expect(budget.isLocked());
-    try std.testing.expectError(error.NoSpaceLeft, budget.tryReserve(9));
+    try testing.expect(budget.isLocked());
+    try testing.expectError(error.NoSpaceLeft, budget.tryReserve(9));
     budget.release(3);
-    try std.testing.expectEqual(@as(u64, 5), budget.used());
+    try testing.expectEqual(@as(u64, 5), budget.used());
 }
 
 test "budget init rejects zero limit" {
     // Verifies the public constructor rejects a nonsensical zero-byte budget up front.
-    try std.testing.expectError(error.InvalidConfig, Budget.init(0));
+    try testing.expectError(error.InvalidConfig, Budget.init(0));
 }
 
 fn isOverReleaseChild() bool {
-    var env_map = std.process.Environ.createMap(std.testing.environ, std.testing.allocator) catch return false;
+    var env_map = std.process.Environ.createMap(testing.environ, testing.allocator) catch return false;
     defer env_map.deinit();
     return env_map.get(over_release_child_env) != null;
 }
@@ -307,7 +309,7 @@ fn currentExePathAlloc(allocator: std.mem.Allocator) ![]u8 {
         },
         .linux, .serenity => {
             var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-            const len = try std.Io.Dir.readLinkAbsolute(std.testing.io, "/proc/self/exe", path_buf[0..]);
+            const len = try std.Io.Dir.readLinkAbsolute(testing.io, "/proc/self/exe", path_buf[0..]);
             return allocator.dupe(u8, path_buf[0..len]);
         },
         else => return error.Unavailable,
@@ -328,25 +330,25 @@ test "budget release panics on over-release" {
         return error.SkipZigTest;
     }
 
-    var env_map = try std.process.Environ.createMap(std.testing.environ, std.testing.allocator);
+    var env_map = try std.process.Environ.createMap(testing.environ, testing.allocator);
     defer env_map.deinit();
     try env_map.put(over_release_child_env, "1");
 
-    const exe_path = try currentExePathAlloc(std.testing.allocator);
-    defer std.testing.allocator.free(exe_path);
+    const exe_path = try currentExePathAlloc(testing.allocator);
+    defer testing.allocator.free(exe_path);
 
-    const result = try std.process.run(std.testing.allocator, std.testing.io, .{
+    const result = try std.process.run(testing.allocator, testing.io, .{
         .argv = &.{exe_path},
         .environ_map = &env_map,
     });
-    defer std.testing.allocator.free(result.stdout);
-    defer std.testing.allocator.free(result.stderr);
+    defer testing.allocator.free(result.stdout);
+    defer testing.allocator.free(result.stderr);
 
     switch (result.term) {
-        .exited => |code| try std.testing.expect(code != 0),
+        .exited => |code| try testing.expect(code != 0),
         else => {},
     }
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "Budget.release: over-release") != null);
+    try testing.expect(std.mem.indexOf(u8, result.stderr, "Budget.release: over-release") != null);
 }
 
 test "budgeted allocator sets denied_last on budget rejection" {
@@ -361,11 +363,11 @@ test "budgeted allocator sets denied_last on budget rejection" {
     const first = try a.alloc(u8, 4);
     defer a.free(first);
 
-    try std.testing.expectEqual(@as(u64, 4), budget.used());
-    try std.testing.expect(!wrapper.takeDeniedLast());
+    try testing.expectEqual(@as(u64, 4), budget.used());
+    try testing.expect(!wrapper.takeDeniedLast());
 
-    try std.testing.expectError(error.OutOfMemory, a.alloc(u8, 9));
-    try std.testing.expect(wrapper.takeDeniedLast());
+    try testing.expectError(error.OutOfMemory, a.alloc(u8, 9));
+    try testing.expect(wrapper.takeDeniedLast());
 }
 
 test "budgeted allocator takeDeniedFromAllocator consumes denied_last" {
@@ -380,9 +382,9 @@ test "budgeted allocator takeDeniedFromAllocator consumes denied_last" {
     const first = try a.alloc(u8, 4);
     defer a.free(first);
 
-    try std.testing.expectError(error.OutOfMemory, a.alloc(u8, 9));
-    try std.testing.expect(BudgetedAllocator.takeDeniedFromAllocator(a));
-    try std.testing.expect(!wrapper.takeDeniedLast());
+    try testing.expectError(error.OutOfMemory, a.alloc(u8, 9));
+    try testing.expect(BudgetedAllocator.takeDeniedFromAllocator(a));
+    try testing.expect(!wrapper.takeDeniedLast());
 }
 
 test "budgetedAllocator helper preserves budget pointer and allocator behavior" {
@@ -392,14 +394,14 @@ test "budgetedAllocator helper preserves budget pointer and allocator behavior" 
 
     var budget = try Budget.init(8);
     var wrapper = budgetedAllocator(fba.allocator(), &budget);
-    try std.testing.expect(wrapper.budget == &budget);
+    try testing.expect(wrapper.budget == &budget);
 
     const a = wrapper.allocator();
     const first = try a.alloc(u8, 4);
     defer a.free(first);
 
-    try std.testing.expectEqual(@as(u64, 4), budget.used());
-    try std.testing.expect(!BudgetedAllocator.takeDeniedFromAllocator(a));
+    try testing.expectEqual(@as(u64, 4), budget.used());
+    try testing.expect(!BudgetedAllocator.takeDeniedFromAllocator(a));
 }
 
 test "budgeted allocator clears denied_last on parent OOM during resize" {
@@ -414,12 +416,12 @@ test "budgeted allocator clears denied_last on parent OOM during resize" {
     const first = try a.alloc(u8, 4);
     defer a.free(first);
 
-    try std.testing.expect(!wrapper.takeDeniedLast());
-    try std.testing.expect(!a.resize(first, 6));
-    try std.testing.expect(!wrapper.takeDeniedLast());
-    try std.testing.expectEqual(@as(u64, 4), budget.used());
-    try std.testing.expectEqual(@as(u64, 6), budget.highWater());
-    try std.testing.expectEqual(@as(u32, 0), budget.overflowCount());
+    try testing.expect(!wrapper.takeDeniedLast());
+    try testing.expect(!a.resize(first, 6));
+    try testing.expect(!wrapper.takeDeniedLast());
+    try testing.expectEqual(@as(u64, 4), budget.used());
+    try testing.expectEqual(@as(u64, 6), budget.highWater());
+    try testing.expectEqual(@as(u32, 0), budget.overflowCount());
 }
 
 test "budgeted allocator remap sets denied_last on budget rejection" {
@@ -435,11 +437,11 @@ test "budgeted allocator remap sets denied_last on budget rejection" {
     defer a.free(mem);
 
     const remapped = a.remap(mem, 6);
-    try std.testing.expect(remapped == null);
-    try std.testing.expect(wrapper.takeDeniedLast());
-    try std.testing.expectEqual(@as(u64, 4), budget.used());
-    try std.testing.expectEqual(@as(u64, 6), budget.highWater());
-    try std.testing.expectEqual(@as(u32, 1), budget.overflowCount());
+    try testing.expect(remapped == null);
+    try testing.expect(wrapper.takeDeniedLast());
+    try testing.expectEqual(@as(u64, 4), budget.used());
+    try testing.expectEqual(@as(u64, 6), budget.highWater());
+    try testing.expectEqual(@as(u32, 1), budget.overflowCount());
 }
 
 test "budgeted allocator remap clears denied_last on parent OOM" {
@@ -455,11 +457,11 @@ test "budgeted allocator remap clears denied_last on parent OOM" {
     defer a.free(mem);
 
     const remapped = a.remap(mem, 6);
-    try std.testing.expect(remapped == null);
-    try std.testing.expect(!wrapper.takeDeniedLast());
-    try std.testing.expectEqual(@as(u64, 4), budget.used());
-    try std.testing.expectEqual(@as(u64, 6), budget.highWater());
-    try std.testing.expectEqual(@as(u32, 0), budget.overflowCount());
+    try testing.expect(remapped == null);
+    try testing.expect(!wrapper.takeDeniedLast());
+    try testing.expectEqual(@as(u64, 4), budget.used());
+    try testing.expectEqual(@as(u64, 6), budget.highWater());
+    try testing.expectEqual(@as(u32, 0), budget.overflowCount());
 }
 
 test "budget tracks high-water on failed reservation attempts" {
@@ -467,10 +469,10 @@ test "budget tracks high-water on failed reservation attempts" {
     var budget = try Budget.init(16);
     try budget.tryReserve(8);
 
-    try std.testing.expectError(error.NoSpaceLeft, budget.tryReserve(9));
-    try std.testing.expectEqual(@as(u32, 1), budget.overflowCount());
-    try std.testing.expectEqual(@as(u64, 17), budget.highWater());
-    try std.testing.expectEqual(@as(u64, 8), budget.used());
+    try testing.expectError(error.NoSpaceLeft, budget.tryReserve(9));
+    try testing.expectEqual(@as(u32, 1), budget.overflowCount());
+    try testing.expectEqual(@as(u64, 17), budget.highWater());
+    try testing.expectEqual(@as(u64, 8), budget.used());
 }
 
 test "budget tryReserve returns Overflow on arithmetic overflow" {
@@ -483,8 +485,8 @@ test "budget tryReserve returns Overflow on arithmetic overflow" {
         .overflow_count = 0,
     };
 
-    try std.testing.expectError(error.Overflow, budget.tryReserve(10));
-    try std.testing.expectEqual(@as(u64, std.math.maxInt(u64) - 1), budget.used());
-    try std.testing.expectEqual(@as(u64, std.math.maxInt(u64) - 1), budget.highWater());
-    try std.testing.expectEqual(@as(u32, 0), budget.overflowCount());
+    try testing.expectError(error.Overflow, budget.tryReserve(10));
+    try testing.expectEqual(@as(u64, std.math.maxInt(u64) - 1), budget.used());
+    try testing.expectEqual(@as(u64, std.math.maxInt(u64) - 1), budget.highWater());
+    try testing.expectEqual(@as(u32, 0), budget.overflowCount());
 }

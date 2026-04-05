@@ -19,6 +19,8 @@
 //! - The `Pair64` struct avoids positional ambiguity when passing two u64 args.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// A pair of 64-bit hash values to be combined.
 ///
@@ -38,10 +40,10 @@ pub const Pair64 = struct {
 pub fn combineOrdered64(pair: Pair64) u64 {
     comptime {
         // Golden-ratio constant distributes entropy across bits before finalization.
-        std.debug.assert(0x9e3779b97f4a7c15 != 0);
+        assert(0x9e3779b97f4a7c15 != 0);
         // SplitMix64 finalizer multipliers must be odd for invertibility in mod 2^64.
-        std.debug.assert(0xbf58476d1ce4e5b9 % 2 == 1);
-        std.debug.assert(0x94d049bb133111eb % 2 == 1);
+        assert(0xbf58476d1ce4e5b9 % 2 == 1);
+        assert(0x94d049bb133111eb % 2 == 1);
     }
     var x = pair.left ^ (pair.right +% 0x9e3779b97f4a7c15);
     x ^= x >> 30;
@@ -64,7 +66,7 @@ pub fn combineUnordered64(pair: Pair64) u64 {
     const lo = @min(pair.left, pair.right);
     const hi = @max(pair.left, pair.right);
     // Canonical ordering: lo <= hi by construction of @min/@max.
-    std.debug.assert(lo <= hi);
+    assert(lo <= hi);
     return combineOrdered64(.{ .left = lo, .right = hi });
 }
 
@@ -75,8 +77,8 @@ pub fn combineUnordered64(pair: Pair64) u64 {
 pub fn mix64(x: u64) u64 {
     comptime {
         // SplitMix64 finalizer multipliers must be odd for invertibility.
-        std.debug.assert(0xbf58476d1ce4e5b9 % 2 == 1);
-        std.debug.assert(0x94d049bb133111eb % 2 == 1);
+        assert(0xbf58476d1ce4e5b9 % 2 == 1);
+        assert(0x94d049bb133111eb % 2 == 1);
     }
     var z = x +% 0x9e3779b97f4a7c15;
     z = (z ^ (z >> 30)) *% 0xbf58476d1ce4e5b9;
@@ -120,8 +122,8 @@ pub fn unordered(pair: Pair64) u64 {
 test "ordered and unordered combiners differ in ordering guarantees" {
     const ab = combineOrdered64(.{ .left = 1, .right = 2 });
     const ba = combineOrdered64(.{ .left = 2, .right = 1 });
-    try std.testing.expect(ab != ba);
-    try std.testing.expectEqual(
+    try testing.expect(ab != ba);
+    try testing.expectEqual(
         combineUnordered64(.{ .left = 1, .right = 2 }),
         combineUnordered64(.{ .left = 2, .right = 1 }),
     );
@@ -130,13 +132,13 @@ test "ordered and unordered combiners differ in ordering guarantees" {
 test "combine ordered is deterministic" {
     const x = combineOrdered64(.{ .left = 0xDEAD, .right = 0xBEEF });
     const y = combineOrdered64(.{ .left = 0xDEAD, .right = 0xBEEF });
-    try std.testing.expectEqual(x, y);
+    try testing.expectEqual(x, y);
 }
 
 test "combine aliases match direct calls" {
     const pair: Pair64 = .{ .left = 42, .right = 99 };
-    try std.testing.expectEqual(combineOrdered64(pair), ordered(pair));
-    try std.testing.expectEqual(combineUnordered64(pair), unordered(pair));
+    try testing.expectEqual(combineOrdered64(pair), ordered(pair));
+    try testing.expectEqual(combineUnordered64(pair), unordered(pair));
 }
 
 test "combineUnorderedMultiset64 is commutative" {
@@ -144,26 +146,26 @@ test "combineUnorderedMultiset64 is commutative" {
     const b: u64 = 67890;
     const ab = combineUnorderedMultiset64(combineUnorderedMultiset64(0, a), b);
     const ba = combineUnorderedMultiset64(combineUnorderedMultiset64(0, b), a);
-    try std.testing.expectEqual(ab, ba);
+    try testing.expectEqual(ab, ba);
 }
 
 test "combineUnorderedMultiset64 is multiplicity-sensitive" {
     const x: u64 = 0xdeadbeef;
     const once = combineUnorderedMultiset64(0, x);
     const twice = combineUnorderedMultiset64(once, x);
-    try std.testing.expect(twice != once);
-    try std.testing.expect(twice != 0);
+    try testing.expect(twice != once);
+    try testing.expect(twice != 0);
 }
 
 test "mix64 produces different outputs for different inputs" {
-    try std.testing.expect(mix64(0) != mix64(1));
-    try std.testing.expect(mix64(0) != 0);
+    try testing.expect(mix64(0) != mix64(1));
+    try testing.expect(mix64(0) != 0);
 }
 
 test "combine golden vectors are stable" {
     // Pinned output values. These must never change.
-    try std.testing.expectEqual(@as(u64, 0x910a2dec89025cc1), combineOrdered64(.{ .left = 1, .right = 2 }));
-    try std.testing.expectEqual(@as(u64, 0xe220a8397b1dcdaf), mix64(0));
+    try testing.expectEqual(@as(u64, 0x910a2dec89025cc1), combineOrdered64(.{ .left = 1, .right = 2 }));
+    try testing.expectEqual(@as(u64, 0xe220a8397b1dcdaf), mix64(0));
 }
 
 test "property: combineUnordered64 is commutative for random inputs" {
@@ -172,7 +174,7 @@ test "property: combineUnordered64 is commutative for random inputs" {
     for (0..1000) |_| {
         const a = random.int(u64);
         const b = random.int(u64);
-        try std.testing.expectEqual(
+        try testing.expectEqual(
             combineUnordered64(.{ .left = a, .right = b }),
             combineUnordered64(.{ .left = b, .right = a }),
         );
@@ -187,6 +189,6 @@ test "property: combineUnorderedMultiset64 is commutative for random inputs" {
         const b = random.int(u64);
         const ab = combineUnorderedMultiset64(combineUnorderedMultiset64(0, a), b);
         const ba = combineUnorderedMultiset64(combineUnorderedMultiset64(0, b), a);
-        try std.testing.expectEqual(ab, ba);
+        try testing.expectEqual(ab, ba);
     }
 }

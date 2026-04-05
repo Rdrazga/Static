@@ -15,6 +15,8 @@
 //! - No hidden randomness.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// XxHash3 streaming hasher with the package's uniform init/update/final shape.
 pub const XxHash3_64 = struct {
@@ -30,7 +32,7 @@ pub const XxHash3_64 = struct {
             .ctx = std.hash.XxHash3.init(seed),
         };
         if (comptime std.debug.runtime_safety) {
-            std.debug.assert(!result.finalized);
+            assert(!result.finalized);
         }
         return result;
     }
@@ -47,7 +49,7 @@ pub const XxHash3_64 = struct {
     /// Preconditions: if data.len > 0, data.ptr must be non-null.
     /// Postconditions: internal state updated with data.
     pub fn update(self: *XxHash3_64, data: []const u8) void {
-        std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+        assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
         self.ctx.update(data);
     }
 
@@ -56,7 +58,7 @@ pub const XxHash3_64 = struct {
     /// Postconditions: returns 64-bit hash of all data fed via update().
     pub fn final(self: *XxHash3_64) u64 {
         if (comptime std.debug.runtime_safety) {
-            std.debug.assert(!self.finalized);
+            assert(!self.finalized);
         }
         const result = self.ctx.final();
         if (comptime std.debug.runtime_safety) {
@@ -77,7 +79,7 @@ pub const StdXxHash3 = std.hash.XxHash3;
 /// Preconditions: if data.len > 0, data.ptr must be non-null.
 /// Postconditions: returns deterministic 64-bit hash of data.
 pub fn hash64(data: []const u8) u64 {
-    std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+    assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
     return std.hash.XxHash3.hash(0, data);
 }
 
@@ -91,7 +93,7 @@ pub fn hash(data: []const u8) u64 {
 /// Preconditions: if data.len > 0, data.ptr must be non-null.
 /// Postconditions: returns deterministic 64-bit hash of data for given seed.
 pub fn hash64Seeded(seed: u64, data: []const u8) u64 {
-    std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+    assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
     return std.hash.XxHash3.hash(seed, data);
 }
 
@@ -109,44 +111,44 @@ pub fn hashSeeded(seed: u64, data: []const u8) u64 {
 test "xxhash3 hash64 deterministic" {
     const a = hash64("hello");
     const b = hash64("hello");
-    try std.testing.expectEqual(a, b);
+    try testing.expectEqual(a, b);
 }
 
 test "xxhash3 hash64Seeded differs across seeds" {
     const a = hash64Seeded(1, "test");
     const b = hash64Seeded(2, "test");
-    try std.testing.expect(a != b);
+    try testing.expect(a != b);
 }
 
 test "xxhash3 different inputs produce different hashes" {
-    try std.testing.expect(hash64("hello") != hash64("world"));
+    try testing.expect(hash64("hello") != hash64("world"));
 }
 
 test "xxhash3 empty input is stable" {
-    try std.testing.expectEqual(hash64(""), hash64(""));
+    try testing.expectEqual(hash64(""), hash64(""));
 }
 
 test "xxhash3 streaming matches one-shot" {
     var hasher = XxHash3.initDefault();
     hasher.update("hel");
     hasher.update("lo");
-    try std.testing.expectEqual(hash64("hello"), hasher.final());
+    try testing.expectEqual(hash64("hello"), hasher.final());
 }
 
 test "xxhash3 seeded streaming matches one-shot" {
     var hasher = XxHash3.init(42);
     hasher.update("hello ");
     hasher.update("world");
-    try std.testing.expectEqual(hash64Seeded(42, "hello world"), hasher.final());
+    try testing.expectEqual(hash64Seeded(42, "hello world"), hasher.final());
 }
 
 test "xxhash3 golden vectors are stable" {
     // Pinned output values. These must never change.
-    try std.testing.expectEqual(@as(u64, 0x2d06800538d394c2), hash64(""));
-    try std.testing.expectEqual(@as(u64, 0x9555e8555c62dcfd), hash64("hello"));
+    try testing.expectEqual(@as(u64, 0x2d06800538d394c2), hash64(""));
+    try testing.expectEqual(@as(u64, 0x9555e8555c62dcfd), hash64("hello"));
 }
 
 test "xxhash3 aliases match direct entrypoints" {
-    try std.testing.expectEqual(hash64("hello"), hash("hello"));
-    try std.testing.expectEqual(hash64Seeded(42, "hello"), hashSeeded(42, "hello"));
+    try testing.expectEqual(hash64("hello"), hash("hello"));
+    try testing.expectEqual(hash64Seeded(42, "hello"), hashSeeded(42, "hello"));
 }

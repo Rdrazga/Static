@@ -22,6 +22,8 @@
 //! tracked indices.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const memory = @import("static_memory");
 
@@ -37,8 +39,8 @@ pub const Error = error{
 
 pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -75,7 +77,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
                 .ctx = ctx,
             };
             self.assertStorageInvariant();
-            std.debug.assert(self.items.len == config.capacity);
+            assert(self.items.len == config.capacity);
             return self;
         }
 
@@ -118,7 +120,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
                 self.invalidateIndex(index);
             }
             self.len_value = 0;
-            std.debug.assert(self.len_value == 0);
+            assert(self.len_value == 0);
         }
 
         /// Creates an independent copy of the heap storage.
@@ -193,7 +195,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         /// Replaces the value currently stored at `index` and restores heap order.
         pub fn updateAt(self: *Self, index: usize, new_value: T) void {
             self.assertStorageInvariant();
-            std.debug.assert(index < self.len_value);
+            assert(index < self.len_value);
 
             const old_value = self.items[index];
             self.items[index] = new_value;
@@ -213,7 +215,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         /// invalidated via `Ctx.setIndex(..., invalid_index)` before return.
         pub fn removeAt(self: *Self, index: usize) T {
             self.assertStorageInvariant();
-            std.debug.assert(index < self.len_value);
+            assert(index < self.len_value);
 
             const value = self.items[index];
             self.invalidateIndex(index);
@@ -235,11 +237,11 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn siftUp(self: *Self, start: usize) void {
-            std.debug.assert(start < self.len_value);
+            assert(start < self.len_value);
             var i: usize = start;
             var steps: usize = 0;
             while (i > 0) : (steps += 1) {
-                std.debug.assert(steps < self.len_value);
+                assert(steps < self.len_value);
                 const parent = (i - 1) / 2;
                 if (!self.lessThanCtx(self.items[i], self.items[parent])) break;
                 std.mem.swap(T, &self.items[i], &self.items[parent]);
@@ -250,11 +252,11 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn siftDown(self: *Self, start: usize) void {
-            std.debug.assert(start < self.len_value);
+            assert(start < self.len_value);
             var i: usize = start;
             var steps: usize = 0;
             while (steps < self.len_value) : (steps += 1) {
-                std.debug.assert(i <= std.math.maxInt(usize) / 2);
+                assert(i <= std.math.maxInt(usize) / 2);
                 const left = i * 2 + 1;
                 const right = left + 1;
                 if (left >= self.len_value) break;
@@ -271,14 +273,14 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn syncIndex(self: *Self, index: usize) void {
-            std.debug.assert(index < self.items.len);
+            assert(index < self.items.len);
             if (comptime Ctx != void and std.meta.hasFn(Ctx, "setIndex")) {
                 self.ctx.setIndex(&self.items[index], index);
             }
         }
 
         fn invalidateIndex(self: *Self, index: usize) void {
-            std.debug.assert(index < self.items.len);
+            assert(index < self.items.len);
             if (comptime Ctx != void and std.meta.hasFn(Ctx, "setIndex")) {
                 self.ctx.setIndex(&self.items[index], invalid_index);
             }
@@ -293,8 +295,8 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn assertStorageInvariant(self: *const Self) void {
-            std.debug.assert(self.items.len > 0);
-            std.debug.assert(self.len_value <= self.items.len);
+            assert(self.items.len > 0);
+            assert(self.len_value <= self.items.len);
         }
 
         fn assertHeapInvariant(self: *const Self) void {
@@ -304,27 +306,27 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
                 const parent_index = (child_index - 1) / 2;
                 const child_item = self.items[child_index];
                 const parent_item = self.items[parent_index];
-                std.debug.assert(!self.lessThanCtx(child_item, parent_item));
-                std.debug.assert(!self.lessThanCtx(child_item, child_item));
-                std.debug.assert(!self.lessThanCtx(parent_item, parent_item));
+                assert(!self.lessThanCtx(child_item, parent_item));
+                assert(!self.lessThanCtx(child_item, child_item));
+                assert(!self.lessThanCtx(parent_item, parent_item));
             }
         }
 
         fn bytesForCapacity(item_capacity: usize) Error!usize {
             const bytes = std.math.mul(usize, item_capacity, @sizeOf(T)) catch return error.Overflow;
-            std.debug.assert(bytes > 0);
+            assert(bytes > 0);
             return bytes;
         }
 
         fn bytesForCapacityAssumeValid(item_capacity: usize) usize {
-            std.debug.assert(item_capacity > 0);
-            std.debug.assert(item_capacity <= std.math.maxInt(usize) / @sizeOf(T));
+            assert(item_capacity > 0);
+            assert(item_capacity <= std.math.maxInt(usize) / @sizeOf(T));
             return item_capacity * @sizeOf(T);
         }
 
         fn reserveBudget(budget: ?*memory.budget.Budget, bytes: usize) Error!void {
             const reserved_budget = budget orelse return;
-            std.debug.assert(bytes > 0);
+            assert(bytes > 0);
             reserved_budget.tryReserve(bytes) catch |err| switch (err) {
                 error.NoSpaceLeft => return error.NoSpaceLeft,
                 error.InvalidConfig => return error.InvalidConfig,
@@ -343,7 +345,7 @@ const TestCmp = struct {
 test "MinHeap push and popMin maintain min order" {
     // Goal: verify heap ordering on nominal push/pop workloads.
     // Method: insert unsorted values and confirm ascending pop sequence.
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 8, .budget = null }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(testing.allocator, .{ .capacity = 8, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(5);
@@ -351,57 +353,57 @@ test "MinHeap push and popMin maintain min order" {
     try heap.push(3);
 
     // Invariant: three pushes recorded correctly (paired assert + expectEqual).
-    std.debug.assert(heap.len() == 3);
-    try std.testing.expectEqual(@as(usize, 3), heap.len());
+    assert(heap.len() == 3);
+    try testing.expectEqual(@as(usize, 3), heap.len());
 
-    try std.testing.expectEqual(@as(u32, 1), heap.popMin().?);
-    try std.testing.expectEqual(@as(u32, 3), heap.popMin().?);
-    try std.testing.expectEqual(@as(u32, 5), heap.popMin().?);
-    try std.testing.expectEqual(@as(?u32, null), heap.popMin());
+    try testing.expectEqual(@as(u32, 1), heap.popMin().?);
+    try testing.expectEqual(@as(u32, 3), heap.popMin().?);
+    try testing.expectEqual(@as(u32, 5), heap.popMin().?);
+    try testing.expectEqual(@as(?u32, null), heap.popMin());
 
-    std.debug.assert(heap.isEmpty());
-    try std.testing.expect(heap.isEmpty());
+    assert(heap.isEmpty());
+    try testing.expect(heap.isEmpty());
 }
 
 test "MinHeap push into full heap returns NoSpaceLeft" {
     // Goal: enforce capacity bound under valid operating conditions.
     // Method: fill the heap and assert one additional push fails.
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 2, .budget = null }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(testing.allocator, .{ .capacity = 2, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(1);
     try heap.push(2);
-    try std.testing.expectError(Error.NoSpaceLeft, heap.push(3));
+    try testing.expectError(Error.NoSpaceLeft, heap.push(3));
 
     // Invariant: len did not change after the failed push.
-    std.debug.assert(heap.len() == 2);
-    try std.testing.expectEqual(@as(usize, 2), heap.len());
+    assert(heap.len() == 2);
+    try testing.expectEqual(@as(usize, 2), heap.len());
 }
 
 test "MinHeap capacity 0 returns InvalidConfig" {
     // Goal: reject invalid zero-capacity configuration at initialization.
     // Method: initialize with capacity=0 and assert InvalidConfig.
-    try std.testing.expectError(
+    try testing.expectError(
         Error.InvalidConfig,
-        MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 0, .budget = null }, .{}),
+        MinHeap(u32, TestCmp).init(testing.allocator, .{ .capacity = 0, .budget = null }, .{}),
     );
 }
 
 test "MinHeap peekMin returns minimum without removing" {
     // Goal: verify peek observes minimum without mutating heap length.
     // Method: check empty peek, then push values and validate len stability.
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
-    try std.testing.expectEqual(@as(?u32, null), heap.peekMin());
+    try testing.expectEqual(@as(?u32, null), heap.peekMin());
 
     try heap.push(7);
     try heap.push(2);
 
     // Invariant: peekMin does not change len (paired assert + expectEqual).
-    std.debug.assert(heap.len() == 2);
-    try std.testing.expectEqual(@as(?u32, 2), heap.peekMin());
-    try std.testing.expectEqual(@as(usize, 2), heap.len());
+    assert(heap.len() == 2);
+    try testing.expectEqual(@as(?u32, 2), heap.peekMin());
+    try testing.expectEqual(@as(usize, 2), heap.len());
 }
 
 test "MinHeap updateAt and removeAt keep tracked indices aligned" {
@@ -425,8 +427,8 @@ test "MinHeap updateAt and removeAt keep tracked indices aligned" {
     const TestHelper = struct {
         fn assertTrackedIndices(heap: *const Heap) !void {
             for (heap.items[0..heap.len_value], 0..) |item, index| {
-                std.debug.assert(item.index == index);
-                try std.testing.expectEqual(index, item.index);
+                assert(item.index == index);
+                try testing.expectEqual(index, item.index);
             }
         }
 
@@ -438,7 +440,7 @@ test "MinHeap updateAt and removeAt keep tracked indices aligned" {
         }
     };
 
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
+    var heap = try Heap.init(testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(.{ .id = 1, .priority = 20 });
@@ -447,20 +449,20 @@ test "MinHeap updateAt and removeAt keep tracked indices aligned" {
     try TestHelper.assertTrackedIndices(&heap);
 
     const update_index = TestHelper.findIndexById(&heap, 3);
-    try std.testing.expect(update_index != null);
+    try testing.expect(update_index != null);
     heap.updateAt(update_index.?, .{ .id = 3, .priority = 5, .index = update_index.? });
     try TestHelper.assertTrackedIndices(&heap);
-    try std.testing.expectEqual(@as(u32, 3), heap.peekMin().?.id);
+    try testing.expectEqual(@as(u32, 3), heap.peekMin().?.id);
 
     const remove_index = TestHelper.findIndexById(&heap, 2);
-    try std.testing.expect(remove_index != null);
+    try testing.expect(remove_index != null);
     const removed = heap.removeAt(remove_index.?);
-    try std.testing.expectEqual(@as(u32, 2), removed.id);
+    try testing.expectEqual(@as(u32, 2), removed.id);
     try TestHelper.assertTrackedIndices(&heap);
 
-    try std.testing.expectEqual(@as(u32, 3), heap.popMin().?.id);
-    try std.testing.expectEqual(@as(u32, 1), heap.popMin().?.id);
-    try std.testing.expectEqual(@as(?Item, null), heap.popMin());
+    try testing.expectEqual(@as(u32, 3), heap.popMin().?.id);
+    try testing.expectEqual(@as(u32, 1), heap.popMin().?.id);
+    try testing.expectEqual(@as(?Item, null), heap.popMin());
 }
 
 test "MinHeap reserves and releases optional budget" {
@@ -470,14 +472,14 @@ test "MinHeap reserves and releases optional budget" {
     var budget = try memory.budget.Budget.init(reserved_bytes);
 
     var heap = try MinHeap(u32, TestCmp).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 4, .budget = &budget },
         .{},
     );
-    try std.testing.expectEqual(@as(u64, reserved_bytes), budget.used());
+    try testing.expectEqual(@as(u64, reserved_bytes), budget.used());
 
     heap.deinit();
-    try std.testing.expectEqual(@as(u64, 0), budget.used());
+    try testing.expectEqual(@as(u64, 0), budget.used());
 }
 
 test "MinHeap stress: random inserts maintain heap invariant" {
@@ -487,7 +489,7 @@ test "MinHeap stress: random inserts maintain heap invariant" {
     // Invariant: pops must return values in non-decreasing order.
     // Verified from two code paths: assert (process-fatal) + expect (test framework).
     const capacity: usize = 64;
-    var heap = try MinHeap(u32, TestCmp).init(std.testing.allocator, .{ .capacity = capacity, .budget = null }, .{});
+    var heap = try MinHeap(u32, TestCmp).init(testing.allocator, .{ .capacity = capacity, .budget = null }, .{});
     defer heap.deinit();
 
     var prng = std.Random.DefaultPrng.init(0xabcd_1234_5678_ef00);
@@ -502,13 +504,13 @@ test "MinHeap stress: random inserts maintain heap invariant" {
     // Pop all values; each must be >= the previous.
     var prev: u32 = 0;
     while (heap.popMin()) |v| {
-        std.debug.assert(v >= prev);
-        try std.testing.expect(v >= prev);
+        assert(v >= prev);
+        try testing.expect(v >= prev);
         prev = v;
     }
 
-    std.debug.assert(heap.isEmpty());
-    try std.testing.expect(heap.isEmpty());
+    assert(heap.isEmpty());
+    try testing.expect(heap.isEmpty());
 }
 
 test "MinHeap supports type-defined comparator when Ctx is void" {
@@ -522,16 +524,16 @@ test "MinHeap supports type-defined comparator when Ctx is void" {
         }
     };
 
-    var heap = try MinHeap(Entry, void).init(std.testing.allocator, .{ .capacity = 4, .budget = null }, {});
+    var heap = try MinHeap(Entry, void).init(testing.allocator, .{ .capacity = 4, .budget = null }, {});
     defer heap.deinit();
 
     try heap.push(.{ .value = 9 });
     try heap.push(.{ .value = 1 });
     try heap.push(.{ .value = 4 });
 
-    try std.testing.expectEqual(@as(u32, 1), heap.popMin().?.value);
-    try std.testing.expectEqual(@as(u32, 4), heap.popMin().?.value);
-    try std.testing.expectEqual(@as(u32, 9), heap.popMin().?.value);
+    try testing.expectEqual(@as(u32, 1), heap.popMin().?.value);
+    try testing.expectEqual(@as(u32, 4), heap.popMin().?.value);
+    try testing.expectEqual(@as(u32, 9), heap.popMin().?.value);
 }
 
 test "MinHeap clear invalidates tracked indices with the sentinel" {
@@ -551,7 +553,7 @@ test "MinHeap clear invalidates tracked indices with the sentinel" {
     };
     const Heap = MinHeap(Item, Ctx);
 
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
+    var heap = try Heap.init(testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(.{ .id = 1, .priority = 20 });
@@ -560,10 +562,10 @@ test "MinHeap clear invalidates tracked indices with the sentinel" {
 
     heap.clear();
 
-    try std.testing.expectEqual(@as(usize, 0), heap.len());
-    try std.testing.expectEqual(Heap.invalid_index, heap.items[0].index);
-    try std.testing.expectEqual(Heap.invalid_index, heap.items[1].index);
-    try std.testing.expectEqual(Heap.invalid_index, heap.items[2].index);
+    try testing.expectEqual(@as(usize, 0), heap.len());
+    try testing.expectEqual(Heap.invalid_index, heap.items[0].index);
+    try testing.expectEqual(Heap.invalid_index, heap.items[1].index);
+    try testing.expectEqual(Heap.invalid_index, heap.items[2].index);
 }
 
 test "MinHeap clone keeps storage independent and copies context by value" {
@@ -587,7 +589,7 @@ test "MinHeap clone keeps storage independent and copies context by value" {
     const Heap = MinHeap(Item, Ctx);
 
     var clear_events: u32 = 0;
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{ .clear_events = &clear_events });
+    var heap = try Heap.init(testing.allocator, .{ .capacity = 4, .budget = null }, .{ .clear_events = &clear_events });
     defer heap.deinit();
     try heap.push(.{ .priority = 20 });
     try heap.push(.{ .priority = 10 });
@@ -595,12 +597,12 @@ test "MinHeap clone keeps storage independent and copies context by value" {
     var clone = try heap.clone();
     defer clone.deinit();
 
-    try std.testing.expect(clone.ctx.clear_events == heap.ctx.clear_events);
+    try testing.expect(clone.ctx.clear_events == heap.ctx.clear_events);
     clone.clear();
-    try std.testing.expectEqual(@as(usize, 2), heap.len());
-    try std.testing.expectEqual(@as(usize, 0), clone.len());
-    try std.testing.expectEqual(@as(u32, 2), clear_events);
-    try std.testing.expectEqual(@as(u32, 10), heap.peekMin().?.priority);
+    try testing.expectEqual(@as(usize, 2), heap.len());
+    try testing.expectEqual(@as(usize, 0), clone.len());
+    try testing.expectEqual(@as(u32, 2), clear_events);
+    try testing.expectEqual(@as(u32, 10), heap.peekMin().?.priority);
 }
 
 test "MinHeap popMin and removeAt invalidate removed tracked indices" {
@@ -620,7 +622,7 @@ test "MinHeap popMin and removeAt invalidate removed tracked indices" {
     };
     const Heap = MinHeap(Item, Ctx);
 
-    var heap = try Heap.init(std.testing.allocator, .{ .capacity = 4, .budget = null }, .{});
+    var heap = try Heap.init(testing.allocator, .{ .capacity = 4, .budget = null }, .{});
     defer heap.deinit();
 
     try heap.push(.{ .id = 1, .priority = 30 });
@@ -628,7 +630,7 @@ test "MinHeap popMin and removeAt invalidate removed tracked indices" {
     try heap.push(.{ .id = 3, .priority = 20 });
 
     const popped = heap.popMin().?;
-    try std.testing.expectEqual(@as(u32, 2), popped.id);
+    try testing.expectEqual(@as(u32, 2), popped.id);
     // Value is captured before invalidation, so the returned copy retains
     // its original index. The heap-internal slot is invalidated separately.
 
@@ -636,8 +638,8 @@ test "MinHeap popMin and removeAt invalidate removed tracked indices" {
     for (heap.items[0..heap.len_value], 0..) |item, index| {
         if (item.id == 3) remove_index = index;
     }
-    try std.testing.expect(remove_index != null);
+    try testing.expect(remove_index != null);
 
     const removed = heap.removeAt(remove_index.?);
-    try std.testing.expectEqual(@as(u32, 3), removed.id);
+    try testing.expectEqual(@as(u32, 3), removed.id);
 }

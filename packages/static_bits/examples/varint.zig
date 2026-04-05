@@ -1,6 +1,7 @@
 //! Demonstrates LEB128 encoding/decoding using `varint` helpers with cursor I/O.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const bits = @import("static_bits");
 
 pub fn main() !void {
@@ -10,6 +11,6 @@ pub fn main() !void {
 
     var reader = bits.cursor.ByteReader.init(storage[0..writer.position()]);
     const decoded = try bits.varint.readUleb128(&reader);
-    std.debug.assert(decoded == 300);
-    std.debug.assert(reader.remaining() == 0);
+    assert(decoded == 300);
+    assert(reader.remaining() == 0);
 }

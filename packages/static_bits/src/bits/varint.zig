@@ -6,6 +6,8 @@
 //! Thread safety: not thread-safe — cursors are single-owner values.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const cursor = @import("cursor.zig");
 
 pub const ByteReader = cursor.ByteReader;
@@ -43,9 +45,9 @@ fn encodedUleb128LenRuntime(value: u64) u8 {
         remaining >>= 7;
     }
 
-    std.debug.assert(byte_count >= 1);
-    std.debug.assert(byte_count <= max_leb128_bytes_u8);
-    std.debug.assert(remaining < 0x80);
+    assert(byte_count >= 1);
+    assert(byte_count <= max_leb128_bytes_u8);
+    assert(remaining < 0x80);
     return byte_count;
 }
 
@@ -61,8 +63,8 @@ fn encodedSleb128LenRuntime(value: i64) u8 {
         const is_last = (remaining == 0 and !sign_bit_set) or (remaining == -1 and sign_bit_set);
         if (is_last) {
             const result = byte_count + 1;
-            std.debug.assert(result >= 1);
-            std.debug.assert(result <= max_leb128_bytes_u8);
+            assert(result >= 1);
+            assert(result <= max_leb128_bytes_u8);
             return result;
         }
     }
@@ -77,8 +79,8 @@ pub fn encodedUleb128Len(comptime value: u64) u8 {
     while (byte_count < max_leb128_bytes_u8 and remaining >= 0x80) : (byte_count += 1) {
         remaining >>= 7;
     }
-    comptime std.debug.assert(byte_count >= 1);
-    comptime std.debug.assert(byte_count <= max_leb128_bytes_u8);
+    comptime assert(byte_count >= 1);
+    comptime assert(byte_count <= max_leb128_bytes_u8);
     return byte_count;
 }
 
@@ -234,7 +236,7 @@ pub fn decodeUleb128(bytes: []const u8) VarintReadError!DecodedUleb128 {
     var reader = ByteReader.init(bytes);
     const value = try readUleb128(&reader);
     const bytes_read_usize = reader.position();
-    std.debug.assert(bytes_read_usize <= std.math.maxInt(u8));
+    assert(bytes_read_usize <= std.math.maxInt(u8));
     const bytes_read: u8 = @intCast(bytes_read_usize);
     return .{
         .value = value,
@@ -247,7 +249,7 @@ pub fn decodeSleb128(bytes: []const u8) VarintReadError!DecodedSleb128 {
     var reader = ByteReader.init(bytes);
     const value = try readSleb128(&reader);
     const bytes_read_usize = reader.position();
-    std.debug.assert(bytes_read_usize <= std.math.maxInt(u8));
+    assert(bytes_read_usize <= std.math.maxInt(u8));
     const bytes_read: u8 = @intCast(bytes_read_usize);
     return .{
         .value = value,
@@ -273,7 +275,7 @@ pub fn readUleb128(reader: *ByteReader) VarintReadError!u64 {
         const payload = byte & 0x7F;
         if (shift == 63 and payload > 1) return error.InvalidEncoding;
 
-        std.debug.assert(shift <= 63);
+        assert(shift <= 63);
         const shift_amount: u6 = @intCast(shift);
         value |= @as(u64, payload) << shift_amount;
         if ((byte & 0x80) == 0) {
@@ -349,106 +351,106 @@ fn nextDeterministic(state: *u64) u64 {
 test "uleb128 encodes and decodes known vectors" {
     var buf = [_]u8{0} ** 10;
     const zero_len = try encodeUleb128(&buf, 0);
-    try std.testing.expectEqual(@as(usize, 1), zero_len);
-    try std.testing.expectEqualSlices(u8, &.{0x00}, buf[0..zero_len]);
+    try testing.expectEqual(@as(usize, 1), zero_len);
+    try testing.expectEqualSlices(u8, &.{0x00}, buf[0..zero_len]);
 
     const n_len = try encodeUleb128(&buf, 624485);
-    try std.testing.expectEqualSlices(u8, &.{ 0xE5, 0x8E, 0x26 }, buf[0..n_len]);
+    try testing.expectEqualSlices(u8, &.{ 0xE5, 0x8E, 0x26 }, buf[0..n_len]);
 
     const decoded = try decodeUleb128(buf[0..n_len]);
-    try std.testing.expectEqual(@as(u64, 624485), decoded.value);
-    try std.testing.expectEqual(@as(u8, 3), decoded.bytes_read);
+    try testing.expectEqual(@as(u64, 624485), decoded.value);
+    try testing.expectEqual(@as(u8, 3), decoded.bytes_read);
 }
 
 test "sleb128 encodes and decodes known vectors" {
     var buf = [_]u8{0} ** 10;
     const n_len = try encodeSleb128(&buf, -624485);
-    try std.testing.expectEqualSlices(u8, &.{ 0x9B, 0xF1, 0x59 }, buf[0..n_len]);
+    try testing.expectEqualSlices(u8, &.{ 0x9B, 0xF1, 0x59 }, buf[0..n_len]);
 
     const decoded = try decodeSleb128(buf[0..n_len]);
-    try std.testing.expectEqual(@as(i64, -624485), decoded.value);
-    try std.testing.expectEqual(@as(u8, 3), decoded.bytes_read);
+    try testing.expectEqual(@as(i64, -624485), decoded.value);
+    try testing.expectEqual(@as(u8, 3), decoded.bytes_read);
 }
 
 test "varint read errors rewind reader position" {
     var truncated = [_]u8{0x80};
     var reader = ByteReader.init(&truncated);
-    try std.testing.expectError(error.EndOfStream, readUleb128(&reader));
-    try std.testing.expectEqual(@as(usize, 0), reader.position());
+    try testing.expectError(error.EndOfStream, readUleb128(&reader));
+    try testing.expectEqual(@as(usize, 0), reader.position());
 
     var overlong_zero = [_]u8{ 0x80, 0x00 };
     reader = ByteReader.init(&overlong_zero);
-    try std.testing.expectError(error.InvalidEncoding, readUleb128(&reader));
-    try std.testing.expectEqual(@as(usize, 0), reader.position());
+    try testing.expectError(error.InvalidEncoding, readUleb128(&reader));
+    try testing.expectEqual(@as(usize, 0), reader.position());
 }
 
 test "varint write errors preserve writer position" {
     var out = [_]u8{0};
     var writer = ByteWriter.init(&out);
-    try std.testing.expectError(error.NoSpaceLeft, writeUleb128(&writer, 300));
-    try std.testing.expectEqual(@as(usize, 0), writer.position());
+    try testing.expectError(error.NoSpaceLeft, writeUleb128(&writer, 300));
+    try testing.expectEqual(@as(usize, 0), writer.position());
 }
 
 test "direct varint encoders leave output unchanged on short buffers" {
     var u_buf = [_]u8{0xFF};
-    try std.testing.expectError(error.NoSpaceLeft, encodeUleb128(&u_buf, 300));
-    try std.testing.expectEqualSlices(u8, &.{0xFF}, &u_buf);
+    try testing.expectError(error.NoSpaceLeft, encodeUleb128(&u_buf, 300));
+    try testing.expectEqualSlices(u8, &.{0xFF}, &u_buf);
 
     var s_buf = [_]u8{0xAA};
-    try std.testing.expectError(error.NoSpaceLeft, encodeSleb128(&s_buf, -300));
-    try std.testing.expectEqualSlices(u8, &.{0xAA}, &s_buf);
+    try testing.expectError(error.NoSpaceLeft, encodeSleb128(&s_buf, -300));
+    try testing.expectEqualSlices(u8, &.{0xAA}, &s_buf);
 }
 
 test "uleb128 rejects non-canonical encodings" {
     const overlong_zero = [_]u8{ 0x80, 0x00 };
-    try std.testing.expectError(error.InvalidEncoding, decodeUleb128(&overlong_zero));
+    try testing.expectError(error.InvalidEncoding, decodeUleb128(&overlong_zero));
 
     const overlong_one = [_]u8{ 0x81, 0x00 };
-    try std.testing.expectError(error.InvalidEncoding, decodeUleb128(&overlong_one));
+    try testing.expectError(error.InvalidEncoding, decodeUleb128(&overlong_one));
 
     const overlong_127 = [_]u8{ 0xFF, 0x00 };
-    try std.testing.expectError(error.InvalidEncoding, decodeUleb128(&overlong_127));
+    try testing.expectError(error.InvalidEncoding, decodeUleb128(&overlong_127));
 }
 
 test "sleb128 rejects non-canonical encodings" {
     const overlong_zero = [_]u8{ 0x80, 0x00 };
-    try std.testing.expectError(error.InvalidEncoding, decodeSleb128(&overlong_zero));
+    try testing.expectError(error.InvalidEncoding, decodeSleb128(&overlong_zero));
 
     const overlong_neg_one = [_]u8{ 0xFF, 0x7F };
-    try std.testing.expectError(error.InvalidEncoding, decodeSleb128(&overlong_neg_one));
+    try testing.expectError(error.InvalidEncoding, decodeSleb128(&overlong_neg_one));
 }
 
 test "varint encodes and decodes integer extremes" {
     var u_buf = [_]u8{0} ** max_leb128_bytes;
     const u_len = try encodeUleb128(&u_buf, std.math.maxInt(u64));
-    try std.testing.expectEqual(max_leb128_bytes, u_len);
+    try testing.expectEqual(max_leb128_bytes, u_len);
     const u_decoded = try decodeUleb128(u_buf[0..u_len]);
-    try std.testing.expectEqual(std.math.maxInt(u64), u_decoded.value);
-    try std.testing.expectEqual(@as(u8, max_leb128_bytes_u8), u_decoded.bytes_read);
+    try testing.expectEqual(std.math.maxInt(u64), u_decoded.value);
+    try testing.expectEqual(@as(u8, max_leb128_bytes_u8), u_decoded.bytes_read);
 
     var s_buf = [_]u8{0} ** max_leb128_bytes;
     const s_len_min = try encodeSleb128(&s_buf, std.math.minInt(i64));
     const s_decoded_min = try decodeSleb128(s_buf[0..s_len_min]);
-    try std.testing.expectEqual(std.math.minInt(i64), s_decoded_min.value);
-    try std.testing.expectEqual(@as(u8, @intCast(s_len_min)), s_decoded_min.bytes_read);
+    try testing.expectEqual(std.math.minInt(i64), s_decoded_min.value);
+    try testing.expectEqual(@as(u8, @intCast(s_len_min)), s_decoded_min.bytes_read);
 
     const s_len_max = try encodeSleb128(&s_buf, std.math.maxInt(i64));
     const s_decoded_max = try decodeSleb128(s_buf[0..s_len_max]);
-    try std.testing.expectEqual(std.math.maxInt(i64), s_decoded_max.value);
-    try std.testing.expectEqual(@as(u8, @intCast(s_len_max)), s_decoded_max.bytes_read);
+    try testing.expectEqual(std.math.maxInt(i64), s_decoded_max.value);
+    try testing.expectEqual(@as(u8, @intCast(s_len_max)), s_decoded_max.bytes_read);
 }
 
 test "comptime varint helpers produce canonical vectors" {
     const encoded_u = comptime encodeUleb128Ct(624485);
-    try std.testing.expectEqualSlices(u8, &.{ 0xE5, 0x8E, 0x26 }, &encoded_u);
-    try std.testing.expectEqual(@as(u64, 624485), comptime decodeUleb128Ct(&encoded_u));
+    try testing.expectEqualSlices(u8, &.{ 0xE5, 0x8E, 0x26 }, &encoded_u);
+    try testing.expectEqual(@as(u64, 624485), comptime decodeUleb128Ct(&encoded_u));
 
     const encoded_s = comptime encodeSleb128Ct(-624485);
-    try std.testing.expectEqualSlices(u8, &.{ 0x9B, 0xF1, 0x59 }, &encoded_s);
-    try std.testing.expectEqual(@as(i64, -624485), comptime decodeSleb128Ct(&encoded_s));
+    try testing.expectEqualSlices(u8, &.{ 0x9B, 0xF1, 0x59 }, &encoded_s);
+    try testing.expectEqual(@as(i64, -624485), comptime decodeSleb128Ct(&encoded_s));
 
-    try std.testing.expectEqual(@as(u8, 3), comptime encodedUleb128Len(624485));
-    try std.testing.expectEqual(@as(u8, 3), comptime encodedSleb128Len(-624485));
+    try testing.expectEqual(@as(u8, 3), comptime encodedUleb128Len(624485));
+    try testing.expectEqual(@as(u8, 3), comptime encodedSleb128Len(-624485));
 }
 
 test "deterministic varint roundtrip coverage" {
@@ -462,11 +464,11 @@ test "deterministic varint roundtrip coverage" {
         var u_buf = [_]u8{0} ** max_leb128_bytes;
         const u_len = try encodeUleb128(&u_buf, unsigned_value);
         const u_decoded = try decodeUleb128(u_buf[0..u_len]);
-        try std.testing.expectEqual(unsigned_value, u_decoded.value);
+        try testing.expectEqual(unsigned_value, u_decoded.value);
 
         var s_buf = [_]u8{0} ** max_leb128_bytes;
         const s_len = try encodeSleb128(&s_buf, signed_value);
         const s_decoded = try decodeSleb128(s_buf[0..s_len]);
-        try std.testing.expectEqual(signed_value, s_decoded.value);
+        try testing.expectEqual(signed_value, s_decoded.value);
     }
 }

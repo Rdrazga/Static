@@ -2,6 +2,7 @@
 //! seed reduction.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const failure_threshold: u64 = 1024;
@@ -38,10 +39,10 @@ pub fn main() !void {
 
     const first_failing = blk: {
         const candidate = findFirstFailingSeed(config);
-        std.debug.assert(candidate != null);
+        assert(candidate != null);
         break :blk candidate.?;
     };
-    std.debug.assert(first_failing.case_index < config.case_count_max);
+    assert(first_failing.case_index < config.case_count_max);
 
     const Runner = testing.testing.fuzz_runner.FuzzRunner(error{}, error{});
     var target_context = TargetContext{ .threshold = failure_threshold };
@@ -71,14 +72,14 @@ pub fn main() !void {
     };
 
     const summary = try runner.run();
-    std.debug.assert(summary.failed_case != null);
+    assert(summary.failed_case != null);
 
     const failed_case = summary.failed_case.?;
-    std.debug.assert(failed_case.persisted_entry_name != null);
-    std.debug.assert(failed_case.reduced_seed != null);
-    std.debug.assert(failed_case.run_identity.seed.value < first_failing.seed.value);
-    std.debug.assert(failed_case.run_identity.seed.value >= failure_threshold);
-    std.debug.assert(failed_case.run_identity.seed.value < failure_threshold * 2);
+    assert(failed_case.persisted_entry_name != null);
+    assert(failed_case.reduced_seed != null);
+    assert(failed_case.run_identity.seed.value < first_failing.seed.value);
+    assert(failed_case.run_identity.seed.value >= failure_threshold);
+    assert(failed_case.run_identity.seed.value < failure_threshold * 2);
 }
 
 fn deleteTreeIfPresent(

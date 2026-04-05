@@ -10,6 +10,8 @@
 //! - You need fanout with per-consumer progress tracking and lock-free delivery.
 //! - You accept stricter producer contract enforcement in exchange for higher throughput.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("ring_buffer.zig");
 const memory = @import("static_memory");
 const sync = @import("static_sync");
@@ -22,8 +24,8 @@ pub fn Disruptor(comptime T: type) type {
     // Guard against zero-size types: the ring buffer requires addressable storage
     // to hold published items, and capacity must map to real bytes.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -96,17 +98,17 @@ pub fn Disruptor(comptime T: type) type {
                 .consumer_active = consumer_active,
             };
             // Postcondition: buffer is power-of-two sized as required by seqToIndex.
-            std.debug.assert(std.math.isPowerOfTwo(self.buf.len));
+            assert(std.math.isPowerOfTwo(self.buf.len));
             // Postcondition: write_seq and published_seq start at zero; no items published yet.
-            std.debug.assert(self.write_seq == 0);
-            std.debug.assert(self.published_seq.load(.monotonic) == 0);
+            assert(self.write_seq == 0);
+            assert(self.published_seq.load(.monotonic) == 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: all allocations must still be valid.
-            std.debug.assert(self.buf.len > 0);
-            std.debug.assert(self.consumer_seq.len > 0);
+            assert(self.buf.len > 0);
+            assert(self.consumer_seq.len > 0);
             const buf_bytes = qi.bytesForItems(self.buf.len, @sizeOf(T));
             const seq_bytes = qi.bytesForItems(self.consumer_seq.len, @sizeOf(AtomicSeq));
             const active_bytes = qi.bytesForItems(self.consumer_active.len, @sizeOf(AtomicFlag));
@@ -127,7 +129,7 @@ pub fn Disruptor(comptime T: type) type {
             defer self.registration_mutex.unlock();
 
             // Precondition: the consumer slot array must be valid.
-            std.debug.assert(self.consumer_active.len > 0);
+            assert(self.consumer_active.len > 0);
             const start_seq = self.published_seq.load(.acquire);
             var consumer_id: usize = 0;
             while (consumer_id < self.consumer_active.len) : (consumer_id += 1) {
@@ -136,7 +138,7 @@ pub fn Disruptor(comptime T: type) type {
                     self.consumer_seq[consumer_id].store(start_seq, .release);
                     self.consumer_active[consumer_id].store(1, .release);
                     // Postcondition: the returned id is a valid slot index.
-                    std.debug.assert(consumer_id < self.consumer_active.len);
+                    assert(consumer_id < self.consumer_active.len);
                     return consumer_id;
                 }
             }
@@ -149,12 +151,12 @@ pub fn Disruptor(comptime T: type) type {
 
             self.assertActiveConsumer(consumer_id);
             // Precondition: consumer_id is in the valid slot range (assertActiveConsumer above).
-            std.debug.assert(consumer_id < self.consumer_active.len);
+            assert(consumer_id < self.consumer_active.len);
             const seq = self.published_seq.load(.acquire);
             self.consumer_seq[consumer_id].store(seq, .release);
             self.consumer_active[consumer_id].store(0, .release);
             // Postcondition: the slot is now inactive.
-            std.debug.assert(self.consumer_active[consumer_id].load(.monotonic) == 0);
+            assert(self.consumer_active[consumer_id].load(.monotonic) == 0);
         }
 
         pub fn trySend(self: *Self, value: T) TrySendError!void {
@@ -164,10 +166,10 @@ pub fn Disruptor(comptime T: type) type {
             }
             defer self.sending.store(false, .release);
             // Precondition: write_seq has room to advance without wrapping u64.
-            std.debug.assert(self.write_seq < std.math.maxInt(u64));
+            assert(self.write_seq < std.math.maxInt(u64));
             const next_write_seq = std.math.add(u64, self.write_seq, 1) catch return error.Overflow;
             const min_read_seq = self.minReadSeq() orelse next_write_seq;
-            std.debug.assert(next_write_seq >= min_read_seq);
+            assert(next_write_seq >= min_read_seq);
             const in_flight = next_write_seq - min_read_seq;
             if (in_flight > self.buf.len) return error.WouldBlock;
 
@@ -176,14 +178,14 @@ pub fn Disruptor(comptime T: type) type {
             self.published_seq.store(next_write_seq, .release);
             self.write_seq = next_write_seq;
             // Postcondition: published_seq advanced to the sequence we just wrote.
-            std.debug.assert(self.published_seq.load(.monotonic) == next_write_seq);
+            assert(self.published_seq.load(.monotonic) == next_write_seq);
         }
 
         pub fn tryRecv(self: *Self, consumer_id: ConsumerId) TryRecvError!T {
             self.assertActiveConsumer(consumer_id);
 
             const read_seq = self.consumer_seq[consumer_id].load(.monotonic);
-            std.debug.assert(read_seq < std.math.maxInt(u64));
+            assert(read_seq < std.math.maxInt(u64));
             const want_seq = read_seq + 1;
             const published = self.published_seq.load(.acquire);
             if (published < want_seq) return error.WouldBlock;
@@ -192,7 +194,7 @@ pub fn Disruptor(comptime T: type) type {
             const value = self.buf[index];
             self.consumer_seq[consumer_id].store(want_seq, .release);
             // Postcondition: the consumer's sequence advanced to exactly want_seq.
-            std.debug.assert(self.consumer_seq[consumer_id].load(.monotonic) == want_seq);
+            assert(self.consumer_seq[consumer_id].load(.monotonic) == want_seq);
             return value;
         }
 
@@ -200,9 +202,9 @@ pub fn Disruptor(comptime T: type) type {
             self.assertActiveConsumer(consumer_id);
             const read_seq = self.consumer_seq[consumer_id].load(.acquire);
             const published = self.published_seq.load(.acquire);
-            std.debug.assert(published >= read_seq);
+            assert(published >= read_seq);
             const pending_seq = published - read_seq;
-            std.debug.assert(pending_seq <= self.buf.len);
+            assert(pending_seq <= self.buf.len);
             return @intCast(pending_seq);
         }
 
@@ -217,15 +219,15 @@ pub fn Disruptor(comptime T: type) type {
                     active_count += 1;
                 }
             }
-            std.debug.assert(active_count <= self.consumer_active.len);
+            assert(active_count <= self.consumer_active.len);
             return active_count;
         }
 
         pub fn capacity(self: *const Self) usize {
             // Invariant: capacity is always a power-of-two (enforced in init).
-            std.debug.assert(self.buf.len > 0);
-            std.debug.assert(std.math.isPowerOfTwo(self.buf.len));
-            std.debug.assert(@intFromPtr(self.buf.ptr) != 0);
+            assert(self.buf.len > 0);
+            assert(std.math.isPowerOfTwo(self.buf.len));
+            assert(@intFromPtr(self.buf.ptr) != 0);
             return self.buf.len;
         }
 
@@ -251,22 +253,22 @@ pub fn Disruptor(comptime T: type) type {
         }
 
         fn seqToIndex(self: Self, seq: u64) usize {
-            std.debug.assert(self.buf.len > 0);
+            assert(self.buf.len > 0);
             const capacity_u64: u64 = @intCast(self.buf.len);
             const index_u64 = seq % capacity_u64;
             return @intCast(index_u64);
         }
 
         fn assertActiveConsumer(self: *Self, consumer_id: ConsumerId) void {
-            std.debug.assert(consumer_id < self.consumer_active.len);
+            assert(consumer_id < self.consumer_active.len);
             const active = self.consumer_active[consumer_id].load(.acquire);
-            std.debug.assert(active == 1);
+            assert(active == 1);
         }
     };
 }
 
 test "disruptor fanout preserves per-consumer ordering" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 8,
         .consumers_max = 2,
     });
@@ -279,17 +281,17 @@ test "disruptor fanout preserves per-consumer ordering" {
     try d.trySend(2);
     try d.trySend(3);
 
-    try std.testing.expectEqual(@as(u8, 1), try d.tryRecv(c0));
-    try std.testing.expectEqual(@as(u8, 2), try d.tryRecv(c0));
-    try std.testing.expectEqual(@as(u8, 3), try d.tryRecv(c0));
+    try testing.expectEqual(@as(u8, 1), try d.tryRecv(c0));
+    try testing.expectEqual(@as(u8, 2), try d.tryRecv(c0));
+    try testing.expectEqual(@as(u8, 3), try d.tryRecv(c0));
 
-    try std.testing.expectEqual(@as(u8, 1), try d.tryRecv(c1));
-    try std.testing.expectEqual(@as(u8, 2), try d.tryRecv(c1));
-    try std.testing.expectEqual(@as(u8, 3), try d.tryRecv(c1));
+    try testing.expectEqual(@as(u8, 1), try d.tryRecv(c1));
+    try testing.expectEqual(@as(u8, 2), try d.tryRecv(c1));
+    try testing.expectEqual(@as(u8, 3), try d.tryRecv(c1));
 }
 
 test "disruptor backpressures on the slowest active consumer" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 2,
         .consumers_max = 2,
     });
@@ -300,17 +302,17 @@ test "disruptor backpressures on the slowest active consumer" {
 
     try d.trySend(10);
     try d.trySend(11);
-    try std.testing.expectError(error.WouldBlock, d.trySend(12));
+    try testing.expectError(error.WouldBlock, d.trySend(12));
 
-    try std.testing.expectEqual(@as(u8, 10), try d.tryRecv(fast));
-    try std.testing.expectError(error.WouldBlock, d.trySend(12));
+    try testing.expectEqual(@as(u8, 10), try d.tryRecv(fast));
+    try testing.expectError(error.WouldBlock, d.trySend(12));
 
-    try std.testing.expectEqual(@as(u8, 10), try d.tryRecv(slow));
+    try testing.expectEqual(@as(u8, 10), try d.tryRecv(slow));
     try d.trySend(12);
 }
 
 test "disruptor removeConsumer releases producer backpressure" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 2,
         .consumers_max = 2,
     });
@@ -321,33 +323,33 @@ test "disruptor removeConsumer releases producer backpressure" {
 
     try d.trySend(20);
     try d.trySend(21);
-    try std.testing.expectError(error.WouldBlock, d.trySend(22));
+    try testing.expectError(error.WouldBlock, d.trySend(22));
 
     d.removeConsumer(slow);
-    try std.testing.expectEqual(@as(u8, 20), try d.tryRecv(fast));
+    try testing.expectEqual(@as(u8, 20), try d.tryRecv(fast));
     try d.trySend(22);
 }
 
 test "disruptor pending tracks unread values per consumer" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 8,
         .consumers_max = 1,
     });
     defer d.deinit();
 
     const consumer = try d.addConsumer();
-    try std.testing.expectEqual(@as(usize, 0), d.pending(consumer));
+    try testing.expectEqual(@as(usize, 0), d.pending(consumer));
 
     try d.trySend(1);
     try d.trySend(2);
-    try std.testing.expectEqual(@as(usize, 2), d.pending(consumer));
+    try testing.expectEqual(@as(usize, 2), d.pending(consumer));
 
     _ = try d.tryRecv(consumer);
-    try std.testing.expectEqual(@as(usize, 1), d.pending(consumer));
+    try testing.expectEqual(@as(usize, 1), d.pending(consumer));
 }
 
 test "disruptor allows publishing with no consumers (late joiners start at the tip)" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 8,
         .consumers_max = 1,
     });
@@ -357,55 +359,55 @@ test "disruptor allows publishing with no consumers (late joiners start at the t
     try d.trySend(2);
 
     const c = try d.addConsumer();
-    try std.testing.expectError(error.WouldBlock, d.tryRecv(c));
+    try testing.expectError(error.WouldBlock, d.tryRecv(c));
 
     try d.trySend(3);
-    try std.testing.expectEqual(@as(u8, 3), try d.tryRecv(c));
+    try testing.expectEqual(@as(u8, 3), try d.tryRecv(c));
 }
 
 test "disruptor validates configuration bounds" {
-    try std.testing.expectError(error.InvalidConfig, Disruptor(u8).init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, Disruptor(u8).init(testing.allocator, .{
         .capacity = 0,
         .consumers_max = 1,
     }));
-    try std.testing.expectError(error.InvalidConfig, Disruptor(u8).init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, Disruptor(u8).init(testing.allocator, .{
         .capacity = 3,
         .consumers_max = 1,
     }));
-    try std.testing.expectError(error.InvalidConfig, Disruptor(u8).init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, Disruptor(u8).init(testing.allocator, .{
         .capacity = 4,
         .consumers_max = 0,
     }));
 }
 
 test "disruptor addConsumer enforces max and reuses removed slots" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 4,
         .consumers_max = 1,
     });
     defer d.deinit();
 
     const only = try d.addConsumer();
-    try std.testing.expectEqual(@as(usize, 0), only);
-    try std.testing.expectError(error.NoSpaceLeft, d.addConsumer());
+    try testing.expectEqual(@as(usize, 0), only);
+    try testing.expectError(error.NoSpaceLeft, d.addConsumer());
 
     d.removeConsumer(only);
     const reused = try d.addConsumer();
-    try std.testing.expectEqual(@as(usize, 0), reused);
+    try testing.expectEqual(@as(usize, 0), reused);
 }
 
 test "disruptor activeConsumerCount reflects add and remove" {
-    var d = try Disruptor(u8).init(std.testing.allocator, .{
+    var d = try Disruptor(u8).init(testing.allocator, .{
         .capacity = 8,
         .consumers_max = 3,
     });
     defer d.deinit();
 
-    try std.testing.expectEqual(@as(usize, 0), d.activeConsumerCount());
+    try testing.expectEqual(@as(usize, 0), d.activeConsumerCount());
     const first = try d.addConsumer();
     const second = try d.addConsumer();
     _ = second;
-    try std.testing.expectEqual(@as(usize, 2), d.activeConsumerCount());
+    try testing.expectEqual(@as(usize, 2), d.activeConsumerCount());
     d.removeConsumer(first);
-    try std.testing.expectEqual(@as(usize, 1), d.activeConsumerCount());
+    try testing.expectEqual(@as(usize, 1), d.activeConsumerCount());
 }

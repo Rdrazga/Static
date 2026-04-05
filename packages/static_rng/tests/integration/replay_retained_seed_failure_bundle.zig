@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_rng = @import("static_rng");
 const static_testing = @import("static_testing");
 
@@ -32,8 +34,8 @@ const Context = struct {
         self.live = null;
         self.reference = null;
         self.consumer_digest = 0;
-        std.debug.assert(self.live == null);
-        std.debug.assert(self.reference == null);
+        assert(self.live == null);
+        assert(self.reference == null);
     }
 
     fn validate(self: *@This()) checker.CheckResult {
@@ -43,8 +45,8 @@ const Context = struct {
             digest = foldDigest(digest, live.state);
             digest = foldDigest(digest, live.inc);
         }
-        std.debug.assert(digest != 0 or self.consumer_digest == 0);
-        std.debug.assert(self.consumer_digest == 0 or digest != 0);
+        assert(digest != 0 or self.consumer_digest == 0);
+        assert(self.consumer_digest == 0 or digest != 0);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(digest));
     }
 
@@ -61,8 +63,8 @@ const Context = struct {
         const sequence = support.sequenceFrom(action_value, 0x5254_4149_4e5f_5341);
         self.live = static_rng.Pcg32.init(seed, sequence);
         self.reference = support.ReferencePcg32.init(seed, sequence);
-        std.debug.assert(self.aligned());
-        std.debug.assert(self.live.?.inc == self.reference.?.inc);
+        assert(self.aligned());
+        assert(self.live.?.inc == self.reference.?.inc);
         return self.validate();
     }
 
@@ -97,15 +99,15 @@ const Context = struct {
 
     fn retainedFailure(self: *@This(), action_value: u64) checker.CheckResult {
         const digest = foldDigest(self.consumer_digest, action_value);
-        std.debug.assert(digest != 0 or action_value == 0);
+        assert(digest != 0 or action_value == 0);
         return checker.CheckResult.fail(&failure_violation, checker.CheckpointDigest.init(digest));
     }
 };
 
 fn foldDigest(digest: u64, value: u64) u64 {
     const next = support.mix64(digest ^ value);
-    std.debug.assert(next != digest or value == 0);
-    std.debug.assert(next == support.mix64(digest ^ value));
+    assert(next != digest or value == 0);
+    assert(next == support.mix64(digest ^ value));
     return next;
 }
 
@@ -113,10 +115,10 @@ test "static_rng retained seed replay and failure bundle stay aligned" {
     const Runner = model.ModelRunner(error{});
     const Target = model.ModelTarget(error{});
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -173,10 +175,10 @@ test "static_rng retained seed replay and failure bundle stay aligned" {
         .reduction_scratch = &reduction_scratch,
     }).run();
 
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expectEqual(@as(u32, 1), summary.executed_case_count);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     var read_artifact_buffer: [512]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -195,11 +197,11 @@ test "static_rng retained seed replay and failure bundle stay aligned" {
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("static_rng", bundle.manifest_document.package_name);
-    try std.testing.expectEqualStrings("retained_seed_failure_bundle", bundle.manifest_document.run_name);
-    try std.testing.expectEqual(failed_case.run_identity.seed.value, bundle.replay_artifact_view.identity.seed.value);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expectEqualStrings(failure_violation[0].code, bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("static_rng", bundle.manifest_document.package_name);
+    try testing.expectEqualStrings("retained_seed_failure_bundle", bundle.manifest_document.run_name);
+    try testing.expectEqual(failed_case.run_identity.seed.value, bundle.replay_artifact_view.identity.seed.value);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expectEqualStrings(failure_violation[0].code, bundle.violations_document.violations[0].code);
 
     var read_action_bytes_buffer: [512]u8 = undefined;
     var read_action_storage: [4]model.RecordedAction = undefined;
@@ -212,10 +214,10 @@ test "static_rng retained seed replay and failure bundle stay aligned" {
         .action_document_parse_buffer = &read_action_document_parse_buffer,
     });
 
-    try std.testing.expectEqual(failed_case.recorded_actions.len, recorded_actions.actions.len);
-    try std.testing.expect(recorded_actions.action_document != null);
-    try std.testing.expectEqual(@as(u32, @intCast(recorded_actions.actions.len)), recorded_actions.action_document.?.action_count);
-    try std.testing.expectEqualStrings("retained_failure", recorded_actions.action_document.?.actions[recorded_actions.actions.len - 1].label);
+    try testing.expectEqual(failed_case.recorded_actions.len, recorded_actions.actions.len);
+    try testing.expect(recorded_actions.action_document != null);
+    try testing.expectEqual(@as(u32, @intCast(recorded_actions.actions.len)), recorded_actions.action_document.?.action_count);
+    try testing.expectEqualStrings("retained_failure", recorded_actions.action_document.?.actions[recorded_actions.actions.len - 1].label);
     const replay = try model.replayRecordedActions(error{}, Target{
         .context = &context,
         .reset_fn = reset,
@@ -225,9 +227,9 @@ test "static_rng retained seed replay and failure bundle stay aligned" {
         .describe_action_fn = describe,
     }, failed_case.run_identity, recorded_actions.actions);
 
-    try std.testing.expect(!replay.check_result.passed);
-    try std.testing.expectEqual(failed_case.failing_action_index, replay.failing_action_index);
-    try std.testing.expectEqual(failed_case.trace_metadata.event_count, replay.trace_metadata.event_count);
+    try testing.expect(!replay.check_result.passed);
+    try testing.expectEqual(failed_case.failing_action_index, replay.failing_action_index);
+    try testing.expectEqual(failed_case.trace_metadata.event_count, replay.trace_metadata.event_count);
 }
 
 fn nextAction(

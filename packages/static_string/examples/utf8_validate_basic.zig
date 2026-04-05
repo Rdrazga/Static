@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const strings = @import("static_string");
 
 pub fn main() !void {
@@ -7,13 +8,13 @@ pub fn main() !void {
 
     // UTF-8 validation is the package's admission check before bounded storage
     // or interning accepts external byte data as text.
-    std.debug.assert(strings.utf8.isValid(valid_name));
+    assert(strings.utf8.isValid(valid_name));
     try strings.utf8.validate(valid_name);
 
     if (strings.utf8.validate(invalid_name)) |_| {
         unreachable;
     } else |err| {
-        std.debug.assert(err == error.InvalidInput);
+        assert(err == error.InvalidInput);
     }
 
     var entry_storage: [4]strings.Entry = undefined;
@@ -22,7 +23,7 @@ pub fn main() !void {
 
     const symbol = try pool.intern(valid_name);
     const resolved = try pool.resolve(symbol);
-    std.debug.assert(std.mem.eql(u8, valid_name, resolved));
+    assert(std.mem.eql(u8, valid_name, resolved));
 
     std.debug.print("validated utf8 symbol={d} text={s}\n", .{ symbol, resolved });
 }

@@ -6,6 +6,8 @@
 //! - caller-managed payload buffers outside the header layout itself.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const serial = @import("static_serial");
 
@@ -55,10 +57,10 @@ pub const DriverResponseHeader = struct {
 
 comptime {
     core.errors.assertVocabularySubset(DriverProtocolError);
-    std.debug.assert(driver_magic.len == 4);
-    std.debug.assert(driver_protocol_version != 0);
-    std.debug.assert(request_header_size_bytes == 16);
-    std.debug.assert(response_header_size_bytes == 16);
+    assert(driver_magic.len == 4);
+    assert(driver_protocol_version != 0);
+    assert(request_header_size_bytes == 16);
+    assert(response_header_size_bytes == 16);
 }
 
 /// Encode a request header into a caller-owned fixed buffer.
@@ -73,7 +75,7 @@ pub fn encodeRequestHeader(
     try writeHeaderPrefix(&writer, header.kind);
     try writeInt(&writer, header.request_id);
     try writeInt(&writer, header.payload_len);
-    std.debug.assert(writer.position() == request_header_size_bytes);
+    assert(writer.position() == request_header_size_bytes);
     return request_header_size_bytes;
 }
 
@@ -110,7 +112,7 @@ pub fn encodeResponseHeader(
     try writeHeaderPrefix(&writer, header.kind);
     try writeInt(&writer, header.request_id);
     try writeInt(&writer, header.payload_len);
-    std.debug.assert(writer.position() == response_header_size_bytes);
+    assert(writer.position() == response_header_size_bytes);
     return response_header_size_bytes;
 }
 
@@ -243,10 +245,10 @@ test "request and response headers round-trip" {
     });
     const response_header = try decodeResponseHeader(response_bytes[0..response_written]);
 
-    try std.testing.expectEqual(DriverMessageKind.echo, request_header.kind);
-    try std.testing.expectEqual(@as(u32, 9), request_header.request_id);
-    try std.testing.expectEqual(DriverMessageKind.ok, response_header.kind);
-    try std.testing.expectEqual(@as(u32, 4), response_header.payload_len);
+    try testing.expectEqual(DriverMessageKind.echo, request_header.kind);
+    try testing.expectEqual(@as(u32, 9), request_header.request_id);
+    try testing.expectEqual(DriverMessageKind.ok, response_header.kind);
+    try testing.expectEqual(@as(u32, 4), response_header.payload_len);
 }
 
 test "decode rejects invalid kinds in request and response space" {
@@ -257,7 +259,7 @@ test "decode rejects invalid kinds in request and response space" {
         .payload_len = 0,
     });
     bytes[6] = @intFromEnum(DriverMessageKind.ok);
-    try std.testing.expectError(error.InvalidInput, decodeRequestHeader(&bytes));
+    try testing.expectError(error.InvalidInput, decodeRequestHeader(&bytes));
 
     var response_bytes: [response_header_size_bytes]u8 = undefined;
     _ = try encodeResponseHeader(&response_bytes, .{
@@ -266,7 +268,7 @@ test "decode rejects invalid kinds in request and response space" {
         .payload_len = 0,
     });
     response_bytes[6] = @intFromEnum(DriverMessageKind.echo);
-    try std.testing.expectError(error.InvalidInput, decodeResponseHeader(&response_bytes));
+    try testing.expectError(error.InvalidInput, decodeResponseHeader(&response_bytes));
 }
 
 test "decode rejects unsupported protocol version" {
@@ -277,7 +279,7 @@ test "decode rejects unsupported protocol version" {
         .payload_len = 0,
     });
     std.mem.writeInt(u16, bytes[4..6], 2, .little);
-    try std.testing.expectError(error.Unsupported, decodeResponseHeader(&bytes));
+    try testing.expectError(error.Unsupported, decodeResponseHeader(&bytes));
 }
 
 test "decode rejects non-zero reserved bytes" {
@@ -288,7 +290,7 @@ test "decode rejects non-zero reserved bytes" {
         .payload_len = 0,
     });
     request_bytes[7] = 1;
-    try std.testing.expectError(error.InvalidInput, decodeRequestHeader(&request_bytes));
+    try testing.expectError(error.InvalidInput, decodeRequestHeader(&request_bytes));
 
     var response_bytes: [response_header_size_bytes]u8 = undefined;
     _ = try encodeResponseHeader(&response_bytes, .{
@@ -297,7 +299,7 @@ test "decode rejects non-zero reserved bytes" {
         .payload_len = 0,
     });
     response_bytes[7] = 1;
-    try std.testing.expectError(error.InvalidInput, decodeResponseHeader(&response_bytes));
+    try testing.expectError(error.InvalidInput, decodeResponseHeader(&response_bytes));
 }
 
 test "decode rejects invalid magic and truncated headers" {
@@ -308,7 +310,7 @@ test "decode rejects invalid magic and truncated headers" {
         .payload_len = 3,
     });
     request_bytes[0] = 'X';
-    try std.testing.expectError(error.InvalidInput, decodeRequestHeader(&request_bytes));
+    try testing.expectError(error.InvalidInput, decodeRequestHeader(&request_bytes));
 
     var response_bytes: [response_header_size_bytes]u8 = undefined;
     _ = try encodeResponseHeader(&response_bytes, .{
@@ -317,13 +319,13 @@ test "decode rejects invalid magic and truncated headers" {
         .payload_len = 3,
     });
     response_bytes[0] = 'X';
-    try std.testing.expectError(error.InvalidInput, decodeResponseHeader(&response_bytes));
+    try testing.expectError(error.InvalidInput, decodeResponseHeader(&response_bytes));
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.EndOfStream,
         decodeRequestHeader(request_bytes[0 .. request_header_size_bytes - 1]),
     );
-    try std.testing.expectError(
+    try testing.expectError(
         error.EndOfStream,
         decodeResponseHeader(response_bytes[0 .. response_header_size_bytes - 1]),
     );

@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_serial = @import("static_serial");
 const static_testing = @import("static_testing");
 
@@ -188,7 +189,7 @@ pub fn writeFrame(
     payload: []const u8,
     checksum_mode: FrameChecksumMode,
 ) static_serial.writer.Error!usize {
-    std.debug.assert(payload.len > 0);
+    assert(payload.len > 0);
 
     var writer = static_serial.writer.Writer.init(buffer);
     try writer.writeVarint(@as(u16, @intCast(payload.len)));
@@ -300,7 +301,7 @@ pub fn buildGeneratedFrameBytes(seed_value: u64) GeneratedFrameBytes {
         },
     }
 
-    std.debug.assert(generated.len <= generated.bytes.len);
+    assert(generated.len <= generated.bytes.len);
     return generated;
 }
 

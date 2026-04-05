@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// A monotonically increasing counter used for change-tracking.
 ///
@@ -11,17 +13,17 @@ pub const Epoch = struct {
     pub fn increment(self: *Epoch) void {
         // Epoch overflow is a programmer error: u64 wrapping would break all
         // change-tracking invariants. 2^64 increments will not occur in practice.
-        std.debug.assert(self.value < std.math.maxInt(u64));
+        assert(self.value < std.math.maxInt(u64));
         self.value += 1;
         // Postcondition: the value must be strictly greater than zero after an increment.
         // Zero is the initial state; reaching it again after an increment implies wraparound,
         // which the precondition above prevents.
-        std.debug.assert(self.value > 0);
+        assert(self.value > 0);
     }
 
     pub fn incrementAndGet(self: *Epoch) u64 {
         self.increment();
-        std.debug.assert(self.value > 0);
+        assert(self.value > 0);
         return self.value;
     }
 
@@ -29,8 +31,8 @@ pub const Epoch = struct {
         const changed = self.value != last_seen;
         // Pair assertion: if the stored value equals the snapshot, no change occurred;
         // if it differs, a change occurred. Both directions must hold.
-        std.debug.assert(changed == (self.value != last_seen));
-        std.debug.assert(!changed == (self.value == last_seen));
+        assert(changed == (self.value != last_seen));
+        assert(!changed == (self.value == last_seen));
         return changed;
     }
 
@@ -39,14 +41,14 @@ pub const Epoch = struct {
         // Postcondition: the captured snapshot must equal the current value at the moment
         // of capture. A mismatch here would indicate self-modification during a read,
         // which is a programmer error in this single-threaded type.
-        std.debug.assert(snap == self.value);
+        assert(snap == self.value);
         return snap;
     }
 
     pub fn get(self: Epoch) u64 {
         const val = self.value;
         // Postcondition: returned value must match the stored field (no silent transformation).
-        std.debug.assert(val == self.value);
+        assert(val == self.value);
         return val;
     }
 
@@ -54,7 +56,7 @@ pub const Epoch = struct {
     pub fn current(self: Epoch) u64 {
         const val = self.get();
         // Postcondition: `current()` is an alias for `get()`; result must be identical.
-        std.debug.assert(val == self.value);
+        assert(val == self.value);
         return val;
     }
 };
@@ -62,7 +64,7 @@ pub const Epoch = struct {
 // The Epoch type must be exactly the size of its backing integer so that layouts
 // depending on Epoch as a u64-sized field hold without padding surprises.
 comptime {
-    std.debug.assert(@sizeOf(Epoch) == @sizeOf(u64));
+    assert(@sizeOf(Epoch) == @sizeOf(u64));
 }
 
 /// Wraps a value of type `T` with an `Epoch` version counter that increments
@@ -82,7 +84,7 @@ pub fn Versioned(comptime T: type) type {
         pub fn init(value: T) Self {
             const out: Self = .{ .data = value };
             // Postcondition: the version counter must start at zero after init.
-            std.debug.assert(out.version.value == 0);
+            assert(out.version.value == 0);
             return out;
         }
 
@@ -90,14 +92,14 @@ pub fn Versioned(comptime T: type) type {
             // Precondition: the version counter must be a valid (non-corrupt) u64; it is
             // validated by the Epoch invariant. Checking here acts as a sentinel that the
             // Versioned struct itself has not been memory-corrupted.
-            std.debug.assert(self.version.value <= std.math.maxInt(u64));
+            assert(self.version.value <= std.math.maxInt(u64));
             return self.data;
         }
 
         pub fn getMut(self: *Self) *T {
             // Precondition: the struct must be in a valid state before handing out a mutable
             // pointer; callers must call markModified() after mutating via the returned pointer.
-            std.debug.assert(self.version.value <= std.math.maxInt(u64));
+            assert(self.version.value <= std.math.maxInt(u64));
             return &self.data;
         }
 
@@ -106,20 +108,20 @@ pub fn Versioned(comptime T: type) type {
             self.data = value;
             self.version.increment();
             // Postcondition: version must have advanced after set() to enable change detection.
-            std.debug.assert(self.version.value > old_version);
+            assert(self.version.value > old_version);
         }
 
         pub fn markModified(self: *Self) void {
             const old_version = self.version.value;
             self.version.increment();
             // Postcondition: version must have advanced after markModified().
-            std.debug.assert(self.version.value > old_version);
+            assert(self.version.value > old_version);
         }
 
         pub fn epoch(self: *const Self) u64 {
             const val = self.version.value;
             // Postcondition: the returned epoch must equal the stored counter.
-            std.debug.assert(val == self.version.value);
+            assert(val == self.version.value);
             return val;
         }
 
@@ -127,7 +129,7 @@ pub fn Versioned(comptime T: type) type {
             const changed = self.version.hasChangedSince(last_seen);
             // Pair assertion: the result must be consistent with a direct comparison against
             // the stored version. Both directions are asserted to catch asymmetric corruption.
-            std.debug.assert(changed == (self.version.value != last_seen));
+            assert(changed == (self.version.value != last_seen));
             return changed;
         }
     };
@@ -136,36 +138,36 @@ pub fn Versioned(comptime T: type) type {
 test "epoch basic operations" {
     // Verifies capture/compare behavior and monotonicity for the `Epoch` counter.
     var epoch = Epoch{};
-    try std.testing.expectEqual(@as(u64, 0), epoch.get());
+    try testing.expectEqual(@as(u64, 0), epoch.get());
 
     const token = epoch.capture();
-    try std.testing.expect(!epoch.hasChangedSince(token));
+    try testing.expect(!epoch.hasChangedSince(token));
 
     epoch.increment();
-    try std.testing.expectEqual(@as(u64, 1), epoch.get());
-    try std.testing.expect(epoch.hasChangedSince(token));
+    try testing.expectEqual(@as(u64, 1), epoch.get());
+    try testing.expect(epoch.hasChangedSince(token));
 }
 
 test "epoch incrementAndGet" {
     // Verifies `incrementAndGet()` returns the incremented epoch and keeps the stored value in sync.
     var epoch = Epoch{};
-    try std.testing.expectEqual(@as(u64, 1), epoch.incrementAndGet());
-    try std.testing.expectEqual(@as(u64, 2), epoch.incrementAndGet());
-    try std.testing.expectEqual(@as(u64, 2), epoch.get());
+    try testing.expectEqual(@as(u64, 1), epoch.incrementAndGet());
+    try testing.expectEqual(@as(u64, 2), epoch.incrementAndGet());
+    try testing.expectEqual(@as(u64, 2), epoch.get());
 }
 
 test "Versioned basic operations" {
     // Verifies version bumps on `set()` and change detection relative to a captured epoch.
     var v = Versioned(i32).init(42);
-    try std.testing.expectEqual(@as(i32, 42), v.get());
-    try std.testing.expectEqual(@as(u64, 0), v.epoch());
+    try testing.expectEqual(@as(i32, 42), v.get());
+    try testing.expectEqual(@as(u64, 0), v.epoch());
 
     const old_epoch = v.epoch();
 
     v.set(100);
-    try std.testing.expectEqual(@as(i32, 100), v.get());
-    try std.testing.expectEqual(@as(u64, 1), v.epoch());
-    try std.testing.expect(v.hasChangedSince(old_epoch));
+    try testing.expectEqual(@as(i32, 100), v.get());
+    try testing.expectEqual(@as(u64, 1), v.epoch());
+    try testing.expect(v.hasChangedSince(old_epoch));
 }
 
 test "Versioned getMut and markModified" {
@@ -177,6 +179,6 @@ test "Versioned getMut and markModified" {
     ptr.* = 999;
     v.markModified();
 
-    try std.testing.expectEqual(@as(i32, 999), v.get());
-    try std.testing.expect(v.hasChangedSince(old_epoch));
+    try testing.expectEqual(@as(i32, 999), v.get());
+    try testing.expect(v.hasChangedSince(old_epoch));
 }

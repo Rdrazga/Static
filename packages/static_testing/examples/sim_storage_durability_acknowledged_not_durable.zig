@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const durability = testing.testing.sim.storage_durability;
@@ -20,26 +21,26 @@ pub fn main() !void {
 
     try simulator.submitWrite(.init(0), 1, 4, 111);
     const omission_summary = try simulator.deliverDueToMailbox(.init(1), &completions, null);
-    std.debug.assert(omission_summary.write_success_count == 1);
-    std.debug.assert((try completions.recv()).status == .success);
-    std.debug.assert(simulator.storedItems().len == 0);
+    assert(omission_summary.write_success_count == 1);
+    assert((try completions.recv()).status == .success);
+    assert(simulator.storedItems().len == 0);
 
     try simulator.submitRead(.init(1), 2, 4);
     const missing_summary = try simulator.deliverDueToMailbox(.init(2), &completions, null);
-    std.debug.assert(missing_summary.missing_count == 1);
-    std.debug.assert((try completions.recv()).status == .missing);
+    assert(missing_summary.missing_count == 1);
+    assert((try completions.recv()).status == .missing);
 
     _ = try simulator.crash(.init(2), null);
     try simulator.recover(.init(2), null);
     try simulator.submitWrite(.init(2), 3, 4, 222);
     const repair_summary = try simulator.deliverDueToMailbox(.init(3), &completions, null);
-    std.debug.assert(repair_summary.write_success_count == 1);
-    std.debug.assert((try completions.recv()).value.? == 222);
+    assert(repair_summary.write_success_count == 1);
+    assert((try completions.recv()).value.? == 222);
 
     try simulator.submitRead(.init(3), 4, 4);
     const repair_read_summary = try simulator.deliverDueToMailbox(.init(4), &completions, null);
-    std.debug.assert(repair_read_summary.read_success_count == 1);
-    std.debug.assert((try completions.recv()).value.? == 222);
+    assert(repair_read_summary.read_success_count == 1);
+    assert((try completions.recv()).value.? == 222);
 
     std.debug.print(
         "storage durability acknowledged a fault-phase write without persisting it, then restabilized durability after recovery\n",

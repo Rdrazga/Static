@@ -4,6 +4,8 @@
 //! - `zig build bench -Doptimize=ReleaseFast` (from `packages/static_testing`).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -18,7 +20,7 @@ const ComputeStatsContext = struct {
     fn run(context_ptr: *anyopaque) void {
         const context: *@This() = @ptrCast(@alignCast(context_ptr));
         const derived = bench.stats.computeStats(context.case_result) catch |err| {
-            std.debug.panic("computeStats failed: {s}", .{@errorName(err)});
+            panic("computeStats failed: {s}", .{@errorName(err)});
         };
 
         context.sink +%= derived.median_elapsed_ns;
@@ -33,12 +35,12 @@ const ComputeStatsScratchContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *@This() = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.scratch.len >= context.case_result.samples.len);
+        assert(context.scratch.len >= context.case_result.samples.len);
         const derived = bench.stats.computeStatsWithScratch(
             context.case_result,
             context.scratch,
         ) catch |err| {
-            std.debug.panic("computeStatsWithScratch failed: {s}", .{@errorName(err)});
+            panic("computeStatsWithScratch failed: {s}", .{@errorName(err)});
         };
 
         context.sink +%= derived.median_elapsed_ns;
@@ -47,7 +49,7 @@ const ComputeStatsScratchContext = struct {
 };
 
 fn fillDeterministicSamples(samples: []bench.runner.BenchmarkSample) void {
-    std.debug.assert(samples.len > 0);
+    assert(samples.len > 0);
 
     var state: u64 = 0x9e37_79b9_7f4a_7c15;
     for (samples) |*sample| {
@@ -73,8 +75,8 @@ fn buildStatsExpectation(
     case_result: bench.runner.BenchmarkCaseResult,
     elapsed_scratch: []u64,
 ) !StatsExpectation {
-    std.debug.assert(case_result.samples.len > 0);
-    std.debug.assert(elapsed_scratch.len >= case_result.samples.len);
+    assert(case_result.samples.len > 0);
+    assert(elapsed_scratch.len >= case_result.samples.len);
 
     var elapsed_sum_ns: u128 = 0;
     var min_elapsed_ns = case_result.samples[0].elapsed_ns;
@@ -103,7 +105,7 @@ fn buildStatsExpectation(
 }
 
 fn meanFromSum(elapsed_sum_ns: u128, sample_len: usize) !u64 {
-    std.debug.assert(sample_len > 0);
+    assert(sample_len > 0);
 
     const mean_elapsed_ns = @divFloor(elapsed_sum_ns, sample_len);
     if (mean_elapsed_ns > std.math.maxInt(u64)) return error.Overflow;
@@ -111,16 +113,16 @@ fn meanFromSum(elapsed_sum_ns: u128, sample_len: usize) !u64 {
 }
 
 fn percentileFromSortedReference(sorted_elapsed_ns: []const u64, percentile_percent: u8) u64 {
-    std.debug.assert(sorted_elapsed_ns.len > 0);
-    std.debug.assert(percentile_percent <= 100);
+    assert(sorted_elapsed_ns.len > 0);
+    assert(percentile_percent <= 100);
 
     if (percentile_percent == 0) return sorted_elapsed_ns[0];
     if (percentile_percent == 100) return sorted_elapsed_ns[sorted_elapsed_ns.len - 1];
 
     const numerator = @as(u128, sorted_elapsed_ns.len) * percentile_percent;
     const rank_1based = @divFloor(numerator + 99, 100);
-    std.debug.assert(rank_1based > 0);
-    std.debug.assert(rank_1based <= sorted_elapsed_ns.len);
+    assert(rank_1based > 0);
+    assert(rank_1based <= sorted_elapsed_ns.len);
     return sorted_elapsed_ns[@as(usize, @intCast(rank_1based - 1))];
 }
 
@@ -128,13 +130,13 @@ fn assertExpectedStats(
     derived: bench.stats.BenchmarkStats,
     expected: StatsExpectation,
 ) void {
-    std.debug.assert(derived.sample_count == expected.sample_count);
-    std.debug.assert(derived.min_elapsed_ns == expected.min_elapsed_ns);
-    std.debug.assert(derived.max_elapsed_ns == expected.max_elapsed_ns);
-    std.debug.assert(derived.mean_elapsed_ns == expected.mean_elapsed_ns);
-    std.debug.assert(derived.median_elapsed_ns == expected.median_elapsed_ns);
-    std.debug.assert(derived.p90_elapsed_ns == expected.p90_elapsed_ns);
-    std.debug.assert(derived.p95_elapsed_ns == expected.p95_elapsed_ns);
+    assert(derived.sample_count == expected.sample_count);
+    assert(derived.min_elapsed_ns == expected.min_elapsed_ns);
+    assert(derived.max_elapsed_ns == expected.max_elapsed_ns);
+    assert(derived.mean_elapsed_ns == expected.mean_elapsed_ns);
+    assert(derived.median_elapsed_ns == expected.median_elapsed_ns);
+    assert(derived.p90_elapsed_ns == expected.p90_elapsed_ns);
+    assert(derived.p95_elapsed_ns == expected.p95_elapsed_ns);
 }
 
 fn verifyComputeStatsCase(

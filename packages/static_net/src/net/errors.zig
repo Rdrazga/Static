@@ -1,6 +1,7 @@
 //! `static_net` error sets.
 
 const std = @import("std");
+const testing = std.testing;
 const core = @import("static_core");
 
 pub const AddressParseError = error{
@@ -53,11 +54,11 @@ comptime {
 }
 
 test "error tags map to shared vocabulary tags" {
-    try std.testing.expect(core.errors.has(.InvalidInput, error.InvalidInput));
-    try std.testing.expect(core.errors.has(.Unsupported, error.Unsupported));
-    try std.testing.expect(core.errors.has(.NoSpaceLeft, error.NoSpaceLeft));
-    try std.testing.expect(core.errors.has(.InvalidConfig, error.InvalidConfig));
-    try std.testing.expect(core.errors.has(.EndOfStream, error.EndOfStream));
-    try std.testing.expect(core.errors.has(.CorruptData, error.CorruptData));
-    try std.testing.expect(core.errors.has(.Overflow, error.Overflow));
+    try testing.expect(core.errors.has(.InvalidInput, error.InvalidInput));
+    try testing.expect(core.errors.has(.Unsupported, error.Unsupported));
+    try testing.expect(core.errors.has(.NoSpaceLeft, error.NoSpaceLeft));
+    try testing.expect(core.errors.has(.InvalidConfig, error.InvalidConfig));
+    try testing.expect(core.errors.has(.EndOfStream, error.EndOfStream));
+    try testing.expect(core.errors.has(.CorruptData, error.CorruptData));
+    try testing.expect(core.errors.has(.Overflow, error.Overflow));
 }

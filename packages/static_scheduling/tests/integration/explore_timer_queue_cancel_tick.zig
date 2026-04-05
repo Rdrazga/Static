@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_scheduling = @import("static_scheduling");
 const static_testing = @import("static_testing");
 
@@ -15,8 +17,8 @@ fn emitTraceEvent(
     label: []const u8,
     value: u64,
 ) !u32 {
-    std.debug.assert(label.len > 0);
-    std.debug.assert(trace_buffer.freeSlots() > 0);
+    assert(label.len > 0);
+    assert(trace_buffer.freeSlots() > 0);
 
     try trace_buffer.append(.{
         .timestamp_ns = timestamp_ns,
@@ -29,11 +31,11 @@ fn emitTraceEvent(
     });
 
     const snapshot = trace_buffer.snapshot();
-    std.debug.assert(snapshot.items.len > 0);
+    assert(snapshot.items.len > 0);
     const event = snapshot.items[snapshot.items.len - 1];
-    std.debug.assert(std.mem.eql(u8, event.label, label));
-    std.debug.assert(event.value == value);
-    std.debug.assert(event.lineage.surface_label != null);
+    assert(std.mem.eql(u8, event.label, label));
+    assert(event.value == value);
+    assert(event.lineage.surface_label != null);
     return event.sequence_no;
 }
 
@@ -42,7 +44,7 @@ test "simulation exploration keeps timer queue cancel-before-tick and due-order 
         fn run(_: *const anyopaque, input: explore.ExplorationScenarioInput) !explore.ExplorationScenarioExecution {
             var fixture: sim.fixture.Fixture(4, 4, 4, 16) = undefined;
             try fixture.init(.{
-                .allocator = std.testing.allocator,
+                .allocator = testing.allocator,
                 .timer_queue_config = .{
                     .buckets = 4,
                     .timers_max = 4,
@@ -60,14 +62,14 @@ test "simulation exploration keeps timer queue cancel-before-tick and due-order 
             _ = try fixture.scheduleAfter(.{ .id = 33, .value = 330 }, .init(2));
 
             const first_step = try fixture.step();
-            std.debug.assert(first_step.progress_made);
-            std.debug.assert(first_step.time_advanced);
-            std.debug.assert(first_step.decision == null);
-            std.debug.assert(fixture.sim_clock.now().tick == 1);
+            assert(first_step.progress_made);
+            assert(first_step.time_advanced);
+            assert(first_step.decision == null);
+            assert(fixture.sim_clock.now().tick == 1);
 
             const cancelled = try fixture.timer_queue.cancel(cancel_id);
-            std.debug.assert(cancelled.id == 44);
-            std.debug.assert(cancelled.value == 440);
+            assert(cancelled.id == 44);
+            assert(cancelled.value == 440);
 
             const trace_buffer = fixture.traceBufferPtr().?;
             _ = try emitTraceEvent(
@@ -79,13 +81,13 @@ test "simulation exploration keeps timer queue cancel-before-tick and due-order 
             );
 
             const remainder = try fixture.runForSteps(8);
-            std.debug.assert(remainder.reason == .idle);
-            std.debug.assert(remainder.steps_run == 4);
-            std.debug.assert(fixture.sim_clock.now().tick == 2);
-            std.debug.assert(fixture.recordedDecisions().len == 3);
+            assert(remainder.reason == .idle);
+            assert(remainder.steps_run == 4);
+            assert(fixture.sim_clock.now().tick == 2);
+            assert(fixture.recordedDecisions().len == 3);
 
             const snapshot = fixture.traceSnapshot().?;
-            std.debug.assert(snapshot.items.len == 6);
+            assert(snapshot.items.len == 6);
 
             const cancel_before_second_jump = try temporal.checkHappensBefore(
                 snapshot,
@@ -259,7 +261,7 @@ test "simulation exploration keeps timer queue cancel-before-tick and due-order 
         .schedules_max = 3,
     }, scenario, null);
 
-    try std.testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure == null);
+    try testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure == null);
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const durability = testing.testing.sim.storage_durability;
@@ -42,11 +43,11 @@ pub fn main() !void {
         sim_fixture.traceBufferPtr(),
     );
     const pre_crash = try completions.recv();
-    std.debug.assert(pre_crash.kind == .write);
-    std.debug.assert(pre_crash.status == .corrupted);
-    std.debug.assert(pre_crash.value.? == 700);
+    assert(pre_crash.kind == .write);
+    assert(pre_crash.status == .corrupted);
+    assert(pre_crash.value.? == 700);
 
-    std.debug.assert(try simulator.crash(sim_fixture.sim_clock.now(), sim_fixture.traceBufferPtr()) == 0);
+    assert(try simulator.crash(sim_fixture.sim_clock.now(), sim_fixture.traceBufferPtr()) == 0);
     try simulator.recover(sim_fixture.sim_clock.now(), sim_fixture.traceBufferPtr());
 
     try simulator.submitWrite(sim_fixture.sim_clock.now(), 2, 4, 222);
@@ -56,11 +57,11 @@ pub fn main() !void {
         &completions,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(write_summary.write_success_count == 1);
+    assert(write_summary.write_success_count == 1);
     const write = try completions.recv();
-    std.debug.assert(write.kind == .write);
-    std.debug.assert(write.status == .success);
-    std.debug.assert(write.value.? == 222);
+    assert(write.kind == .write);
+    assert(write.status == .success);
+    assert(write.value.? == 222);
 
     try simulator.submitRead(sim_fixture.sim_clock.now(), 3, 4);
     _ = try sim_fixture.sim_clock.advance(.init(1));
@@ -69,11 +70,11 @@ pub fn main() !void {
         &completions,
         sim_fixture.traceBufferPtr(),
     );
-    std.debug.assert(read_summary.read_success_count == 1);
+    assert(read_summary.read_success_count == 1);
     const read = try completions.recv();
-    std.debug.assert(read.kind == .read);
-    std.debug.assert(read.status == .success);
-    std.debug.assert(read.value.? == 222);
+    assert(read.kind == .read);
+    assert(read.status == .success);
+    assert(read.value.? == 222);
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const crash_before_recover = try temporal.checkHappensBefore(
@@ -81,14 +82,14 @@ pub fn main() !void {
         .{ .label = "storage_durability.crash", .surface_label = "storage_durability" },
         .{ .label = "storage_durability.recover", .surface_label = "storage_durability" },
     );
-    std.debug.assert(crash_before_recover.check_result.passed);
+    assert(crash_before_recover.check_result.passed);
 
     const recover_before_write = try temporal.checkHappensBefore(
         snapshot,
         .{ .label = "storage_durability.recover", .surface_label = "storage_durability" },
         .{ .label = "storage_durability.write.success", .surface_label = "storage_durability" },
     );
-    std.debug.assert(recover_before_write.check_result.passed);
+    assert(recover_before_write.check_result.passed);
 
     std.debug.print(
         "storage durability corrupted the fault-phase write, then stabilized repair-phase write/read after recovery\n",

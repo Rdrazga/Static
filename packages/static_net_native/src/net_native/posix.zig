@@ -1,6 +1,7 @@
 //! POSIX-native endpoint adapters.
 
 const std = @import("std");
+const testing = std.testing;
 const common = @import("common.zig");
 
 pub const Endpoint = common.Endpoint;
@@ -88,7 +89,7 @@ test "posix sockaddr ipv4 round trips through storage" {
     } };
     const sockaddr = SockaddrAny.fromEndpoint(endpoint);
     const storage: *const posix.sockaddr.storage = @ptrCast(@alignCast(sockaddr.ptr()));
-    try std.testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
+    try testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
 }
 
 test "posix sockaddr ipv6 round trips through storage" {
@@ -98,12 +99,12 @@ test "posix sockaddr ipv6 round trips through storage" {
     } };
     const sockaddr = SockaddrAny.fromEndpoint(endpoint);
     const storage: *const posix.sockaddr.storage = @ptrCast(@alignCast(sockaddr.ptr()));
-    try std.testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
+    try testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
 }
 
 test "posix storage rejects unsupported family" {
     var storage = std.mem.zeroes(posix.sockaddr.storage);
     storage.family = 0;
 
-    try std.testing.expect(endpointFromStorage(&storage) == null);
+    try testing.expect(endpointFromStorage(&storage) == null);
 }

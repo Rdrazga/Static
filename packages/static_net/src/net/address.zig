@@ -1,6 +1,8 @@
 //! IPv4/IPv6 value types with strict parse and deterministic format contracts.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const errors = @import("errors.zig");
 
 pub const Ipv4Address = struct {
@@ -97,7 +99,7 @@ pub const Ipv6Address = struct {
                 segments[out_index] = right_segments[right_index];
                 out_index += 1;
             }
-            std.debug.assert(out_index == 8);
+            assert(out_index == 8);
         } else {
             const parsed = try parseIpv6Part(text, &segments, true);
             if (parsed.count != 8) return error.InvalidInput;
@@ -291,28 +293,28 @@ fn appendHexU16Fixed(out: []u8, cursor: *usize, value: u16) errors.AddressFormat
 
 test "ipv4 parse and format roundtrip" {
     const parsed = try Ipv4Address.parse("192.168.0.1");
-    try std.testing.expectEqualSlices(u8, &.{ 192, 168, 0, 1 }, &parsed.octets);
+    try testing.expectEqualSlices(u8, &.{ 192, 168, 0, 1 }, &parsed.octets);
 
     var out: [15]u8 = [_]u8{0} ** 15;
     const text = try parsed.format(&out);
-    try std.testing.expectEqualStrings("192.168.0.1", text);
+    try testing.expectEqualStrings("192.168.0.1", text);
 }
 
 test "ipv4 parse rejects non-canonical decimal tokens" {
-    try std.testing.expectError(error.InvalidInput, Ipv4Address.parse("01.2.3.4"));
-    try std.testing.expectError(error.InvalidInput, Ipv4Address.parse("256.1.1.1"));
-    try std.testing.expectError(error.InvalidInput, Ipv4Address.parse("1.2.3"));
+    try testing.expectError(error.InvalidInput, Ipv4Address.parse("01.2.3.4"));
+    try testing.expectError(error.InvalidInput, Ipv4Address.parse("256.1.1.1"));
+    try testing.expectError(error.InvalidInput, Ipv4Address.parse("1.2.3"));
 }
 
 test "ipv6 parse accepts compression and formats deterministically" {
     const parsed = try Ipv6Address.parse("2001:db8::1");
-    try std.testing.expectEqual(@as(u16, 0x2001), parsed.segments[0]);
-    try std.testing.expectEqual(@as(u16, 0x0db8), parsed.segments[1]);
-    try std.testing.expectEqual(@as(u16, 0x0001), parsed.segments[7]);
+    try testing.expectEqual(@as(u16, 0x2001), parsed.segments[0]);
+    try testing.expectEqual(@as(u16, 0x0db8), parsed.segments[1]);
+    try testing.expectEqual(@as(u16, 0x0001), parsed.segments[7]);
 
     var out: [39]u8 = [_]u8{0} ** 39;
     const text = try parsed.format(&out);
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "2001:0db8:0000:0000:0000:0000:0000:0001",
         text,
     );
@@ -320,22 +322,22 @@ test "ipv6 parse accepts compression and formats deterministically" {
 
 test "ipv6 parse accepts IPv4-mapped tail" {
     const parsed = try Ipv6Address.parse("::ffff:192.168.0.1");
-    try std.testing.expectEqual(@as(u16, 0x0000), parsed.segments[0]);
-    try std.testing.expectEqual(@as(u16, 0xffff), parsed.segments[5]);
-    try std.testing.expectEqual(@as(u16, 0xc0a8), parsed.segments[6]);
-    try std.testing.expectEqual(@as(u16, 0x0001), parsed.segments[7]);
+    try testing.expectEqual(@as(u16, 0x0000), parsed.segments[0]);
+    try testing.expectEqual(@as(u16, 0xffff), parsed.segments[5]);
+    try testing.expectEqual(@as(u16, 0xc0a8), parsed.segments[6]);
+    try testing.expectEqual(@as(u16, 0x0001), parsed.segments[7]);
 }
 
 test "ipv6 parse rejects invalid forms and unsupported scope IDs" {
-    try std.testing.expectError(error.InvalidInput, Ipv6Address.parse("2001::db8::1"));
-    try std.testing.expectError(error.InvalidInput, Ipv6Address.parse("2001:db8:::1"));
-    try std.testing.expectError(error.Unsupported, Ipv6Address.parse("fe80::1%2"));
+    try testing.expectError(error.InvalidInput, Ipv6Address.parse("2001::db8::1"));
+    try testing.expectError(error.InvalidInput, Ipv6Address.parse("2001:db8:::1"));
+    try testing.expectError(error.Unsupported, Ipv6Address.parse("fe80::1%2"));
 }
 
 test "address tagged parse dispatches by format" {
     const v4 = try Address.parse("10.0.0.7");
-    try std.testing.expect(v4 == .ipv4);
+    try testing.expect(v4 == .ipv4);
 
     const v6 = try Address.parse("::1");
-    try std.testing.expect(v6 == .ipv6);
+    try testing.expect(v6 == .ipv6);
 }

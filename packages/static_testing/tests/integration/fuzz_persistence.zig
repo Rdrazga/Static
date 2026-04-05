@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const failure_threshold: u64 = 1024;
@@ -33,7 +34,7 @@ test "fuzz runner persists a reduced failing seed and replay reproduces it" {
 
     const first_failing = blk: {
         const candidate = findFirstFailingSeed(config);
-        std.debug.assert(candidate != null);
+        assert(candidate != null);
         break :blk candidate.?;
     };
     try std.testing.expect(first_failing.case_index < config.case_count_max);

@@ -1,10 +1,11 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const math = @import("static_math");
 
 const tolerance: f32 = 1.0e-4;
 
 fn assertVec3Approx(actual: math.Vec3, expected: math.Vec3) void {
-    std.debug.assert(math.Vec3.approxEqual(actual, expected, tolerance));
+    assert(math.Vec3.approxEqual(actual, expected, tolerance));
 }
 
 pub fn main() void {
@@ -28,7 +29,7 @@ pub fn main() void {
     const recovered = math.Transform.fromMat4(matrix) orelse unreachable;
     assertVec3Approx(recovered.translation, local_to_world.translation);
     assertVec3Approx(recovered.scale, local_to_world.scale);
-    std.debug.assert(math.Quat.approxEqual(
+    assert(math.Quat.approxEqual(
         recovered.rotation,
         local_to_world.rotation,
         tolerance,

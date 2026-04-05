@@ -6,6 +6,8 @@
 //! - the caller decides whether a candidate remains "interesting".
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 
 /// Budget validation errors for reduction runs.
@@ -75,7 +77,7 @@ pub fn Reducer(comptime Candidate: type, comptime ReduceError: type) type {
 
 comptime {
     core.errors.assertVocabularySubset(ReductionBudgetError);
-    std.debug.assert(std.meta.fields(ReduceStep).len == 2);
+    assert(std.meta.fields(ReduceStep).len == 2);
 }
 
 /// Run a deterministic reducer until it reaches a fixed point or a budget limit.
@@ -99,7 +101,7 @@ pub fn reduceUntilFixedPoint(
 
         if (next_candidate) |candidate_next| {
             const measure_next = reducer.measure(candidate_next);
-            std.debug.assert(measure_next < candidate_measure);
+            assert(measure_next < candidate_measure);
 
             if (try reducer.isInteresting(candidate_next)) {
                 candidate = candidate_next;
@@ -130,9 +132,9 @@ fn validateBudget(budget: ReductionBudget) ReductionBudgetError!void {
 }
 
 test "reducer step enum contains only reachable terminal states" {
-    try std.testing.expectEqual(@as(usize, 2), std.meta.fields(ReduceStep).len);
-    try std.testing.expectEqual(ReduceStep.fixed_point, @as(ReduceStep, .fixed_point));
-    try std.testing.expectEqual(ReduceStep.budget_exhausted, @as(ReduceStep, .budget_exhausted));
+    try testing.expectEqual(@as(usize, 2), std.meta.fields(ReduceStep).len);
+    try testing.expectEqual(ReduceStep.fixed_point, @as(ReduceStep, .fixed_point));
+    try testing.expectEqual(ReduceStep.budget_exhausted, @as(ReduceStep, .budget_exhausted));
 }
 
 test "reduceUntilFixedPoint reaches a fixed point under a monotonic reducer" {
@@ -161,9 +163,9 @@ test "reduceUntilFixedPoint reaches a fixed point under a monotonic reducer" {
         .max_successes = 16,
     });
 
-    try std.testing.expectEqual(@as(u32, 1), result.candidate);
-    try std.testing.expectEqual(ReduceStep.fixed_point, result.step);
-    try std.testing.expectEqual(@as(u32, 6), result.successes_total);
+    try testing.expectEqual(@as(u32, 1), result.candidate);
+    try testing.expectEqual(ReduceStep.fixed_point, result.step);
+    try testing.expectEqual(@as(u32, 6), result.successes_total);
 }
 
 test "reduceUntilFixedPoint stops when the reduction budget is exhausted" {
@@ -191,9 +193,9 @@ test "reduceUntilFixedPoint stops when the reduction budget is exhausted" {
         .max_successes = 2,
     });
 
-    try std.testing.expectEqual(@as(u32, 8), result.candidate);
-    try std.testing.expectEqual(ReduceStep.budget_exhausted, result.step);
-    try std.testing.expectEqual(@as(u32, 2), result.successes_total);
+    try testing.expectEqual(@as(u32, 8), result.candidate);
+    try testing.expectEqual(ReduceStep.budget_exhausted, result.step);
+    try testing.expectEqual(@as(u32, 2), result.successes_total);
 }
 
 test "reduceUntilFixedPoint rejects zero budgets" {
@@ -211,7 +213,7 @@ test "reduceUntilFixedPoint rejects zero budgets" {
         }
     };
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         reduceUntilFixedPoint(u32, error{}, .{
             .context = undefined,

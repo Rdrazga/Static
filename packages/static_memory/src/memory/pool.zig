@@ -10,6 +10,8 @@
 //! in-place init via out-pointer to avoid intermediate stack copies (see `Pool.init`).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const CapacityReport = @import("capacity_report.zig").CapacityReport;
 
 pub const PoolError = error{
@@ -24,7 +26,7 @@ pub const PoolError = error{
 // size. A zero-size Pool would make @intFromPtr(self) checks meaningless and break the
 // vtable dispatch assumption that the pool can be identified by address.
 comptime {
-    std.debug.assert(@sizeOf(Pool) > 0);
+    assert(@sizeOf(Pool) > 0);
 }
 
 pub const Pool = struct {
@@ -70,7 +72,7 @@ pub const Pool = struct {
         const aligned = std.mem.alignForward(usize, base, pad);
         const offset = aligned - base;
         const buf_end = std.math.add(usize, offset, total_bytes) catch return error.Overflow;
-        std.debug.assert(buf_end <= raw_buffer.len);
+        assert(buf_end <= raw_buffer.len);
         const buffer = raw_buffer[offset..buf_end];
 
         const free_next = backing_allocator.alloc(u32, capacity) catch return error.OutOfMemory;
@@ -103,7 +105,7 @@ pub const Pool = struct {
 
     pub fn deinit(self: *Pool) void {
         self.assertInvariants();
-        std.debug.assert(self.raw_buffer.len != 0);
+        assert(self.raw_buffer.len != 0);
         self.backing_allocator.free(self.raw_buffer);
         self.backing_allocator.free(self.free_next);
         self.backing_allocator.free(self.in_use);
@@ -134,7 +136,7 @@ pub const Pool = struct {
     pub fn available(self: *const Pool) u32 {
         self.assertInvariants();
         // Postcondition: available (free) count must not exceed total capacity.
-        std.debug.assert(self.free_count <= self.capacity);
+        assert(self.free_count <= self.capacity);
         return self.free_count;
     }
 
@@ -142,20 +144,20 @@ pub const Pool = struct {
         self.assertInvariants();
         // Postcondition: capacity must be non-zero; assertInvariants also checks this,
         // but the explicit assertion here documents the contract at the public API boundary.
-        std.debug.assert(self.capacity != 0);
+        assert(self.capacity != 0);
         return self.capacity;
     }
 
     pub fn used(self: *const Pool) u32 {
         self.assertInvariants();
-        std.debug.assert(self.free_count <= self.capacity);
+        assert(self.free_count <= self.capacity);
         return self.capacity - self.free_count;
     }
 
     pub fn highWaterUsed(self: *const Pool) u32 {
         self.assertInvariants();
         // Postcondition: high_water must be >= current used count (monotonically tracked).
-        std.debug.assert(self.high_water_used >= self.capacity - self.free_count);
+        assert(self.high_water_used >= self.capacity - self.free_count);
         return self.high_water_used;
     }
 
@@ -163,7 +165,7 @@ pub const Pool = struct {
         self.assertInvariants();
         // Pair assertion: if any overflow occurred, high_water must equal capacity because
         // overflow happens when allocBlock is called on an exhausted pool.
-        if (self.overflow_count > 0) std.debug.assert(self.high_water_used == self.capacity);
+        if (self.overflow_count > 0) assert(self.high_water_used == self.capacity);
         return self.overflow_count;
     }
 
@@ -177,14 +179,14 @@ pub const Pool = struct {
             .overflow_count = self.overflow_count,
         };
         // Postcondition: reported capacity must match the configured block capacity.
-        std.debug.assert(r.capacity == @as(u64, self.capacity));
+        assert(r.capacity == @as(u64, self.capacity));
         return r;
     }
 
     pub fn blockSize(self: *const Pool) u32 {
         self.assertInvariants();
         // Postcondition: block_size must be non-zero; zero-sized blocks are rejected in init.
-        std.debug.assert(self.block_size != 0);
+        assert(self.block_size != 0);
         return self.block_size;
     }
 
@@ -192,7 +194,7 @@ pub const Pool = struct {
         self.assertInvariants();
         // Postcondition: block_align must be a non-zero power of two; assertInvariants also
         // checks this, but the assertion here documents the contract at the public API boundary.
-        std.debug.assert(std.math.isPowerOfTwo(self.block_align));
+        assert(std.math.isPowerOfTwo(self.block_align));
         return self.block_align;
     }
 
@@ -208,7 +210,7 @@ pub const Pool = struct {
         // Pair assertion: the index returned by indexFromBlock must be in [0, capacity).
         // indexFromBlock already enforces this, but asserting here makes the contract explicit
         // at the blockFromPtr boundary for both lookup paths.
-        std.debug.assert(index < self.capacity);
+        assert(index < self.capacity);
         return self.blockSlice(index);
     }
 
@@ -220,8 +222,8 @@ pub const Pool = struct {
         if (result) {
             const base = @intFromPtr(self.buffer.ptr);
             const p = @intFromPtr(ptr);
-            std.debug.assert(p >= base);
-            std.debug.assert(p < base + self.buffer.len);
+            assert(p >= base);
+            assert(p < base + self.buffer.len);
         }
         return result;
     }
@@ -234,15 +236,15 @@ pub const Pool = struct {
         }
 
         const index = self.free_head;
-        std.debug.assert(index < self.capacity);
-        std.debug.assert(self.free_count != 0);
+        assert(index < self.capacity);
+        assert(self.free_count != 0);
         self.free_head = self.free_next[index];
         self.free_count -= 1;
 
         const used_now = self.capacity - self.free_count;
         if (used_now > self.high_water_used) self.high_water_used = used_now;
 
-        if (std.debug.runtime_safety) std.debug.assert(!self.in_use[index]);
+        if (std.debug.runtime_safety) assert(!self.in_use[index]);
         self.in_use[index] = true;
 
         const block = self.blockSlice(index);
@@ -255,7 +257,7 @@ pub const Pool = struct {
         const index = try self.indexFromBlock(block);
         if (!self.in_use[index]) return error.InvalidBlock;
 
-        std.debug.assert(self.free_count < self.capacity);
+        assert(self.free_count < self.capacity);
         self.in_use[index] = false;
         self.free_next[index] = self.free_head;
         self.free_head = index;
@@ -265,7 +267,7 @@ pub const Pool = struct {
 
     pub fn allocator(self: *Pool) std.mem.Allocator {
         self.assertInvariants();
-        std.debug.assert(@intFromPtr(self) != 0);
+        assert(@intFromPtr(self) != 0);
         return .{ .ptr = self, .vtable = &vtable };
     }
 
@@ -302,22 +304,22 @@ pub const Pool = struct {
         _ = ret_addr;
         const self: *Pool = @ptrCast(@alignCast(ctx));
         self.assertInvariants();
-        if (std.debug.runtime_safety) std.debug.assert(alignment.toByteUnits() <= @as(usize, self.block_align));
+        if (std.debug.runtime_safety) assert(alignment.toByteUnits() <= @as(usize, self.block_align));
 
         self.freeBlock(memory) catch {
-            if (std.debug.runtime_safety) std.debug.assert(false);
+            if (std.debug.runtime_safety) assert(false);
             return;
         };
     }
 
     fn blockSlice(self: *const Pool, index: u32) []u8 {
         self.assertInvariants();
-        std.debug.assert(index < self.capacity);
+        assert(index < self.capacity);
 
         // `index < capacity` and `buffer.len == block_size * capacity` guarantee this cannot overflow.
         const offset = std.math.mul(usize, @as(usize, self.block_size), @as(usize, index)) catch unreachable;
         const end = std.math.add(usize, offset, @as(usize, self.block_size)) catch unreachable;
-        std.debug.assert(end <= self.buffer.len);
+        assert(end <= self.buffer.len);
         return self.buffer[offset..end];
     }
 
@@ -341,7 +343,7 @@ pub const Pool = struct {
             // Pair assertion: the block slice reconstructed from this index must start at
             // exactly the same address as the incoming block pointer, mirroring the same
             // ownership check that blockFromPtr performs via the buffer offset computation.
-            std.debug.assert(index * @as(usize, self.block_size) == offset);
+            assert(index * @as(usize, self.block_size) == offset);
             return @intCast(index);
         } else {
             return error.InvalidBlock;
@@ -349,29 +351,29 @@ pub const Pool = struct {
     }
 
     fn assertInvariants(self: *const Pool) void {
-        std.debug.assert(self.block_size != 0);
-        std.debug.assert(self.block_align != 0);
-        std.debug.assert(std.math.isPowerOfTwo(self.block_align));
-        std.debug.assert(self.block_size % self.block_align == 0);
-        std.debug.assert(self.capacity != 0);
+        assert(self.block_size != 0);
+        assert(self.block_align != 0);
+        assert(std.math.isPowerOfTwo(self.block_align));
+        assert(self.block_size % self.block_align == 0);
+        assert(self.capacity != 0);
 
-        std.debug.assert(self.raw_buffer.len != 0);
-        std.debug.assert(self.buffer.len != 0);
-        std.debug.assert(self.free_next.len == @as(usize, self.capacity));
-        std.debug.assert(self.in_use.len == @as(usize, self.capacity));
+        assert(self.raw_buffer.len != 0);
+        assert(self.buffer.len != 0);
+        assert(self.free_next.len == @as(usize, self.capacity));
+        assert(self.in_use.len == @as(usize, self.capacity));
 
         // `Pool.init()` rejects configurations where `block_size * capacity` overflows `usize`.
         const expected_bytes = std.math.mul(usize, @as(usize, self.block_size), @as(usize, self.capacity)) catch unreachable;
-        std.debug.assert(self.buffer.len == expected_bytes);
+        assert(self.buffer.len == expected_bytes);
 
         const buf_ptr = @intFromPtr(self.buffer.ptr);
-        std.debug.assert(buf_ptr % @as(usize, self.block_align) == 0);
+        assert(buf_ptr % @as(usize, self.block_align) == 0);
 
-        std.debug.assert(self.free_count <= self.capacity);
-        if (self.free_head != free_sentinel) std.debug.assert(self.free_head < self.capacity);
+        assert(self.free_count <= self.capacity);
+        if (self.free_head != free_sentinel) assert(self.free_head < self.capacity);
 
-        std.debug.assert(self.high_water_used <= self.capacity);
-        std.debug.assert(self.high_water_used >= self.capacity - self.free_count);
+        assert(self.high_water_used <= self.capacity);
+        assert(self.high_water_used >= self.capacity - self.free_count);
     }
 };
 
@@ -391,30 +393,30 @@ pub fn TypedPool(comptime T: type) type {
             try Pool.init(&target.pool, backing_allocator, @sizeOf(T), @alignOf(T), capacity);
             // Postcondition: the pool block_size must match @sizeOf(T) so create()/destroy()
             // safely cast between *T and the raw block slice.
-            std.debug.assert(target.pool.block_size == @sizeOf(T));
+            assert(target.pool.block_size == @sizeOf(T));
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: pool must be initialized (capacity > 0).
-            std.debug.assert(self.pool.capacity != 0);
+            assert(self.pool.capacity != 0);
             self.pool.deinit();
         }
 
         pub fn create(self: *Self) PoolError!*T {
             const block = try self.pool.allocBlock();
             // Postcondition: the block must have the expected size for type T.
-            std.debug.assert(block.len == @sizeOf(T));
+            assert(block.len == @sizeOf(T));
             const ptr: *T = @ptrCast(@alignCast(block.ptr));
             // Postcondition: the pointer must be aligned for T.
-            std.debug.assert(@intFromPtr(ptr) % @alignOf(T) == 0);
+            assert(@intFromPtr(ptr) % @alignOf(T) == 0);
             return ptr;
         }
 
         pub fn destroy(self: *Self, ptr: *T) PoolError!void {
             // Precondition: pointer must be non-null.
-            std.debug.assert(@intFromPtr(ptr) != 0);
+            assert(@intFromPtr(ptr) != 0);
             // Precondition: pointer must be aligned for T.
-            std.debug.assert(@intFromPtr(ptr) % @alignOf(T) == 0);
+            assert(@intFromPtr(ptr) % @alignOf(T) == 0);
             const bytes = @as([*]u8, @ptrCast(ptr))[0..@sizeOf(T)];
             try self.pool.freeBlock(bytes);
         }
@@ -429,10 +431,10 @@ pub fn TypedPool(comptime T: type) type {
 
         pub fn allocator(self: *Self) std.mem.Allocator {
             // Precondition: pool must be initialized.
-            std.debug.assert(self.pool.capacity != 0);
+            assert(self.pool.capacity != 0);
             const alloc_if = self.pool.allocator();
             // Postcondition: returned allocator must have a non-null vtable.
-            std.debug.assert(@intFromPtr(alloc_if.ptr) != 0);
+            assert(@intFromPtr(alloc_if.ptr) != 0);
             return alloc_if;
         }
     };
@@ -441,80 +443,80 @@ pub fn TypedPool(comptime T: type) type {
 test "Pool alloc/free blocks" {
     // Verifies deterministic reuse via `freeBlock()` and overflow accounting when the pool is exhausted.
     var pool: Pool = undefined;
-    try Pool.init(&pool, std.testing.allocator, 16, 8, 2);
+    try Pool.init(&pool, testing.allocator, 16, 8, 2);
     defer pool.deinit();
 
     const a = try pool.allocBlock();
     const b = try pool.allocBlock();
-    try std.testing.expectError(error.NoSpaceLeft, pool.allocBlock());
+    try testing.expectError(error.NoSpaceLeft, pool.allocBlock());
 
     try pool.freeBlock(a);
     const c = try pool.allocBlock();
-    try std.testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(c.ptr));
+    try testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(c.ptr));
     _ = b;
 }
 
 test "TypedPool basic" {
     // Verifies typed block creation/destruction and pointer reuse for a `TypedPool(T)` wrapper.
     var pool: TypedPool(u32) = undefined;
-    try TypedPool(u32).init(&pool, std.testing.allocator, 2);
+    try TypedPool(u32).init(&pool, testing.allocator, 2);
     defer pool.deinit();
 
     const a = try pool.create();
     a.* = 10;
     const b = try pool.create();
     b.* = 20;
-    try std.testing.expectError(error.NoSpaceLeft, pool.create());
+    try testing.expectError(error.NoSpaceLeft, pool.create());
 
     try pool.destroy(a);
     const c = try pool.create();
-    try std.testing.expectEqual(@intFromPtr(a), @intFromPtr(c));
+    try testing.expectEqual(@intFromPtr(a), @intFromPtr(c));
 }
 
 test "Pool rejects invalid config" {
     // Verifies that invalid configuration values are rejected up front.
     var p: Pool = undefined;
-    try std.testing.expectError(error.InvalidConfig, Pool.init(&p, std.testing.allocator, 0, 8, 1));
-    try std.testing.expectError(error.InvalidConfig, Pool.init(&p, std.testing.allocator, 8, 0, 1));
-    try std.testing.expectError(error.InvalidConfig, Pool.init(&p, std.testing.allocator, 8, 8, 0));
+    try testing.expectError(error.InvalidConfig, Pool.init(&p, testing.allocator, 0, 8, 1));
+    try testing.expectError(error.InvalidConfig, Pool.init(&p, testing.allocator, 8, 0, 1));
+    try testing.expectError(error.InvalidConfig, Pool.init(&p, testing.allocator, 8, 8, 0));
 }
 
 test "Pool blockFromPtr rejects non-owned pointers and double free" {
     // Verifies ownership checks and invalid block detection via `blockFromPtr()`/`freeBlock()`.
     var pool: Pool = undefined;
-    try Pool.init(&pool, std.testing.allocator, 16, 8, 1);
+    try Pool.init(&pool, testing.allocator, 16, 8, 1);
     defer pool.deinit();
 
     const a = try pool.allocBlock();
     defer pool.freeBlock(a) catch {};
 
     const roundtrip = try pool.blockFromPtr(a.ptr);
-    try std.testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(roundtrip.ptr));
-    try std.testing.expectEqual(a.len, roundtrip.len);
+    try testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(roundtrip.ptr));
+    try testing.expectEqual(a.len, roundtrip.len);
 
-    var other = try std.testing.allocator.alloc(u8, 16);
-    defer std.testing.allocator.free(other);
-    try std.testing.expectError(error.InvalidBlock, pool.blockFromPtr(other.ptr));
-    try std.testing.expect(!pool.ownsPtr(other.ptr));
+    var other = try testing.allocator.alloc(u8, 16);
+    defer testing.allocator.free(other);
+    try testing.expectError(error.InvalidBlock, pool.blockFromPtr(other.ptr));
+    try testing.expect(!pool.ownsPtr(other.ptr));
 
     try pool.freeBlock(a);
-    try std.testing.expectError(error.InvalidBlock, pool.freeBlock(a));
+    try testing.expectError(error.InvalidBlock, pool.freeBlock(a));
 }
 
 test "Pool reset invalidates stale block frees" {
     // Verifies that `reset()` returns ownership to the pool and invalidates stale block handles.
     var pool: Pool = undefined;
-    try Pool.init(&pool, std.testing.allocator, 16, 8, 2);
+    try Pool.init(&pool, testing.allocator, 16, 8, 2);
     defer pool.deinit();
 
     const first = try pool.allocBlock();
     const second = try pool.allocBlock();
-    try std.testing.expectError(error.NoSpaceLeft, pool.allocBlock());
+    try testing.expectError(error.NoSpaceLeft, pool.allocBlock());
 
     pool.reset();
-    try std.testing.expectError(error.InvalidBlock, pool.freeBlock(first));
-    try std.testing.expectError(error.InvalidBlock, pool.freeBlock(second));
+    try testing.expectError(error.InvalidBlock, pool.freeBlock(first));
+    try testing.expectError(error.InvalidBlock, pool.freeBlock(second));
 
     const after_reset = try pool.allocBlock();
-    try std.testing.expectEqual(@intFromPtr(first.ptr), @intFromPtr(after_reset.ptr));
+    try testing.expectEqual(@intFromPtr(first.ptr), @intFromPtr(after_reset.ptr));
 }

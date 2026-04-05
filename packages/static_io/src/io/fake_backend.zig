@@ -5,6 +5,8 @@
 //! Runtime does not need an in-memory simulator.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_queues = @import("static_queues");
 const backend = @import("backend.zig");
 const config = @import("config.zig");
@@ -101,10 +103,10 @@ pub const FakeBackend = struct {
             error.InvalidConfig => return error.InvalidConfig,
             error.Overflow => return error.Overflow,
         };
-        std.debug.assert(cfg.max_in_flight > 0);
-        std.debug.assert(cfg.submission_queue_capacity > 0);
-        std.debug.assert(cfg.completion_queue_capacity > 0);
-        std.debug.assert(cfg.handles_max > 0);
+        assert(cfg.max_in_flight > 0);
+        assert(cfg.submission_queue_capacity > 0);
+        assert(cfg.completion_queue_capacity > 0);
+        assert(cfg.handles_max > 0);
 
         const slot_count: usize = cfg.max_in_flight;
         const queue_cap_pending: usize = cfg.submission_queue_capacity;
@@ -183,8 +185,8 @@ pub const FakeBackend = struct {
         errdefer self.freeSlot(slot_index);
 
         const slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .free);
-        std.debug.assert(slot.generation != 0);
+        assert(slot.state == .free);
+        assert(slot.generation != 0);
         const operation_id = encodeOperationId(slot_index, slot.generation);
         slot.state = .pending;
         slot.operation_id = operation_id;
@@ -205,7 +207,7 @@ pub const FakeBackend = struct {
 
     /// Processes pending operations and queues completed entries.
     pub fn pump(self: *FakeBackend, max_completions: u32) backend.PumpError!u32 {
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
         var completed_count: u32 = 0;
         const pending_budget: usize = self.pending.len();
         var processed: usize = 0;
@@ -238,7 +240,7 @@ pub const FakeBackend = struct {
 
         const slot = &self.slots[slot_index];
         if (slot.state != .completed) {
-            std.debug.assert(slot.state == .completed);
+            assert(slot.state == .completed);
             return null;
         }
         const completion = slot.completion;
@@ -338,18 +340,18 @@ pub const FakeBackend = struct {
     }
 
     fn allocSlot(self: *FakeBackend) backend.SubmitError!u32 {
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
         if (self.free_len == 0) return error.WouldBlock;
         self.free_len -= 1;
         const slot_index = self.free_slots[self.free_len];
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.slots[slot_index].state == .free);
+        assert(slot_index < self.slots.len);
+        assert(self.slots[slot_index].state == .free);
         return slot_index;
     }
 
     fn freeSlot(self: *FakeBackend, slot_index: u32) void {
-        std.debug.assert(slot_index < self.slots.len);
-        std.debug.assert(self.free_len < self.free_slots.len);
+        assert(slot_index < self.slots.len);
+        assert(self.free_len < self.free_slots.len);
         const slot = &self.slots[slot_index];
         const next_generation = nextGeneration(slot.generation);
         self.slots[slot_index] = .{
@@ -357,12 +359,12 @@ pub const FakeBackend = struct {
         };
         self.free_slots[self.free_len] = slot_index;
         self.free_len += 1;
-        std.debug.assert(self.free_len <= self.free_slots.len);
+        assert(self.free_len <= self.free_slots.len);
     }
 
     fn processSlot(self: *FakeBackend, slot_index: u32) bool {
         var slot = &self.slots[slot_index];
-        std.debug.assert(slot.state == .pending);
+        assert(slot.state == .pending);
 
         if (slot.cancelled) {
             slot.completion = makeSimpleCompletion(slot.operation_id, slot.operation, .cancelled, .cancelled);
@@ -760,7 +762,7 @@ fn copyFromRing(src_ring: []const u8, head: u32, dst: []u8, count: u32) void {
 }
 
 test "fake backend preserves deterministic completion ordering" {
-    var backend_impl = try FakeBackend.init(std.testing.allocator, config.Config.initForTest(2));
+    var backend_impl = try FakeBackend.init(testing.allocator, config.Config.initForTest(2));
     defer backend_impl.deinit();
 
     var storage_a: [8]u8 = [_]u8{0} ** 8;
@@ -774,22 +776,22 @@ test "fake backend preserves deterministic completion ordering" {
         .byte = 0xAA,
     } });
     const id_b = try backend_impl.submit(.{ .nop = buf_b });
-    try std.testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
+    try testing.expectError(error.WouldBlock, backend_impl.submit(.{ .nop = buf_b }));
 
     _ = try backend_impl.pump(8);
     const first = backend_impl.poll().?;
     const second = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
+    try testing.expect(backend_impl.poll() == null);
 
-    try std.testing.expectEqual(id_a, first.operation_id);
-    try std.testing.expectEqual(id_b, second.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.success, first.status);
-    try std.testing.expectEqual(types.CompletionStatus.success, second.status);
-    try std.testing.expectEqual(@as(u8, 0xAA), first.buffer.bytes[0]);
+    try testing.expectEqual(id_a, first.operation_id);
+    try testing.expectEqual(id_b, second.operation_id);
+    try testing.expectEqual(types.CompletionStatus.success, first.status);
+    try testing.expectEqual(types.CompletionStatus.success, second.status);
+    try testing.expectEqual(@as(u8, 0xAA), first.buffer.bytes[0]);
 }
 
 test "fake backend supports typed stream write then read roundtrip" {
-    var backend_impl = try FakeBackend.init(std.testing.allocator, config.Config.initForTest(4));
+    var backend_impl = try FakeBackend.init(testing.allocator, config.Config.initForTest(4));
     defer backend_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -824,16 +826,16 @@ test "fake backend supports typed stream write then read roundtrip" {
     const connect_completion = backend_impl.poll().?;
     const write_completion = backend_impl.poll().?;
     const read_completion = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
+    try testing.expect(backend_impl.poll() == null);
 
-    try std.testing.expectEqual(connect_id, connect_completion.operation_id);
-    try std.testing.expectEqual(write_id, write_completion.operation_id);
-    try std.testing.expectEqual(read_id, read_completion.operation_id);
-    try std.testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
+    try testing.expectEqual(connect_id, connect_completion.operation_id);
+    try testing.expectEqual(write_id, write_completion.operation_id);
+    try testing.expectEqual(read_id, read_completion.operation_id);
+    try testing.expectEqualSlices(u8, "test", read_completion.buffer.usedSlice());
 }
 
 test "fake backend close forces pending stream operations to closed" {
-    var backend_impl = try FakeBackend.init(std.testing.allocator, config.Config.initForTest(4));
+    var backend_impl = try FakeBackend.init(testing.allocator, config.Config.initForTest(4));
     defer backend_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -860,12 +862,12 @@ test "fake backend close forces pending stream operations to closed" {
     backend_impl.notifyHandleClosed(stream.handle);
     _ = try backend_impl.pump(4);
     const read_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(read_id, read_completion.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.closed, read_completion.status);
+    try testing.expectEqual(read_id, read_completion.operation_id);
+    try testing.expectEqual(types.CompletionStatus.closed, read_completion.status);
 }
 
 test "fake backend immediate timeout produces timeout completion" {
-    var backend_impl = try FakeBackend.init(std.testing.allocator, config.Config.initForTest(4));
+    var backend_impl = try FakeBackend.init(testing.allocator, config.Config.initForTest(4));
     defer backend_impl.deinit();
 
     const endpoint = types.Endpoint{ .ipv4 = .{
@@ -891,13 +893,13 @@ test "fake backend immediate timeout produces timeout completion" {
 
     _ = try backend_impl.pump(1);
     const completion = backend_impl.poll().?;
-    try std.testing.expectEqual(read_id, completion.operation_id);
-    try std.testing.expectEqual(types.CompletionStatus.timeout, completion.status);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), completion.err);
+    try testing.expectEqual(read_id, completion.operation_id);
+    try testing.expectEqual(types.CompletionStatus.timeout, completion.status);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), completion.err);
 }
 
 test "fake backend error completions have zero progress and consistent status" {
-    var backend_impl = try FakeBackend.init(std.testing.allocator, config.Config.initForTest(8));
+    var backend_impl = try FakeBackend.init(testing.allocator, config.Config.initForTest(8));
     defer backend_impl.deinit();
 
     const listener_handle: types.Handle = .{ .index = 0, .generation = 1 };
@@ -911,12 +913,12 @@ test "fake backend error completions have zero progress and consistent status" {
     const read_buf = types.Buffer{ .bytes = &read_bytes };
 
     // Invalid input => rejected at submit time, matching the real backends.
-    try std.testing.expectError(error.InvalidInput, backend_impl.submit(.{ .connect = .{
+    try testing.expectError(error.InvalidInput, backend_impl.submit(.{ .connect = .{
         .stream = stream,
         .endpoint = .{ .ipv4 = .{ .address = .init(127, 0, 0, 1), .port = 0 } },
         .timeout_ns = null,
     } }));
-    try std.testing.expect(backend_impl.poll() == null);
+    try testing.expect(backend_impl.poll() == null);
 
     // Immediate timeout => timeout completion.
     const timeout_id = try backend_impl.submit(.{ .stream_read = .{
@@ -926,10 +928,10 @@ test "fake backend error completions have zero progress and consistent status" {
     } });
     _ = try backend_impl.pump(1);
     const timeout_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(timeout_id, timeout_completion.operation_id);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
-    try std.testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
-    try std.testing.expectEqual(error_map.statusFromTag(timeout_completion.err.?), timeout_completion.status);
+    try testing.expectEqual(timeout_id, timeout_completion.operation_id);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .timeout), timeout_completion.err);
+    try testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
+    try testing.expectEqual(error_map.statusFromTag(timeout_completion.err.?), timeout_completion.status);
 
     // Cancel => cancelled completion.
     const cancel_id = try backend_impl.submit(.{ .stream_read = .{
@@ -940,10 +942,10 @@ test "fake backend error completions have zero progress and consistent status" {
     try backend_impl.cancel(cancel_id);
     _ = try backend_impl.pump(1);
     const cancel_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(cancel_id, cancel_completion.operation_id);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancel_completion.err);
-    try std.testing.expectEqual(@as(u32, 0), cancel_completion.bytes_transferred);
-    try std.testing.expectEqual(error_map.statusFromTag(cancel_completion.err.?), cancel_completion.status);
+    try testing.expectEqual(cancel_id, cancel_completion.operation_id);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .cancelled), cancel_completion.err);
+    try testing.expectEqual(@as(u32, 0), cancel_completion.bytes_transferred);
+    try testing.expectEqual(error_map.statusFromTag(cancel_completion.err.?), cancel_completion.status);
 
     // Close => closed completion.
     const close_id = try backend_impl.submit(.{ .stream_read = .{
@@ -955,14 +957,14 @@ test "fake backend error completions have zero progress and consistent status" {
     backend_impl.notifyHandleClosed(listener_handle);
     _ = try backend_impl.pump(1);
     const close_completion = backend_impl.poll().?;
-    try std.testing.expectEqual(close_id, close_completion.operation_id);
-    try std.testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_completion.err);
-    try std.testing.expectEqual(@as(u32, 0), close_completion.bytes_transferred);
-    try std.testing.expectEqual(error_map.statusFromTag(close_completion.err.?), close_completion.status);
+    try testing.expectEqual(close_id, close_completion.operation_id);
+    try testing.expectEqual(@as(?types.CompletionErrorTag, .closed), close_completion.err);
+    try testing.expectEqual(@as(u32, 0), close_completion.bytes_transferred);
+    try testing.expectEqual(error_map.statusFromTag(close_completion.err.?), close_completion.status);
 }
 
 test "fake backend file write then read roundtrip" {
-    var backend_impl = try FakeBackend.init(std.testing.allocator, config.Config.initForTest(4));
+    var backend_impl = try FakeBackend.init(testing.allocator, config.Config.initForTest(4));
     defer backend_impl.deinit();
 
     const file = types.File{ .handle = .{ .index = 1, .generation = 1 } };
@@ -990,10 +992,10 @@ test "fake backend file write then read roundtrip" {
     _ = try backend_impl.pump(8);
     const write_completion = backend_impl.poll().?;
     const read_completion = backend_impl.poll().?;
-    try std.testing.expect(backend_impl.poll() == null);
+    try testing.expect(backend_impl.poll() == null);
 
-    try std.testing.expectEqual(write_id, write_completion.operation_id);
-    try std.testing.expectEqual(@as(u32, 3), write_completion.bytes_transferred);
-    try std.testing.expectEqual(read_id, read_completion.operation_id);
-    try std.testing.expectEqualSlices(u8, "abc", read_completion.buffer.usedSlice());
+    try testing.expectEqual(write_id, write_completion.operation_id);
+    try testing.expectEqual(@as(u32, 3), write_completion.bytes_transferred);
+    try testing.expectEqual(read_id, read_completion.operation_id);
+    try testing.expectEqualSlices(u8, "abc", read_completion.buffer.usedSlice());
 }

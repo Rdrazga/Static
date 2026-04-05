@@ -4,6 +4,8 @@
 //! stable, cross-backend vocabulary.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const builtin = @import("builtin");
 const types = @import("types.zig");
 
@@ -38,7 +40,7 @@ pub fn statusFromTag(tag: types.CompletionErrorTag) types.CompletionStatus {
 /// Builds a mapped completion value from a stable tag.
 pub fn fromTag(tag: types.CompletionErrorTag) MappedCompletionError {
     const status = statusFromTag(tag);
-    std.debug.assert(status != .success);
+    assert(status != .success);
     return .{ .status = status, .tag = tag };
 }
 
@@ -187,16 +189,16 @@ const windows_impl = if (builtin.os.tag == .windows) struct {
 };
 
 test "statusFromTag matches field name" {
-    try std.testing.expectEqual(types.CompletionStatus.timeout, statusFromTag(.timeout));
-    try std.testing.expectEqual(types.CompletionStatus.access_denied, statusFromTag(.access_denied));
-    try std.testing.expectEqual(types.CompletionStatus.connection_refused, statusFromTag(.connection_refused));
+    try testing.expectEqual(types.CompletionStatus.timeout, statusFromTag(.timeout));
+    try testing.expectEqual(types.CompletionStatus.access_denied, statusFromTag(.access_denied));
+    try testing.expectEqual(types.CompletionStatus.connection_refused, statusFromTag(.connection_refused));
 }
 
 test "all error tags map to non-success statuses and imply zero progress" {
     inline for (@typeInfo(types.CompletionErrorTag).@"enum".fields) |field| {
         const tag: types.CompletionErrorTag = @enumFromInt(field.value);
         const status = statusFromTag(tag);
-        try std.testing.expect(status != .success);
+        try testing.expect(status != .success);
 
         const completion: types.Completion = .{
             .operation_id = 1,
@@ -208,23 +210,23 @@ test "all error tags map to non-success statuses and imply zero progress" {
             .handle = null,
             .endpoint = null,
         };
-        try std.testing.expect(completion.err != null);
-        try std.testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
-        try std.testing.expectEqual(statusFromTag(completion.err.?), completion.status);
+        try testing.expect(completion.err != null);
+        try testing.expectEqual(@as(u32, 0), completion.bytes_transferred);
+        try testing.expectEqual(statusFromTag(completion.err.?), completion.status);
     }
 }
 
 test "posix errno maps to stable tags" {
-    try std.testing.expectEqual(types.CompletionErrorTag.access_denied, fromPosixErrno(.ACCES).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.not_found, fromPosixErrno(.NOENT).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.no_space_left, fromPosixErrno(.NOSPC).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.connection_refused, fromPosixErrno(.CONNREFUSED).tag);
+    try testing.expectEqual(types.CompletionErrorTag.access_denied, fromPosixErrno(.ACCES).tag);
+    try testing.expectEqual(types.CompletionErrorTag.not_found, fromPosixErrno(.NOENT).tag);
+    try testing.expectEqual(types.CompletionErrorTag.no_space_left, fromPosixErrno(.NOSPC).tag);
+    try testing.expectEqual(types.CompletionErrorTag.connection_refused, fromPosixErrno(.CONNREFUSED).tag);
 }
 
 test "linux errno maps to stable tags" {
-    try std.testing.expectEqual(types.CompletionErrorTag.would_block, fromLinuxErrno(.AGAIN).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.name_too_long, fromLinuxErrno(.NAMETOOLONG).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.address_unavailable, fromLinuxErrno(.HOSTUNREACH).tag);
+    try testing.expectEqual(types.CompletionErrorTag.would_block, fromLinuxErrno(.AGAIN).tag);
+    try testing.expectEqual(types.CompletionErrorTag.name_too_long, fromLinuxErrno(.NAMETOOLONG).tag);
+    try testing.expectEqual(types.CompletionErrorTag.address_unavailable, fromLinuxErrno(.HOSTUNREACH).tag);
 }
 
 test "windows error code maps to stable tags" {
@@ -233,10 +235,10 @@ test "windows error code maps to stable tags" {
     const windows = std.os.windows;
     const wsa = windows.ws2_32;
 
-    try std.testing.expectEqual(types.CompletionErrorTag.not_found, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.FILE_NOT_FOUND)).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.access_denied, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.ACCESS_DENIED)).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.connection_refused, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.ECONNREFUSED)).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.ECONNABORTED)).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.NETNAME_DELETED)).tag);
-    try std.testing.expectEqual(types.CompletionErrorTag.would_block, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.EWOULDBLOCK)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.not_found, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.FILE_NOT_FOUND)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.access_denied, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.ACCESS_DENIED)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.connection_refused, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.ECONNREFUSED)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.ECONNABORTED)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.NETNAME_DELETED)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.would_block, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.EWOULDBLOCK)).tag);
 }

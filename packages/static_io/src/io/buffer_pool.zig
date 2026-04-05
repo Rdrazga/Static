@@ -1,6 +1,8 @@
 //! Bounded reusable buffer pool built on `static_memory.pool.Pool`.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const static_memory = @import("static_memory");
 const types = @import("types.zig");
@@ -51,14 +53,14 @@ pub const BufferPool = struct {
     /// Initializes a bounded pool and reserves budget up front.
     pub fn init(allocator: std.mem.Allocator, cfg: Config) InitError!BufferPool {
         try validateConfig(cfg);
-        std.debug.assert(cfg.buffer_size != 0);
-        std.debug.assert(cfg.capacity != 0);
-        std.debug.assert(cfg.buffer_align != 0);
-        std.debug.assert(std.math.isPowerOfTwo(cfg.buffer_align));
-        std.debug.assert(cfg.buffer_size % cfg.buffer_align == 0);
+        assert(cfg.buffer_size != 0);
+        assert(cfg.capacity != 0);
+        assert(cfg.buffer_align != 0);
+        assert(std.math.isPowerOfTwo(cfg.buffer_align));
+        assert(cfg.buffer_size % cfg.buffer_align == 0);
 
         const reserved_bytes = std.math.mul(usize, cfg.buffer_size, cfg.capacity) catch return error.Overflow;
-        std.debug.assert(reserved_bytes > 0);
+        assert(reserved_bytes > 0);
         if (cfg.budget) |budget| {
             budget.tryReserve(reserved_bytes) catch |reserve_err| switch (reserve_err) {
                 error.InvalidConfig => return error.InvalidConfig,
@@ -93,7 +95,7 @@ pub const BufferPool = struct {
 
     /// Releases the pool and returns any reserved budget.
     pub fn deinit(self: *BufferPool) void {
-        std.debug.assert(self.reserved_bytes > 0);
+        assert(self.reserved_bytes > 0);
         self.pool.deinit();
         if (self.budget) |budget| budget.release(self.reserved_bytes);
         self.* = undefined;
@@ -108,7 +110,7 @@ pub const BufferPool = struct {
             error.OutOfMemory => return error.NoSpaceLeft,
             error.Overflow => return error.NoSpaceLeft,
         };
-        std.debug.assert(bytes.len == self.pool.blockSize());
+        assert(bytes.len == self.pool.blockSize());
         return .{
             .bytes = bytes,
             .used_len = 0,
@@ -124,7 +126,7 @@ pub const BufferPool = struct {
     /// Returns currently available block count.
     pub fn available(self: *const BufferPool) u32 {
         const available_count = self.pool.available();
-        std.debug.assert(available_count <= self.pool.total());
+        assert(available_count <= self.pool.total());
         return available_count;
     }
 
@@ -147,8 +149,8 @@ pub const BufferPool = struct {
     pub fn reportBytes(self: *const BufferPool) static_memory.capacity_report.CapacityReport {
         const report_blocks = self.reportBlocks();
         const bytes_per_block: u64 = self.bufferSize();
-        std.debug.assert(report_blocks.used <= report_blocks.capacity);
-        std.debug.assert(report_blocks.high_water <= report_blocks.capacity);
+        assert(report_blocks.used <= report_blocks.capacity);
+        assert(report_blocks.high_water <= report_blocks.capacity);
         return .{
             .unit = .bytes,
             .used = std.math.mul(u64, report_blocks.used, bytes_per_block) catch unreachable,
@@ -169,11 +171,11 @@ fn validateConfig(cfg: Config) InitError!void {
 }
 
 test "buffer pool rejects invalid configuration" {
-    try std.testing.expectError(error.InvalidConfig, BufferPool.init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, BufferPool.init(testing.allocator, .{
         .buffer_size = 0,
         .capacity = 1,
     }));
-    try std.testing.expectError(error.InvalidConfig, BufferPool.init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, BufferPool.init(testing.allocator, .{
         .buffer_size = 8,
         .buffer_align = 3,
         .capacity = 1,
@@ -181,7 +183,7 @@ test "buffer pool rejects invalid configuration" {
 }
 
 test "buffer pool exhaustion, reuse, and high-water reporting" {
-    var pool = try BufferPool.init(std.testing.allocator, .{
+    var pool = try BufferPool.init(testing.allocator, .{
         .buffer_size = 8,
         .capacity = 2,
     });
@@ -189,27 +191,27 @@ test "buffer pool exhaustion, reuse, and high-water reporting" {
 
     const a = try pool.acquire();
     const b = try pool.acquire();
-    try std.testing.expectError(error.NoSpaceLeft, pool.acquire());
-    try std.testing.expectEqual(@as(u32, 0), pool.available());
+    try testing.expectError(error.NoSpaceLeft, pool.acquire());
+    try testing.expectEqual(@as(u32, 0), pool.available());
 
     try pool.release(a);
-    try std.testing.expectEqual(@as(u32, 1), pool.available());
+    try testing.expectEqual(@as(u32, 1), pool.available());
 
     const c = try pool.acquire();
     defer pool.release(b) catch unreachable;
     defer pool.release(c) catch unreachable;
 
     const blocks = pool.reportBlocks();
-    try std.testing.expectEqual(@as(u64, 2), blocks.high_water);
-    try std.testing.expectEqual(@as(u64, 2), blocks.capacity);
+    try testing.expectEqual(@as(u64, 2), blocks.high_water);
+    try testing.expectEqual(@as(u64, 2), blocks.capacity);
 
     const bytes = pool.reportBytes();
-    try std.testing.expectEqual(@as(u64, 16), bytes.high_water);
-    try std.testing.expectEqual(@as(u64, 16), bytes.capacity);
+    try testing.expectEqual(@as(u64, 16), bytes.high_water);
+    try testing.expectEqual(@as(u64, 16), bytes.capacity);
 }
 
 test "buffer pool release rejects foreign slices" {
-    var pool = try BufferPool.init(std.testing.allocator, .{
+    var pool = try BufferPool.init(testing.allocator, .{
         .buffer_size = 8,
         .capacity = 1,
     });
@@ -217,5 +219,5 @@ test "buffer pool release rejects foreign slices" {
 
     var storage: [8]u8 = [_]u8{0} ** 8;
     const foreign = types.Buffer{ .bytes = &storage };
-    try std.testing.expectError(error.InvalidInput, pool.release(foreign));
+    try testing.expectError(error.InvalidInput, pool.release(foreign));
 }

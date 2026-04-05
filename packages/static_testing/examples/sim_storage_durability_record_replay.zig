@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const durability = testing.testing.sim.storage_durability;
@@ -21,7 +22,7 @@ pub fn main() !void {
 
     try source.submitWrite(.init(0), 1, 4, 111);
     _ = try source.deliverDueToMailbox(.init(1), &completions, null);
-    std.debug.assert((try completions.recv()).value.? == 700);
+    assert((try completions.recv()).value.? == 700);
 
     _ = try source.crash(.init(1), null);
     try source.recover(.init(1), null);
@@ -44,13 +45,13 @@ pub fn main() !void {
     try replay.replayRecordedState(recorded);
 
     const replay_summary = try replay.deliverDueToMailbox(.init(2), &completions, null);
-    std.debug.assert(replay_summary.write_success_count == 1);
-    std.debug.assert(replay_summary.read_success_count == 1);
+    assert(replay_summary.write_success_count == 1);
+    assert(replay_summary.read_success_count == 1);
 
     const replay_write = try completions.recv();
     const replay_read = try completions.recv();
-    std.debug.assert(replay_write.value.? == 222);
-    std.debug.assert(replay_read.value.? == 700);
+    assert(replay_write.value.? == 222);
+    assert(replay_read.value.? == 700);
 
     std.debug.print(
         "storage durability replay restored {d} stored slots and {d} pending operations in stabilized repair state\n",

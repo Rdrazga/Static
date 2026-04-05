@@ -5,6 +5,8 @@
 //! run labels from the file name and using only normalized identifiers.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const identity = @import("identity.zig");
 const replay_artifact = @import("replay_artifact.zig");
@@ -77,7 +79,7 @@ pub const CorpusNaming = struct {
             },
         ) catch return error.NoSpaceLeft;
 
-        std.debug.assert(entry_name.len == required_len);
+        assert(entry_name.len == required_len);
         return entry_name;
     }
 };
@@ -178,15 +180,15 @@ fn isNormalizedNameByte(byte: u8) bool {
 
 fn assertTraceMetadata(metadata: trace.TraceMetadata) void {
     if (metadata.event_count == 0) {
-        std.debug.assert(!metadata.has_range);
-        std.debug.assert(metadata.first_sequence_no == 0);
-        std.debug.assert(metadata.last_sequence_no == 0);
-        std.debug.assert(metadata.first_timestamp_ns == 0);
-        std.debug.assert(metadata.last_timestamp_ns == 0);
+        assert(!metadata.has_range);
+        assert(metadata.first_sequence_no == 0);
+        assert(metadata.last_sequence_no == 0);
+        assert(metadata.first_timestamp_ns == 0);
+        assert(metadata.last_timestamp_ns == 0);
     } else {
-        std.debug.assert(metadata.has_range);
-        std.debug.assert(metadata.first_sequence_no <= metadata.last_sequence_no);
-        std.debug.assert(metadata.first_timestamp_ns <= metadata.last_timestamp_ns);
+        assert(metadata.has_range);
+        assert(metadata.first_sequence_no <= metadata.last_sequence_no);
+        assert(metadata.first_timestamp_ns <= metadata.last_timestamp_ns);
     }
 }
 
@@ -209,22 +211,22 @@ test "corpus naming is stable and rejects invalid prefixes" {
     const first = try naming.formatEntryName(&name_buffer_a, run_identity);
     const second = try naming.formatEntryName(&name_buffer_b, run_identity);
 
-    try std.testing.expectEqualStrings(first, second);
-    try std.testing.expectError(
+    try testing.expectEqualStrings(first, second);
+    try testing.expectError(
         error.InvalidInput,
         (CorpusNaming{ .prefix = "bad name" }).formatEntryName(&name_buffer_a, run_identity),
     );
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         (CorpusNaming{ .extension = "bin" }).formatEntryName(&name_buffer_a, run_identity),
     );
 }
 
 test "corpus write/read round-trip preserves artifact identity and rejects duplicates" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -262,8 +264,8 @@ test "corpus write/read round-trip preserves artifact identity and rejects dupli
         trace_metadata,
     );
 
-    try std.testing.expectEqual(identity.identityHash(run_identity), written_meta.identity_hash);
-    try std.testing.expectError(
+    try testing.expectEqual(identity.identityHash(run_identity), written_meta.identity_hash);
+    try testing.expectError(
         error.PathAlreadyExists,
         writeCorpusEntry(
             io,
@@ -279,10 +281,10 @@ test "corpus write/read round-trip preserves artifact identity and rejects dupli
     var read_buffer: [256]u8 = undefined;
     const entry = try readCorpusEntry(io, tmp_dir.dir, written_meta.entry_name, &read_buffer);
 
-    try std.testing.expectEqual(written_meta.identity_hash, entry.meta.identity_hash);
-    try std.testing.expectEqualStrings(run_identity.package_name, entry.artifact.identity.package_name);
-    try std.testing.expectEqualStrings(run_identity.run_name, entry.artifact.identity.run_name);
-    try std.testing.expectEqual(trace_metadata.last_timestamp_ns, entry.artifact.trace_metadata.last_timestamp_ns);
+    try testing.expectEqual(written_meta.identity_hash, entry.meta.identity_hash);
+    try testing.expectEqualStrings(run_identity.package_name, entry.artifact.identity.package_name);
+    try testing.expectEqualStrings(run_identity.run_name, entry.artifact.identity.run_name);
+    try testing.expectEqual(trace_metadata.last_timestamp_ns, entry.artifact.trace_metadata.last_timestamp_ns);
 }
 
 test "corpus naming rejects undersized name buffers" {
@@ -296,17 +298,17 @@ test "corpus naming rejects undersized name buffers" {
     });
     var small_buffer: [8]u8 = undefined;
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.NoSpaceLeft,
         (CorpusNaming{}).formatEntryName(&small_buffer, run_identity),
     );
 }
 
 test "corpus write rejects undersized artifact buffers" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -331,7 +333,7 @@ test "corpus write rejects undersized artifact buffers" {
     var entry_name_buffer: [128]u8 = undefined;
     var artifact_buffer: [8]u8 = undefined;
 
-    try std.testing.expectError(error.NoSpaceLeft, writeCorpusEntry(
+    try testing.expectError(error.NoSpaceLeft, writeCorpusEntry(
         threaded_io.io(),
         tmp_dir.dir,
         .{},

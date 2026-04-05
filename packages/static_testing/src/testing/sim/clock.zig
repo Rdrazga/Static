@@ -3,6 +3,8 @@
 //! Logical time is explicit. No API in this file reads wall clock state.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 
 /// Operating errors surfaced by logical clock mutation.
@@ -64,7 +66,7 @@ pub const SimClock = struct {
     /// Advance the clock forward by one positive or zero logical duration.
     pub fn advance(self: *SimClock, duration: LogicalDuration) SimClockError!LogicalTime {
         const next_time = try self.now_time.add(duration);
-        std.debug.assert(next_time.tick >= self.now_time.tick);
+        assert(next_time.tick >= self.now_time.tick);
         self.now_time = next_time;
         return self.now_time;
     }
@@ -156,26 +158,26 @@ fn driftAdjustment(relative_ticks: i128, drift_ppm: i32) SimClockError!i128 {
 
 comptime {
     core.errors.assertVocabularySubset(SimClockError);
-    std.debug.assert(@sizeOf(LogicalTime) == @sizeOf(u64));
-    std.debug.assert(@sizeOf(LogicalDuration) == @sizeOf(u64));
+    assert(@sizeOf(LogicalTime) == @sizeOf(u64));
+    assert(@sizeOf(LogicalDuration) == @sizeOf(u64));
 }
 
 test "logical clock advances monotonically" {
     var sim_clock = SimClock.init(LogicalTime.init(5));
-    try std.testing.expectEqual(@as(u64, 5), sim_clock.now().tick);
-    try std.testing.expectEqual(@as(u64, 7), (try sim_clock.advance(.init(2))).tick);
-    try std.testing.expectEqual(@as(u64, 7), sim_clock.now().tick);
+    try testing.expectEqual(@as(u64, 5), sim_clock.now().tick);
+    try testing.expectEqual(@as(u64, 7), (try sim_clock.advance(.init(2))).tick);
+    try testing.expectEqual(@as(u64, 7), sim_clock.now().tick);
 }
 
 test "logical clock jump rejects backwards motion" {
     var sim_clock = SimClock.init(LogicalTime.init(10));
-    try std.testing.expectError(error.InvalidInput, sim_clock.jumpTo(.init(9)));
-    try std.testing.expectEqual(@as(u64, 10), (try sim_clock.jumpTo(.init(10))).tick);
+    try testing.expectError(error.InvalidInput, sim_clock.jumpTo(.init(9)));
+    try testing.expectEqual(@as(u64, 10), (try sim_clock.jumpTo(.init(10))).tick);
 }
 
 test "logical clock detects overflow on advance" {
     var sim_clock = SimClock.init(LogicalTime.init(std.math.maxInt(u64)));
-    try std.testing.expectError(error.Overflow, sim_clock.advance(.init(1)));
+    try testing.expectError(error.Overflow, sim_clock.advance(.init(1)));
 }
 
 test "realtime view projects bounded offset and drift from a reference time" {
@@ -185,9 +187,9 @@ test "realtime view projects bounded offset and drift from a reference time" {
         .drift_ppm = 200_000,
     });
 
-    try std.testing.expectEqual(@as(u64, 15), realtime.monotonicNow(SimClock.init(.init(15))).tick);
-    try std.testing.expectEqual(@as(u64, 19), (try realtime.realtimeAt(.init(15))).tick);
-    try std.testing.expectEqual(@as(u64, 6), (try realtime.elapsedBetween(.init(10), .init(15))).ticks);
+    try testing.expectEqual(@as(u64, 15), realtime.monotonicNow(SimClock.init(.init(15))).tick);
+    try testing.expectEqual(@as(u64, 19), (try realtime.realtimeAt(.init(15))).tick);
+    try testing.expectEqual(@as(u64, 6), (try realtime.elapsedBetween(.init(10), .init(15))).ticks);
 }
 
 test "realtime view deadlines diverge under fast and slow observers" {
@@ -205,22 +207,22 @@ test "realtime view deadlines diverge under fast and slow observers" {
     const slow_deadline = try slow.deadlineAfter(sim_clock.now(), .init(10));
 
     _ = try sim_clock.advance(.init(9));
-    try std.testing.expect(try fast.hasReached(sim_clock, fast_deadline));
-    try std.testing.expect(!(try slow.hasReached(sim_clock, slow_deadline)));
-    try std.testing.expectEqual(@as(u64, 10), (try fast.elapsedBetween(.init(100), sim_clock.now())).ticks);
-    try std.testing.expectEqual(@as(u64, 8), (try slow.elapsedBetween(.init(100), sim_clock.now())).ticks);
+    try testing.expect(try fast.hasReached(sim_clock, fast_deadline));
+    try testing.expect(!(try slow.hasReached(sim_clock, slow_deadline)));
+    try testing.expectEqual(@as(u64, 10), (try fast.elapsedBetween(.init(100), sim_clock.now())).ticks);
+    try testing.expectEqual(@as(u64, 8), (try slow.elapsedBetween(.init(100), sim_clock.now())).ticks);
 
     _ = try sim_clock.advance(.init(3));
-    try std.testing.expect(try slow.hasReached(sim_clock, slow_deadline));
+    try testing.expect(try slow.hasReached(sim_clock, slow_deadline));
 }
 
 test "realtime view rejects invalid drift or underflowing realtime" {
-    try std.testing.expectError(error.InvalidInput, RealtimeView.init(.{
+    try testing.expectError(error.InvalidInput, RealtimeView.init(.{
         .drift_ppm = drift_ppm_limit + 1,
     }));
 
     const underflow = try RealtimeView.init(.{
         .offset_ticks = -5,
     });
-    try std.testing.expectError(error.InvalidInput, underflow.realtimeAt(.init(0)));
+    try testing.expectError(error.InvalidInput, underflow.realtimeAt(.init(0)));
 }

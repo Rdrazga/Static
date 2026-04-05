@@ -11,6 +11,8 @@
 //! is written in place. Both must be owned by a single thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const distributions = @import("distributions.zig");
 
 pub const DistributionError = distributions.DistributionError;
@@ -23,7 +25,7 @@ pub fn shuffleSlice(rng: anytype, values: anytype) DistributionError!void {
         const bound: u64 = @intCast(index + 1);
         const chosen64 = try distributions.uintBelow(rng, bound);
         const chosen: usize = @intCast(chosen64);
-        std.debug.assert(chosen <= index);
+        assert(chosen <= index);
 
         if (chosen != index) {
             std.mem.swap(@TypeOf(values[0]), &values[index], &values[chosen]);
@@ -44,7 +46,7 @@ test "shuffleSlice deterministic for same seed" {
 
     try shuffleSlice(&rng_a, a[0..]);
     try shuffleSlice(&rng_b, b[0..]);
-    try std.testing.expectEqualSlices(u32, a[0..], b[0..]);
+    try testing.expectEqualSlices(u32, a[0..], b[0..]);
 }
 
 test "shuffleSlice preserves all input elements" {
@@ -56,10 +58,10 @@ test "shuffleSlice preserves all input elements" {
 
     var seen = [_]bool{false} ** 8;
     for (values) |value| {
-        try std.testing.expect(value < 8);
+        try testing.expect(value < 8);
         seen[value] = true;
     }
     for (seen) |flag| {
-        try std.testing.expect(flag);
+        try testing.expect(flag);
     }
 }

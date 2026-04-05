@@ -1,5 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 const integration_options = @import("static_io_integration_options");
@@ -52,16 +54,16 @@ const Runner = struct {
     next_sequence_no: u32 = 0,
 
     fn run(self: *@This(), context: *system.SystemContext(Fixture)) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("process_driver"));
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("retry_policy"));
-        std.debug.assert(context.traceBufferPtr() != null);
-        std.debug.assert(self.pool.capacity() >= 2);
+        assert(context.hasComponent("process_driver"));
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("retry_policy"));
+        assert(context.traceBufferPtr() != null);
+        assert(self.pool.capacity() >= 2);
 
         const stream = try support.connectStream(self.runtime, endpoint, context, &self.next_sequence_no);
         defer self.runtime.closeHandle(stream.handle) catch |err| {
-            std.debug.assert(err == error.Closed);
+            assert(err == error.Closed);
         };
 
         const timeout_buffer = try self.pool.acquire();
@@ -78,8 +80,8 @@ const Runner = struct {
         const timeout_id = try self.runtime.submitStreamRead(stream, timeout_buffer, 0);
         _ = try self.runtime.pump(1);
         const timeout_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(timeout_id, timeout_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
+        try testing.expectEqual(timeout_id, timeout_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
 
         const timeout_seq = try support.appendEvent(
             context,
@@ -127,8 +129,8 @@ const Runner = struct {
         const write_id = try self.runtime.submitStreamWrite(stream, retry_buffer, null);
         _ = try self.runtime.pump(1);
         const write_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(write_id, write_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
+        try testing.expectEqual(write_id, write_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
 
         const write_seq = try support.appendEvent(
             context,
@@ -164,9 +166,9 @@ const Runner = struct {
         const read_id = try self.runtime.submitStreamRead(stream, read_buffer, null);
         _ = try self.runtime.pump(1);
         const read_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(read_id, read_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
-        try std.testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
+        try testing.expectEqual(read_id, read_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
+        try testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
 
         const read_seq = try support.appendEvent(
             context,
@@ -236,7 +238,7 @@ const Runner = struct {
             });
             if (!driver_stderr_once.check_result.passed) return driver_stderr_once.check_result;
 
-            try std.testing.expect(self.pool.available() == self.pool.capacity());
+            try testing.expect(self.pool.available() == self.pool.capacity());
             return checker.CheckResult.fail(&violations, null);
         }
 
@@ -279,7 +281,7 @@ const Runner = struct {
         });
         if (!process_request_before_response.check_result.passed) return process_request_before_response.check_result;
 
-        try std.testing.expect(self.pool.available() == self.pool.capacity());
+        try testing.expect(self.pool.available() == self.pool.capacity());
         return checker.CheckResult.pass(checker.CheckpointDigest.init(
             (@as(u128, snapshot.items.len) << 64) |
                 (@as(u128, self.pool.available()) << 32) |
@@ -312,9 +314,9 @@ const Runner = struct {
 
         var payload_buffer: [16]u8 = undefined;
         const response = try driver.recvResponse(&payload_buffer);
-        try std.testing.expectEqual(request_id, response.header.request_id);
-        try std.testing.expectEqual(driver_protocol.DriverMessageKind.ok, response.header.kind);
-        try std.testing.expectEqualStrings("hello", response.payload);
+        try testing.expectEqual(request_id, response.header.request_id);
+        try testing.expectEqual(driver_protocol.DriverMessageKind.ok, response.header.kind);
+        try testing.expectEqualStrings("hello", response.payload);
 
         _ = try support.appendEvent(
             context,
@@ -355,10 +357,10 @@ const Runner = struct {
         );
 
         var payload_buffer: [1]u8 = undefined;
-        try std.testing.expectError(error.Unsupported, driver.recvResponse(&payload_buffer));
+        try testing.expectError(error.Unsupported, driver.recvResponse(&payload_buffer));
 
         const captured_stderr = driver.capturedStderr().?;
-        try std.testing.expectEqualStrings("runtime child emitted malformed response\n", captured_stderr.bytes);
+        try testing.expectEqualStrings("runtime child emitted malformed response\n", captured_stderr.bytes);
 
         return try support.appendEvent(
             context,
@@ -374,7 +376,7 @@ const Runner = struct {
 
 fn initFixture(fixture: *Fixture) !void {
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(41),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -389,19 +391,19 @@ test "static_io system composes process_driver and runtime retry flow" {
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 3,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -424,10 +426,10 @@ test "static_io system composes process_driver and runtime retry flow" {
         .components = &components,
     }, &runner, Runner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(usize, components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 10);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(usize, components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 10);
+    try testing.expect(execution.retained_bundle == null);
 }
 
 test "static_io system retains provenance and stderr through process_driver failure" {
@@ -437,24 +439,24 @@ test "static_io system retains provenance and stderr through process_driver fail
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 2,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
     var entry_name_buffer: [128]u8 = undefined;
@@ -499,8 +501,8 @@ test "static_io system retains provenance and stderr through process_driver fail
         },
     }, &runner, Runner.run);
 
-    try std.testing.expect(!execution.check_result.passed);
-    try std.testing.expect(execution.retained_bundle != null);
+    try testing.expect(!execution.check_result.passed);
+    try testing.expect(execution.retained_bundle != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -532,11 +534,11 @@ test "static_io system retains provenance and stderr through process_driver fail
         .stderr_buffer = &read_stderr_buffer,
     });
 
-    try std.testing.expectEqualStrings("system_process_driver_runtime_retry_failure", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expect(bundle.trace_document.?.has_provenance);
-    try std.testing.expect(bundle.trace_document.?.caused_event_count > 0);
-    try std.testing.expect(bundle.retained_trace != null);
-    try std.testing.expectEqualStrings(expected_stderr, bundle.stderr_capture.?);
-    try std.testing.expectEqualStrings("static_io.system_process_driver_runtime_retry", bundle.violations_document.violations[0].code);
+    try testing.expectEqualStrings("system_process_driver_runtime_retry_failure", bundle.manifest_document.run_name);
+    try testing.expect(bundle.trace_document != null);
+    try testing.expect(bundle.trace_document.?.has_provenance);
+    try testing.expect(bundle.trace_document.?.caused_event_count > 0);
+    try testing.expect(bundle.retained_trace != null);
+    try testing.expectEqualStrings(expected_stderr, bundle.stderr_capture.?);
+    try testing.expectEqualStrings("static_io.system_process_driver_runtime_retry", bundle.violations_document.violations[0].code);
 }

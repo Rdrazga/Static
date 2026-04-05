@@ -1,6 +1,7 @@
 //! `static_io` buffer-pool bounded churn baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -23,25 +24,25 @@ const BufferPoolChurnContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *BufferPoolChurnContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.pool.capacity() == churn_capacity);
-        std.debug.assert(context.pool.available() == context.pool.capacity());
+        assert(context.pool.capacity() == churn_capacity);
+        assert(context.pool.available() == context.pool.capacity());
 
         var total_bytes: usize = 0;
         for (&context.scratch, 0..) |*buffer, index| {
             buffer.* = context.pool.acquire() catch unreachable;
-            std.debug.assert(buffer.*.capacity() != 0);
+            assert(buffer.*.capacity() != 0);
             total_bytes += buffer.bytes.len + index;
         }
-        std.debug.assert(context.pool.available() == 0);
+        assert(context.pool.available() == 0);
 
         var release_index = context.scratch.len;
         while (release_index != 0) {
             release_index -= 1;
             context.pool.release(context.scratch[release_index]) catch unreachable;
         }
-        std.debug.assert(context.pool.available() == context.pool.capacity());
+        assert(context.pool.available() == context.pool.capacity());
         context.sink = bench.case.blackBox(total_bytes);
-        std.debug.assert(context.sink >= @as(usize, context.pool.capacity()));
+        assert(context.sink >= @as(usize, context.pool.capacity()));
     }
 };
 
@@ -104,9 +105,9 @@ fn validateSemanticPreflight() void {
     for (&scratch) |*buffer| {
         buffer.* = pool.acquire() catch unreachable;
     }
-    std.debug.assert(pool.available() == 0);
+    assert(pool.available() == 0);
     for (scratch) |buffer| {
         pool.release(buffer) catch unreachable;
     }
-    std.debug.assert(pool.available() == pool.capacity());
+    assert(pool.available() == pool.capacity());
 }

@@ -1,6 +1,8 @@
 //! Deterministic bounded frame encoder.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_serial = @import("static_serial");
 const errors = @import("errors.zig");
 const frame_config = @import("frame_config.zig");
@@ -26,7 +28,7 @@ pub fn encodeInto(cfg: frame_config.Config, dst: []u8, payload: []const u8) Enco
     }
 
     const written = writer.position();
-    std.debug.assert(written == needed);
+    assert(written == needed);
     return written;
 }
 
@@ -43,16 +45,16 @@ test "frame encode handles zero-length payload without checksum" {
     const cfg = try (frame_config.Config{ .max_payload_bytes = 128 }).init();
     var out: [8]u8 = [_]u8{0} ** 8;
     const written = try encodeInto(cfg, &out, &.{});
-    try std.testing.expectEqual(@as(usize, 3), written);
-    try std.testing.expectEqual(cfg.protocol_version, out[0]);
-    try std.testing.expectEqual(@as(u8, 0), out[1]);
-    try std.testing.expectEqual(@as(u8, 0), out[2]);
+    try testing.expectEqual(@as(usize, 3), written);
+    try testing.expectEqual(cfg.protocol_version, out[0]);
+    try testing.expectEqual(@as(u8, 0), out[1]);
+    try testing.expectEqual(@as(u8, 0), out[2]);
 }
 
 test "frame encode rejects payload larger than configured maximum" {
     const cfg = try (frame_config.Config{ .max_payload_bytes = 3 }).init();
     var out: [32]u8 = [_]u8{0} ** 32;
-    try std.testing.expectError(
+    try testing.expectError(
         error.NoSpaceLeft,
         encodeInto(cfg, &out, "toolarge"),
     );
@@ -66,12 +68,12 @@ test "frame encode writes checksum trailers when enabled" {
     var out: [64]u8 = [_]u8{0} ** 64;
     const payload = "hello";
     const written = try encodeInto(cfg, &out, payload);
-    try std.testing.expect(written > payload.len);
-    try std.testing.expectEqual(frame_config.flag_checksum_present, out[1]);
+    try testing.expect(written > payload.len);
+    try testing.expectEqual(frame_config.flag_checksum_present, out[1]);
 }
 
 test "frame encode rejects destination buffers that are too small" {
     const cfg = try (frame_config.Config{ .max_payload_bytes = 128 }).init();
     var out: [4]u8 = [_]u8{0} ** 4;
-    try std.testing.expectError(error.NoSpaceLeft, encodeInto(cfg, &out, "abcd"));
+    try testing.expectError(error.NoSpaceLeft, encodeInto(cfg, &out, "abcd"));
 }

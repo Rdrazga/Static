@@ -7,6 +7,8 @@
 //! - it keeps simulation primitives in `testing.sim` out of orchestration code.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const artifact = @import("../artifact/root.zig");
 const core = @import("static_core");
 const checker = @import("checker.zig");
@@ -275,8 +277,8 @@ pub fn SwarmRunner(comptime ScenarioError: type) type {
 
 comptime {
     core.errors.assertVocabularySubset(SwarmRunError);
-    std.debug.assert(std.meta.fields(SwarmProfile).len == 3);
-    std.debug.assert(std.meta.fields(SwarmStopPolicy).len == 2);
+    assert(std.meta.fields(SwarmProfile).len == 3);
+    assert(std.meta.fields(SwarmStopPolicy).len == 2);
 }
 
 /// Execute a bounded deterministic swarm campaign.
@@ -372,8 +374,8 @@ fn runSwarmHostThreaded(
 ) (SwarmRunError || corpus.CorpusWriteError || failure_bundle.FailureBundleWriteError || artifact.record_log.ArtifactRecordLogError || ScenarioError)!SwarmSummary {
     const parallel_scenarios = runner.parallel_scenarios.?;
     const lane_count = parallel_scenarios.len;
-    std.debug.assert(lane_count != 0);
-    std.debug.assert(lane_count <= swarm_parallel_lane_count_max);
+    assert(lane_count != 0);
+    assert(lane_count <= swarm_parallel_lane_count_max);
 
     const resume_from_run_index = try resolveResumeFromRunIndex(runner.campaign_persistence);
     var summary: SwarmSummary = .{
@@ -594,7 +596,7 @@ fn chooseVariant(
 
     const run_seed = seed_mod.splitSeed(base_seed, run_index);
     const total_weight = totalVariantWeight(variants);
-    std.debug.assert(total_weight > 0);
+    assert(total_weight > 0);
     const threshold = run_seed.value % total_weight;
     return selectVariantForThreshold(variants, threshold);
 }
@@ -604,7 +606,7 @@ fn totalVariantWeight(variants: []const SwarmVariant) u64 {
     for (variants) |variant| {
         total_weight += variant.variant_weight;
     }
-    std.debug.assert(total_weight > 0);
+    assert(total_weight > 0);
     return total_weight;
 }
 
@@ -642,54 +644,54 @@ fn assertScenarioExecution(
     execution: SwarmScenarioExecution,
     steps_per_seed_max: u32,
 ) void {
-    std.debug.assert(execution.steps_executed <= steps_per_seed_max);
+    assert(execution.steps_executed <= steps_per_seed_max);
     assertTraceMetadata(execution.trace_metadata);
     assertCheckResult(execution.check_result);
     if (execution.retained_trace_snapshot) |snapshot| {
         const snapshot_metadata = snapshot.metadata();
-        std.debug.assert(snapshot_metadata.event_count == execution.trace_metadata.event_count);
-        std.debug.assert(snapshot_metadata.truncated == execution.trace_metadata.truncated);
-        std.debug.assert(snapshot_metadata.has_range == execution.trace_metadata.has_range);
+        assert(snapshot_metadata.event_count == execution.trace_metadata.event_count);
+        assert(snapshot_metadata.truncated == execution.trace_metadata.truncated);
+        assert(snapshot_metadata.has_range == execution.trace_metadata.has_range);
         if (execution.trace_provenance_summary) |provenance_summary| {
             const snapshot_provenance = snapshot.provenanceSummary();
-            std.debug.assert(snapshot_provenance.has_provenance == provenance_summary.has_provenance);
-            std.debug.assert(snapshot_provenance.caused_event_count == provenance_summary.caused_event_count);
-            std.debug.assert(snapshot_provenance.root_event_count == provenance_summary.root_event_count);
-            std.debug.assert(snapshot_provenance.correlated_event_count == provenance_summary.correlated_event_count);
-            std.debug.assert(snapshot_provenance.surface_labeled_event_count == provenance_summary.surface_labeled_event_count);
-            std.debug.assert(snapshot_provenance.max_causal_depth == provenance_summary.max_causal_depth);
+            assert(snapshot_provenance.has_provenance == provenance_summary.has_provenance);
+            assert(snapshot_provenance.caused_event_count == provenance_summary.caused_event_count);
+            assert(snapshot_provenance.root_event_count == provenance_summary.root_event_count);
+            assert(snapshot_provenance.correlated_event_count == provenance_summary.correlated_event_count);
+            assert(snapshot_provenance.surface_labeled_event_count == provenance_summary.surface_labeled_event_count);
+            assert(snapshot_provenance.max_causal_depth == provenance_summary.max_causal_depth);
         }
     }
     if (execution.pending_reason) |detail| {
         if (detail.label) |label| {
-            std.debug.assert(label.len > 0);
+            assert(label.len > 0);
         }
     }
     if (execution.schedule_mode) |mode_label| {
-        std.debug.assert(mode_label.len > 0);
+        assert(mode_label.len > 0);
     }
 }
 
 fn assertTraceMetadata(metadata: trace.TraceMetadata) void {
     if (metadata.event_count == 0) {
-        std.debug.assert(!metadata.has_range);
-        std.debug.assert(metadata.first_sequence_no == 0);
-        std.debug.assert(metadata.last_sequence_no == 0);
-        std.debug.assert(metadata.first_timestamp_ns == 0);
-        std.debug.assert(metadata.last_timestamp_ns == 0);
+        assert(!metadata.has_range);
+        assert(metadata.first_sequence_no == 0);
+        assert(metadata.last_sequence_no == 0);
+        assert(metadata.first_timestamp_ns == 0);
+        assert(metadata.last_timestamp_ns == 0);
         return;
     }
 
-    std.debug.assert(metadata.has_range);
-    std.debug.assert(metadata.first_sequence_no <= metadata.last_sequence_no);
-    std.debug.assert(metadata.first_timestamp_ns <= metadata.last_timestamp_ns);
+    assert(metadata.has_range);
+    assert(metadata.first_sequence_no <= metadata.last_sequence_no);
+    assert(metadata.first_timestamp_ns <= metadata.last_timestamp_ns);
 }
 
 fn assertCheckResult(result: checker.CheckResult) void {
     if (result.passed) {
-        std.debug.assert(result.violations.len == 0);
+        assert(result.violations.len == 0);
     } else {
-        std.debug.assert(result.violations.len > 0);
+        assert(result.violations.len > 0);
     }
 }
 
@@ -1084,7 +1086,7 @@ fn maybeReportProgress(
     if (progress == null) return;
     if (config.progress_every_n_runs == 0) return;
     const local_completed_run_count = summary.executed_run_count;
-    std.debug.assert(local_completed_run_count > 0);
+    assert(local_completed_run_count > 0);
     if ((local_completed_run_count % config.progress_every_n_runs) != 0) return;
     const completed_run_count = summary.resume_from_run_index + local_completed_run_count;
 
@@ -1212,7 +1214,7 @@ test "runSwarm rejects invalid configs" {
         .run_fn = Context.run,
     };
 
-    try std.testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
         .config = .{
             .package_name = "",
             .run_name = "invalid",
@@ -1224,7 +1226,7 @@ test "runSwarm rejects invalid configs" {
         .scenario = scenario,
         .variants = &variants,
     }));
-    try std.testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid",
@@ -1236,7 +1238,7 @@ test "runSwarm rejects invalid configs" {
         .scenario = scenario,
         .variants = &.{},
     }));
-    try std.testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid",
@@ -1249,7 +1251,7 @@ test "runSwarm rejects invalid configs" {
         .scenario = scenario,
         .variants = &variants,
     }));
-    try std.testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid",
@@ -1263,7 +1265,7 @@ test "runSwarm rejects invalid configs" {
         .scenario = scenario,
         .variants = &variants,
     }));
-    try std.testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid",
@@ -1277,7 +1279,7 @@ test "runSwarm rejects invalid configs" {
         .parallel_scenarios = &[_]Scenario{scenario},
         .variants = &variants,
     }));
-    try std.testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
+    try testing.expectError(error.InvalidInput, runSwarm(error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid",
@@ -1303,17 +1305,17 @@ test "chooseVariant is deterministic for the same seed and run index" {
     const second = try chooseVariant(seed_mod.Seed.init(55), 4, &variants);
     const third = try chooseVariant(seed_mod.Seed.init(55), 5, &variants);
 
-    try std.testing.expectEqual(first.variant_id, second.variant_id);
-    try std.testing.expectEqualStrings(first.label, second.label);
-    try std.testing.expect(first.variant_id != 0);
-    try std.testing.expect(third.variant_id != 0);
+    try testing.expectEqual(first.variant_id, second.variant_id);
+    try testing.expectEqualStrings(first.label, second.label);
+    try testing.expect(first.variant_id != 0);
+    try testing.expect(third.variant_id != 0);
 }
 
 test "runSwarm stops on the first failure and persists one retained artifact" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1384,14 +1386,14 @@ test "runSwarm stops on the first failure and persists one retained artifact" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 1), context.run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.failed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.retained_failure_count);
-    try std.testing.expect(summary.first_failure != null);
+    try testing.expectEqual(@as(u32, 1), context.run_count);
+    try testing.expectEqual(@as(u32, 1), summary.executed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.failed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.retained_failure_count);
+    try testing.expect(summary.first_failure != null);
     const first_failure = summary.first_failure.?;
-    try std.testing.expectEqual(@as(u32, 7), first_failure.variant_id);
-    try std.testing.expect(first_failure.persistedEntryName() != null);
+    try testing.expectEqual(@as(u32, 7), first_failure.variant_id);
+    try testing.expect(first_failure.persistedEntryName() != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_buffer: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -1414,15 +1416,15 @@ test "runSwarm stops on the first failure and persists one retained artifact" {
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    try std.testing.expectEqual(first_failure.run_identity.seed.value, entry.replay_artifact_view.identity.seed.value);
-    try std.testing.expectEqualStrings("smoke", entry.manifest_document.campaign_profile.?);
+    try testing.expectEqual(first_failure.run_identity.seed.value, entry.replay_artifact_view.identity.seed.value);
+    try testing.expectEqualStrings("smoke", entry.manifest_document.campaign_profile.?);
 }
 
 test "runSwarm can collect failures without losing the first retained name" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1500,13 +1502,13 @@ test "runSwarm can collect failures without losing the first retained name" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 5), summary.executed_run_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.failed_run_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.retained_failure_count);
-    try std.testing.expect(summary.first_failure != null);
+    try testing.expectEqual(@as(u32, 5), summary.executed_run_count);
+    try testing.expectEqual(@as(u32, 2), summary.failed_run_count);
+    try testing.expectEqual(@as(u32, 2), summary.retained_failure_count);
+    try testing.expect(summary.first_failure != null);
     const first_failure = summary.first_failure.?;
-    try std.testing.expectEqual(@as(u32, 1), first_failure.run_identity.run_index);
-    try std.testing.expect(first_failure.persistedEntryName() != null);
+    try testing.expectEqual(@as(u32, 1), first_failure.run_identity.run_index);
+    try testing.expect(first_failure.persistedEntryName() != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_buffer: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -1529,15 +1531,15 @@ test "runSwarm can collect failures without losing the first retained name" {
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    try std.testing.expectEqual(@as(u32, 1), entry.replay_artifact_view.identity.run_index);
-    try std.testing.expectEqualStrings("stress", entry.manifest_document.campaign_profile.?);
+    try testing.expectEqual(@as(u32, 1), entry.replay_artifact_view.identity.run_index);
+    try testing.expectEqualStrings("stress", entry.manifest_document.campaign_profile.?);
 }
 
 test "runSwarm forwards caller-selected failure-bundle artifact policy" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1607,9 +1609,9 @@ test "runSwarm forwards caller-selected failure-bundle artifact policy" {
         },
     });
 
-    try std.testing.expect(summary.first_failure != null);
+    try testing.expect(summary.first_failure != null);
     const first_failure = summary.first_failure.?;
-    try std.testing.expect(first_failure.persistedEntryName() != null);
+    try testing.expect(first_failure.persistedEntryName() != null);
 
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_buffer: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -1632,8 +1634,8 @@ test "runSwarm forwards caller-selected failure-bundle artifact policy" {
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    try std.testing.expect(entry.manifest_document.trace_file == null);
-    try std.testing.expect(entry.trace_document == null);
+    try testing.expect(entry.manifest_document.trace_file == null);
+    try testing.expect(entry.trace_document == null);
 }
 
 test "runSwarm reports deterministic progress on configured cadence" {
@@ -1693,14 +1695,14 @@ test "runSwarm reports deterministic progress on configured cadence" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 5), summary.executed_run_count);
-    try std.testing.expectEqual(@as(u32, 2), context.progress_count);
-    try std.testing.expect(context.last_progress != null);
-    try std.testing.expectEqual(@as(u32, 0), context.last_progress.?.shard_index);
-    try std.testing.expectEqual(@as(u32, 1), context.last_progress.?.shard_count);
-    try std.testing.expectEqual(@as(u32, 4), context.last_progress.?.completed_run_count);
-    try std.testing.expectEqual(@as(u32, 0), context.last_progress.?.resume_from_run_index);
-    try std.testing.expectEqual(@as(u32, 3), context.last_progress.?.latest_run_index);
+    try testing.expectEqual(@as(u32, 5), summary.executed_run_count);
+    try testing.expectEqual(@as(u32, 2), context.progress_count);
+    try testing.expect(context.last_progress != null);
+    try testing.expectEqual(@as(u32, 0), context.last_progress.?.shard_index);
+    try testing.expectEqual(@as(u32, 1), context.last_progress.?.shard_count);
+    try testing.expectEqual(@as(u32, 4), context.last_progress.?.completed_run_count);
+    try testing.expectEqual(@as(u32, 0), context.last_progress.?.resume_from_run_index);
+    try testing.expectEqual(@as(u32, 3), context.last_progress.?.latest_run_index);
 }
 
 test "formatProgressSummary produces stable plain text" {
@@ -1719,7 +1721,7 @@ test "formatProgressSummary produces stable plain text" {
         .latest_failed = true,
     });
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "profile=stress shard=0/1 resume_from=0 completed=4/10 failed=1 retained=1 latest_run=3 latest_variant=9 latest_failed=true",
         summary,
     );
@@ -1776,13 +1778,13 @@ test "runSwarm executes only the configured deterministic shard" {
         .variants = &variants,
     });
 
-    try std.testing.expectEqual(@as(u32, 1), summary.shard_index);
-    try std.testing.expectEqual(@as(u32, 2), summary.shard_count);
-    try std.testing.expectEqual(@as(u32, 3), summary.executed_run_count);
-    try std.testing.expectEqual(@as(usize, 3), context.run_count);
-    try std.testing.expectEqual(@as(u32, 1), context.run_indices[0]);
-    try std.testing.expectEqual(@as(u32, 3), context.run_indices[1]);
-    try std.testing.expectEqual(@as(u32, 5), context.run_indices[2]);
+    try testing.expectEqual(@as(u32, 1), summary.shard_index);
+    try testing.expectEqual(@as(u32, 2), summary.shard_count);
+    try testing.expectEqual(@as(u32, 3), summary.executed_run_count);
+    try testing.expectEqual(@as(usize, 3), context.run_count);
+    try testing.expectEqual(@as(u32, 1), context.run_indices[0]);
+    try testing.expectEqual(@as(u32, 3), context.run_indices[1]);
+    try testing.expectEqual(@as(u32, 5), context.run_indices[2]);
 }
 
 test "runSwarm host-thread lanes commit failures in deterministic run order" {
@@ -1850,16 +1852,16 @@ test "runSwarm host-thread lanes commit failures in deterministic run order" {
         .variants = &variants,
     });
 
-    try std.testing.expectEqual(@as(u32, 4), summary.executed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.failed_run_count);
-    try std.testing.expect(summary.first_failure != null);
-    try std.testing.expectEqual(@as(u32, 1), summary.first_failure.?.run_identity.run_index);
-    try std.testing.expectEqual(@as(u32, 2), lane_a.run_count);
-    try std.testing.expectEqual(@as(u32, 2), lane_b.run_count);
-    try std.testing.expectEqual(@as(u32, 0), lane_a.seen_runs[0]);
-    try std.testing.expectEqual(@as(u32, 2), lane_a.seen_runs[1]);
-    try std.testing.expectEqual(@as(u32, 1), lane_b.seen_runs[0]);
-    try std.testing.expectEqual(@as(u32, 3), lane_b.seen_runs[1]);
+    try testing.expectEqual(@as(u32, 4), summary.executed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.failed_run_count);
+    try testing.expect(summary.first_failure != null);
+    try testing.expectEqual(@as(u32, 1), summary.first_failure.?.run_identity.run_index);
+    try testing.expectEqual(@as(u32, 2), lane_a.run_count);
+    try testing.expectEqual(@as(u32, 2), lane_b.run_count);
+    try testing.expectEqual(@as(u32, 0), lane_a.seen_runs[0]);
+    try testing.expectEqual(@as(u32, 2), lane_a.seen_runs[1]);
+    try testing.expectEqual(@as(u32, 1), lane_b.seen_runs[0]);
+    try testing.expectEqual(@as(u32, 3), lane_b.seen_runs[1]);
 }
 
 test "campaign record binary round-trips through shared storage format" {
@@ -1875,19 +1877,19 @@ test "campaign record binary round-trips through shared storage format" {
 
     var entry_name_buffer: [64]u8 = undefined;
     const decoded = try decodeCampaignRecordBinary(encoded, &entry_name_buffer);
-    try std.testing.expectEqual(@as(u32, 7), decoded.run_index);
-    try std.testing.expectEqual(@as(u64, 41), decoded.seed.value);
-    try std.testing.expectEqual(@as(u32, 3), decoded.variant_id);
-    try std.testing.expect(!decoded.passed);
-    try std.testing.expect(decoded.retained_failure);
-    try std.testing.expectEqualStrings("swarm_bundle-7.bundle", decoded.persisted_entry_name.?);
+    try testing.expectEqual(@as(u32, 7), decoded.run_index);
+    try testing.expectEqual(@as(u64, 41), decoded.seed.value);
+    try testing.expectEqual(@as(u32, 3), decoded.variant_id);
+    try testing.expect(!decoded.passed);
+    try testing.expect(decoded.retained_failure);
+    try testing.expectEqualStrings("swarm_bundle-7.bundle", decoded.persisted_entry_name.?);
 }
 
 test "runSwarm resumes from the latest campaign record" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -1986,24 +1988,24 @@ test "runSwarm resumes from the latest campaign record" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 2), summary.resume_from_run_index);
-    try std.testing.expectEqual(@as(u32, 2), summary.executed_run_count);
-    try std.testing.expectEqual(@as(u32, 2), context.first_run_index.?);
-    try std.testing.expectEqual(@as(u32, 2), context.run_count);
+    try testing.expectEqual(@as(u32, 2), summary.resume_from_run_index);
+    try testing.expectEqual(@as(u32, 2), summary.executed_run_count);
+    try testing.expectEqual(@as(u32, 2), context.first_run_index.?);
+    try testing.expectEqual(@as(u32, 2), context.run_count);
 
     const latest = (try readMostRecentCampaignRecord(io, tmp_dir.dir, "swarm_campaign.binlog", .{
         .file_buffer = &read_file_buffer,
         .entry_name_buffer = &read_entry_name_buffer,
     })).?;
-    try std.testing.expectEqual(@as(u32, 3), latest.run_index);
-    try std.testing.expect(latest.passed);
+    try testing.expectEqual(@as(u32, 3), latest.run_index);
+    try testing.expect(latest.passed);
 }
 
 test "summarizeCampaignRecords groups variants and prefers retained failures" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -2109,31 +2111,31 @@ test "summarizeCampaignRecords groups variants and prefers retained failures" {
         },
     )).?;
 
-    try std.testing.expectEqual(@as(u32, 4), summary.total_run_count);
-    try std.testing.expectEqual(@as(u32, 3), summary.failed_run_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.retained_failure_count);
-    try std.testing.expectEqual(@as(?u32, 0), summary.first_run_index);
-    try std.testing.expectEqual(@as(?u32, 3), summary.last_run_index);
-    try std.testing.expectEqual(@as(usize, 2), summary.variant_summaries.len);
-    try std.testing.expectEqual(@as(u32, 1), summary.variant_summaries[0].variant_id);
-    try std.testing.expectEqual(@as(u32, 2), summary.variant_summaries[0].run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.variant_summaries[0].failed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.variant_summaries[0].retained_failure_count);
-    try std.testing.expectEqual(@as(?u32, 2), summary.variant_summaries[0].first_failed_run_index);
-    try std.testing.expectEqual(@as(u32, 2), summary.variant_summaries[0].last_run_index);
-    try std.testing.expectEqual(@as(u32, 2), summary.variant_summaries[1].variant_id);
-    try std.testing.expectEqual(@as(u32, 2), summary.variant_summaries[1].run_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.variant_summaries[1].failed_run_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.variant_summaries[1].retained_failure_count);
-    try std.testing.expectEqual(@as(?u32, 1), summary.variant_summaries[1].first_failed_run_index);
-    try std.testing.expectEqual(@as(u32, 3), summary.variant_summaries[1].last_run_index);
-    try std.testing.expectEqual(@as(usize, 2), summary.retained_seed_suggestions.len);
-    try std.testing.expectEqual(@as(u32, 2), summary.retained_seed_suggestions[0].variant_id);
-    try std.testing.expectEqual(@as(u32, 3), summary.retained_seed_suggestions[0].run_index);
-    try std.testing.expectEqual(@as(u64, 13), summary.retained_seed_suggestions[0].seed.value);
-    try std.testing.expectEqual(@as(u32, 1), summary.retained_seed_suggestions[1].variant_id);
-    try std.testing.expectEqual(@as(u32, 2), summary.retained_seed_suggestions[1].run_index);
-    try std.testing.expectEqual(@as(u64, 12), summary.retained_seed_suggestions[1].seed.value);
+    try testing.expectEqual(@as(u32, 4), summary.total_run_count);
+    try testing.expectEqual(@as(u32, 3), summary.failed_run_count);
+    try testing.expectEqual(@as(u32, 2), summary.retained_failure_count);
+    try testing.expectEqual(@as(?u32, 0), summary.first_run_index);
+    try testing.expectEqual(@as(?u32, 3), summary.last_run_index);
+    try testing.expectEqual(@as(usize, 2), summary.variant_summaries.len);
+    try testing.expectEqual(@as(u32, 1), summary.variant_summaries[0].variant_id);
+    try testing.expectEqual(@as(u32, 2), summary.variant_summaries[0].run_count);
+    try testing.expectEqual(@as(u32, 1), summary.variant_summaries[0].failed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.variant_summaries[0].retained_failure_count);
+    try testing.expectEqual(@as(?u32, 2), summary.variant_summaries[0].first_failed_run_index);
+    try testing.expectEqual(@as(u32, 2), summary.variant_summaries[0].last_run_index);
+    try testing.expectEqual(@as(u32, 2), summary.variant_summaries[1].variant_id);
+    try testing.expectEqual(@as(u32, 2), summary.variant_summaries[1].run_count);
+    try testing.expectEqual(@as(u32, 2), summary.variant_summaries[1].failed_run_count);
+    try testing.expectEqual(@as(u32, 1), summary.variant_summaries[1].retained_failure_count);
+    try testing.expectEqual(@as(?u32, 1), summary.variant_summaries[1].first_failed_run_index);
+    try testing.expectEqual(@as(u32, 3), summary.variant_summaries[1].last_run_index);
+    try testing.expectEqual(@as(usize, 2), summary.retained_seed_suggestions.len);
+    try testing.expectEqual(@as(u32, 2), summary.retained_seed_suggestions[0].variant_id);
+    try testing.expectEqual(@as(u32, 3), summary.retained_seed_suggestions[0].run_index);
+    try testing.expectEqual(@as(u64, 13), summary.retained_seed_suggestions[0].seed.value);
+    try testing.expectEqual(@as(u32, 1), summary.retained_seed_suggestions[1].variant_id);
+    try testing.expectEqual(@as(u32, 2), summary.retained_seed_suggestions[1].run_index);
+    try testing.expectEqual(@as(u64, 12), summary.retained_seed_suggestions[1].seed.value);
 }
 
 test "formatCampaignSummary produces stable plain text" {
@@ -2168,7 +2170,7 @@ test "formatCampaignSummary produces stable plain text" {
         },
     });
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "campaign runs=4 failed=3 retained=2 variants=2 run_range=0..3\n" ++
             "variant=1 runs=2 failed=1 retained=1 first_failed_run=2\n" ++
             "variant=2 runs=2 failed=2 retained=1 first_failed_run=1\n" ++

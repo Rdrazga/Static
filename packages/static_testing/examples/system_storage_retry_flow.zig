@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const network = testing.testing.sim.network_link;
@@ -74,38 +75,38 @@ pub fn main() !void {
             self: *@This(),
             context: *system.SystemContext(@TypeOf(sim_fixture)),
         ) anyerror!testing.testing.checker.CheckResult {
-            std.debug.assert(context.hasComponent("network_link"));
-            std.debug.assert(context.hasComponent("storage_lane"));
-            std.debug.assert(context.hasComponent("retry_queue"));
+            assert(context.hasComponent("network_link"));
+            assert(context.hasComponent("storage_lane"));
+            assert(context.hasComponent("retry_queue"));
 
             try self.link.send(context.fixture.sim_clock.now(), 1, 11, 41);
             _ = try context.fixture.sim_clock.advance(.init(1));
             _ = try self.link.deliverDueToMailbox(context.fixture.sim_clock.now(), 11, self.request_mailbox, context.traceBufferPtr());
-            std.debug.assert(try self.request_mailbox.recv() == 41);
+            assert(try self.request_mailbox.recv() == 41);
 
             try self.storage_lane.submitFailure(context.fixture.sim_clock.now(), 41, 500);
             _ = try context.fixture.sim_clock.advance(.init(1));
             _ = try self.storage_lane.deliverDueToMailbox(context.fixture.sim_clock.now(), self.completion_mailbox, context.traceBufferPtr());
             const failed = try self.completion_mailbox.recv();
-            std.debug.assert(failed.status == .failed);
+            assert(failed.status == .failed);
 
             const retry_decision = try self.retry_queue.scheduleNext(context.fixture.sim_clock.now(), 0, failed.request_id, failed.request_id);
-            std.debug.assert(retry_decision == .queued);
+            assert(retry_decision == .queued);
             _ = try context.fixture.sim_clock.advance(.init(1));
-            std.debug.assert(try self.retry_queue.emitDueToMailbox(context.fixture.sim_clock.now(), self.retry_mailbox, context.traceBufferPtr()) == 1);
+            assert(try self.retry_queue.emitDueToMailbox(context.fixture.sim_clock.now(), self.retry_mailbox, context.traceBufferPtr()) == 1);
             const retry = try self.retry_mailbox.recv();
-            std.debug.assert(retry.attempt == 1);
+            assert(retry.attempt == 1);
 
             try self.link.send(context.fixture.sim_clock.now(), 1, 11, retry.payload);
             _ = try context.fixture.sim_clock.advance(.init(1));
             _ = try self.link.deliverDueToMailbox(context.fixture.sim_clock.now(), 11, self.request_mailbox, context.traceBufferPtr());
-            std.debug.assert(try self.request_mailbox.recv() == 41);
+            assert(try self.request_mailbox.recv() == 41);
 
             try self.storage_lane.submitSuccess(context.fixture.sim_clock.now(), 41, 200);
             _ = try context.fixture.sim_clock.advance(.init(1));
             _ = try self.storage_lane.deliverDueToMailbox(context.fixture.sim_clock.now(), self.completion_mailbox, context.traceBufferPtr());
             const success = try self.completion_mailbox.recv();
-            std.debug.assert(success.status == .success);
+            assert(success.status == .success);
 
             const snapshot = context.traceSnapshot().?;
             const retry_before_success = try temporal.checkHappensBefore(
@@ -113,7 +114,7 @@ pub fn main() !void {
                 .{ .label = "retry_queue.emit", .surface_label = "retry_queue" },
                 .{ .label = "storage_lane.success", .surface_label = "storage_lane" },
             );
-            std.debug.assert(retry_before_success.check_result.passed);
+            assert(retry_before_success.check_result.passed);
 
             return testing.testing.checker.CheckResult.pass(null);
         }
@@ -131,7 +132,7 @@ pub fn main() !void {
         .components = &components,
     }, &runner, Runner.run);
 
-    std.debug.assert(execution.check_result.passed);
+    assert(execution.check_result.passed);
     std.debug.print(
         "system flow passed run={s} components={} trace_events={}\n",
         .{ execution.run_identity.run_name, execution.component_count, execution.trace_metadata.event_count },

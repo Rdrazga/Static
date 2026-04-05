@@ -1,6 +1,7 @@
 //! `static_net` frame encode/decode roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_net = @import("static_net");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -50,7 +51,7 @@ const ThroughputContext = struct {
 
         context.payload[0] +%= 1;
         context.sink = bench.case.blackBox(@as(u64, step.status.frame.payload_len) ^ written);
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 

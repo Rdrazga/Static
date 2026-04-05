@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_simd = @import("static_simd");
 const static_testing = @import("static_testing");
 
@@ -24,10 +25,10 @@ const trig_violation = [_]checker.Violation{
 };
 
 test "static_simd replay-backed trig differential families stay aligned with scalar references" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -57,8 +58,8 @@ test "static_simd replay-backed trig differential families stay aligned with sca
     };
 
     const summary = try runner.run();
-    try std.testing.expectEqual(case_count_max, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(case_count_max, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 test "static_simd trig edge inputs stay non-crashing at the integration surface" {
@@ -81,8 +82,8 @@ test "static_simd trig boundary sin and cos stay finite across the documented ra
     const cos_values = static_simd.trig.cos4f(boundary_values).toArray();
 
     inline for (0..4) |lane_index| {
-        try std.testing.expect(std.math.isFinite(sin_values[lane_index]));
-        try std.testing.expect(std.math.isFinite(cos_values[lane_index]));
+        try testing.expect(std.math.isFinite(sin_values[lane_index]));
+        try testing.expect(std.math.isFinite(cos_values[lane_index]));
     }
 }
 

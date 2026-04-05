@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -27,7 +28,7 @@ test "simulation exploration validates wait_queue wake-before-timeout protocol a
         fn run(_: *const anyopaque, input: explore.ExplorationScenarioInput) !explore.ExplorationScenarioExecution {
             var fixture: sim.fixture.Fixture(4, 4, 4, 24) = undefined;
             try fixture.init(.{
-                .allocator = std.testing.allocator,
+                .allocator = testing.allocator,
                 .timer_queue_config = .{
                     .buckets = 8,
                     .timers_max = 8,
@@ -166,9 +167,9 @@ test "simulation exploration validates wait_queue wake-before-timeout protocol a
         .schedules_max = 3,
     }, scenario, null);
 
-    try std.testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure == null);
+    try testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure == null);
 }
 
 fn traceContainsLabel(snapshot: trace.TraceSnapshot, label: []const u8) bool {
@@ -200,7 +201,7 @@ test "simulation exploration validates condvar broadcast protocol across schedul
         fn run(_: *const anyopaque, input: explore.ExplorationScenarioInput) !explore.ExplorationScenarioExecution {
             var fixture: sim.fixture.Fixture(6, 6, 6, 24) = undefined;
             try fixture.init(.{
-                .allocator = std.testing.allocator,
+                .allocator = testing.allocator,
                 .timer_queue_config = .{
                     .buckets = 8,
                     .timers_max = 8,
@@ -361,9 +362,9 @@ test "simulation exploration validates condvar broadcast protocol across schedul
         .schedules_max = 3,
     }, scenario, null);
 
-    try std.testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure == null);
+    try testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure == null);
 }
 
 test "simulation exploration validates condvar timeout protocol" {
@@ -386,7 +387,7 @@ test "simulation exploration validates condvar timeout protocol" {
         fn run(_: *const anyopaque, input: explore.ExplorationScenarioInput) !explore.ExplorationScenarioExecution {
             var fixture: sim.fixture.Fixture(4, 4, 4, 0) = undefined;
             try fixture.init(.{
-                .allocator = std.testing.allocator,
+                .allocator = testing.allocator,
                 .timer_queue_config = .{
                     .buckets = 8,
                     .timers_max = 8,
@@ -447,7 +448,7 @@ test "simulation exploration validates condvar timeout protocol" {
         .schedules_max = 1,
     }, scenario, null);
 
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure == null);
+    try testing.expectEqual(@as(u32, 1), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 0), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure == null);
 }

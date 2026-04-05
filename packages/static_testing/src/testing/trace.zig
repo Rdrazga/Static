@@ -5,6 +5,8 @@
 //! as long as any exported trace JSON needs those labels.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const artifact = @import("../artifact/root.zig");
 const profile = @import("static_profile");
@@ -304,8 +306,8 @@ pub const TraceBuffer = struct {
 
     /// Append one trace event with the next sequence number.
     pub fn append(self: *TraceBuffer, entry: TraceAppend) TraceAppendError!void {
-        std.debug.assert(entry.label.len > 0);
-        std.debug.assert(self.event_count <= self.max_events);
+        assert(entry.label.len > 0);
+        assert(self.event_count <= self.max_events);
 
         if (self.event_count >= self.max_events) {
             self.truncated = true;
@@ -327,12 +329,12 @@ pub const TraceBuffer = struct {
         } else {
             self.next_sequence_no = sequence_no;
         }
-        std.debug.assert(self.event_count <= self.max_events);
+        assert(self.event_count <= self.max_events);
     }
 
     /// Reset event count, sequence number, and truncation state.
     pub fn reset(self: *TraceBuffer) void {
-        std.debug.assert(self.max_events > 0);
+        assert(self.max_events > 0);
         self.event_count = 0;
         self.next_sequence_no = self.start_sequence_no;
         self.truncated = false;
@@ -340,7 +342,7 @@ pub const TraceBuffer = struct {
 
     /// Snapshot the currently stored trace prefix.
     pub fn snapshot(self: *const TraceBuffer) TraceSnapshot {
-        std.debug.assert(self.event_count <= self.max_events);
+        assert(self.event_count <= self.max_events);
         return .{
             .items = self.storage[0..self.event_count],
             .truncated = self.truncated,
@@ -349,15 +351,15 @@ pub const TraceBuffer = struct {
 
     /// Report how many more events can be appended before truncation begins.
     pub fn freeSlots(self: *const TraceBuffer) usize {
-        std.debug.assert(self.event_count <= self.max_events);
+        assert(self.event_count <= self.max_events);
         return self.max_events - self.event_count;
     }
 };
 
 comptime {
     core.errors.assertVocabularySubset(TraceAppendError);
-    std.debug.assert(std.meta.fields(TraceCategory).len == 5);
-    std.debug.assert(retained_trace_record_version == 1);
+    assert(std.meta.fields(TraceCategory).len == 5);
+    assert(retained_trace_record_version == 1);
 }
 
 fn sequenceRangeFits(config: TraceBufferConfig) bool {
@@ -393,19 +395,19 @@ fn assertTraceSnapshot(snapshot: TraceSnapshot) void {
     for (snapshot.items, 0..) |event, index| {
         assertTraceEvent(event);
         if (index != 0) {
-            std.debug.assert(previous_sequence_no < event.sequence_no);
+            assert(previous_sequence_no < event.sequence_no);
             previous_sequence_no = event.sequence_no;
         }
     }
 }
 
 fn assertTraceEvent(event: TraceEvent) void {
-    std.debug.assert(event.label.len != 0);
+    assert(event.label.len != 0);
     if (event.lineage.surface_label) |surface_label| {
-        std.debug.assert(surface_label.len != 0);
+        assert(surface_label.len != 0);
     }
     if (event.lineage.cause_sequence_no) |cause_sequence_no| {
-        std.debug.assert(cause_sequence_no < event.sequence_no);
+        assert(cause_sequence_no < event.sequence_no);
     }
 }
 
@@ -511,7 +513,7 @@ fn encodeRetainedTraceEvent(
     buffer: []u8,
     event: TraceEvent,
 ) artifact.record_log.ArtifactRecordLogError![]const u8 {
-    std.debug.assert(event.label.len > 0);
+    assert(event.label.len > 0);
     var writer = RetainedTraceBufferWriter.init(buffer);
     const flags: u8 =
         (if (event.lineage.cause_sequence_no != null) retained_trace_flag_has_cause else 0) |
@@ -673,10 +675,10 @@ test "trace buffer appends in order and snapshot metadata matches" {
     const snapshot = buffer.snapshot();
     const metadata = snapshot.metadata();
 
-    try std.testing.expectEqual(@as(u32, 9), snapshot.items[0].sequence_no);
-    try std.testing.expectEqual(@as(u32, 10), snapshot.items[1].sequence_no);
-    try std.testing.expectEqual(@as(u32, 2), metadata.event_count);
-    try std.testing.expect(metadata.has_range);
+    try testing.expectEqual(@as(u32, 9), snapshot.items[0].sequence_no);
+    try testing.expectEqual(@as(u32, 10), snapshot.items[1].sequence_no);
+    try testing.expectEqual(@as(u32, 2), metadata.event_count);
+    try testing.expect(metadata.has_range);
 }
 
 test "trace buffer marks truncation and keeps successful entries unchanged" {
@@ -688,14 +690,14 @@ test "trace buffer marks truncation and keeps successful entries unchanged" {
         .category = .input,
         .label = "first",
     });
-    try std.testing.expectError(error.NoSpaceLeft, buffer.append(.{
+    try testing.expectError(error.NoSpaceLeft, buffer.append(.{
         .timestamp_ns = 2,
         .category = .input,
         .label = "second",
     }));
 
-    try std.testing.expectEqual(@as(usize, 1), buffer.snapshot().items.len);
-    try std.testing.expect(buffer.snapshot().truncated);
+    try testing.expectEqual(@as(usize, 1), buffer.snapshot().items.len);
+    try testing.expect(buffer.snapshot().truncated);
 }
 
 test "trace buffer reset clears count and truncation" {
@@ -710,9 +712,9 @@ test "trace buffer reset clears count and truncation" {
     buffer.reset();
 
     const snapshot = buffer.snapshot();
-    try std.testing.expectEqual(@as(usize, 0), snapshot.items.len);
-    try std.testing.expect(!snapshot.truncated);
-    try std.testing.expectEqual(@as(u32, 4), buffer.next_sequence_no);
+    try testing.expectEqual(@as(usize, 0), snapshot.items.len);
+    try testing.expect(!snapshot.truncated);
+    try testing.expectEqual(@as(u32, 4), buffer.next_sequence_no);
 }
 
 test "trace snapshot exports deterministic chrome trace json" {
@@ -727,12 +729,12 @@ test "trace snapshot exports deterministic chrome trace json" {
         .value = 3,
     });
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try buffer.snapshot().writeChromeTraceJson(&aw.writer);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "[{\"name\":\"sample\",\"cat\":\"bench\",\"ph\":\"i\",\"ts\":10,\"pid\":0,\"tid\":0,\"s\":\"t\",\"args\":{\"seq\":0,\"value\":3}}]",
         out.items,
     );
@@ -774,12 +776,12 @@ test "captureSnapshot copies labels and lineage into caller-owned buffers" {
     storage[1].label = "other";
     storage[1].lineage.surface_label = "changed";
 
-    try std.testing.expectEqual(@as(usize, 2), copied.items.len);
-    try std.testing.expectEqualStrings("choose", copied.items[0].label);
-    try std.testing.expectEqualStrings("apply", copied.items[1].label);
-    try std.testing.expectEqualStrings("lane", copied.items[1].lineage.surface_label.?);
-    try std.testing.expectEqual(@as(u32, 11), copied.items[0].sequence_no);
-    try std.testing.expectEqual(@as(u32, 12), copied.items[1].sequence_no);
+    try testing.expectEqual(@as(usize, 2), copied.items.len);
+    try testing.expectEqualStrings("choose", copied.items[0].label);
+    try testing.expectEqualStrings("apply", copied.items[1].label);
+    try testing.expectEqualStrings("lane", copied.items[1].lineage.surface_label.?);
+    try testing.expectEqual(@as(u32, 11), copied.items[0].sequence_no);
+    try testing.expectEqual(@as(u32, 12), copied.items[1].sequence_no);
 }
 
 test "trace snapshot exports multiple events in insertion order" {
@@ -801,12 +803,12 @@ test "trace snapshot exports multiple events in insertion order" {
         .value = 7,
     });
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try buffer.snapshot().writeChromeTraceJson(&aw.writer);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "[{\"name\":\"boot\",\"cat\":\"info\",\"ph\":\"i\",\"ts\":1,\"pid\":0,\"tid\":0,\"s\":\"t\",\"args\":{\"seq\":9,\"value\":1}},{\"name\":\"choose\",\"cat\":\"decision\",\"ph\":\"i\",\"ts\":2,\"pid\":0,\"tid\":0,\"s\":\"t\",\"args\":{\"seq\":10,\"value\":7}}]",
         out.items,
     );
@@ -846,29 +848,29 @@ test "trace snapshot summarizes causal lineage and formats deterministic text" {
 
     const snapshot = buffer.snapshot();
     const summary = snapshot.provenanceSummary();
-    try std.testing.expect(summary.has_provenance);
-    try std.testing.expectEqual(@as(u32, 2), summary.caused_event_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.root_event_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.correlated_event_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.surface_labeled_event_count);
-    try std.testing.expectEqual(@as(u16, 2), summary.max_causal_depth);
+    try testing.expect(summary.has_provenance);
+    try testing.expectEqual(@as(u32, 2), summary.caused_event_count);
+    try testing.expectEqual(@as(u32, 1), summary.root_event_count);
+    try testing.expectEqual(@as(u32, 2), summary.correlated_event_count);
+    try testing.expectEqual(@as(u32, 2), summary.surface_labeled_event_count);
+    try testing.expectEqual(@as(u16, 2), summary.max_causal_depth);
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try snapshot.writeCausalityText(&aw.writer);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "seq=20 label=boot cause_seq=root\nseq=21 label=choose cause_seq=20 correlation_id=99 surface=scheduler\nseq=22 label=deliver cause_seq=21 correlation_id=99 surface=mailbox",
         out.items,
     );
 }
 
 test "retained trace file preserves bounded events and lineage" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -913,19 +915,19 @@ test "retained trace file preserves bounded events and lineage" {
         .label_buffer = &read_labels,
     });
 
-    try std.testing.expectEqual(@as(usize, 2), snapshot.items.len);
-    try std.testing.expectEqual(@as(u32, 17), snapshot.items[0].sequence_no);
-    try std.testing.expectEqualStrings("apply", snapshot.items[1].label);
-    try std.testing.expectEqual(@as(?u32, 17), snapshot.items[1].lineage.cause_sequence_no);
-    try std.testing.expectEqual(@as(?u64, 44), snapshot.items[1].lineage.correlation_id);
-    try std.testing.expectEqualStrings("mailbox", snapshot.items[1].lineage.surface_label.?);
+    try testing.expectEqual(@as(usize, 2), snapshot.items.len);
+    try testing.expectEqual(@as(u32, 17), snapshot.items[0].sequence_no);
+    try testing.expectEqualStrings("apply", snapshot.items[1].label);
+    try testing.expectEqual(@as(?u32, 17), snapshot.items[1].lineage.cause_sequence_no);
+    try testing.expectEqual(@as(?u64, 44), snapshot.items[1].lineage.correlation_id);
+    try testing.expectEqualStrings("mailbox", snapshot.items[1].lineage.surface_label.?);
 }
 
 test "retained trace file validates bounded path and buffer inputs" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -940,7 +942,7 @@ test "retained trace file validates bounded path and buffer inputs" {
     });
 
     var file_buffer: [256]u8 = undefined;
-    try std.testing.expectError(error.InvalidInput, writeRetainedTraceFile(
+    try testing.expectError(error.InvalidInput, writeRetainedTraceFile(
         io,
         tmp_dir.dir,
         "",
@@ -953,7 +955,7 @@ test "retained trace file validates bounded path and buffer inputs" {
 
     var read_file_buffer: [256]u8 = undefined;
     var read_labels: [64]u8 = undefined;
-    try std.testing.expectError(error.InvalidInput, readRetainedTraceFile(
+    try testing.expectError(error.InvalidInput, readRetainedTraceFile(
         io,
         tmp_dir.dir,
         "",
@@ -967,10 +969,10 @@ test "retained trace file validates bounded path and buffer inputs" {
 
 test "trace buffer validates sequence boundaries and storage bounds" {
     var small_storage: [1]TraceEvent = undefined;
-    try std.testing.expectError(error.InvalidConfig, TraceBuffer.init(&small_storage, .{
+    try testing.expectError(error.InvalidConfig, TraceBuffer.init(&small_storage, .{
         .max_events = 0,
     }));
-    try std.testing.expectError(error.InvalidConfig, TraceBuffer.init(&small_storage, .{
+    try testing.expectError(error.InvalidConfig, TraceBuffer.init(&small_storage, .{
         .max_events = 2,
     }));
 
@@ -979,9 +981,9 @@ test "trace buffer validates sequence boundaries and storage bounds" {
         .max_events = 1,
         .start_sequence_no = std.math.maxInt(u32),
     });
-    try std.testing.expectEqual(std.math.maxInt(u32), boundary.next_sequence_no);
+    try testing.expectEqual(std.math.maxInt(u32), boundary.next_sequence_no);
 
-    try std.testing.expectError(error.InvalidConfig, TraceBuffer.init(&boundary_storage, .{
+    try testing.expectError(error.InvalidConfig, TraceBuffer.init(&boundary_storage, .{
         .max_events = 2,
         .start_sequence_no = std.math.maxInt(u32),
     }));
@@ -1000,10 +1002,10 @@ test "trace buffer supports the final valid u32 sequence number without overflow
         .label = "boundary",
     });
 
-    try std.testing.expectEqual(@as(usize, 0), buffer.freeSlots());
-    try std.testing.expectEqual(std.math.maxInt(u32), buffer.snapshot().items[0].sequence_no);
-    try std.testing.expectEqual(std.math.maxInt(u32), buffer.next_sequence_no);
-    try std.testing.expectError(error.NoSpaceLeft, buffer.append(.{
+    try testing.expectEqual(@as(usize, 0), buffer.freeSlots());
+    try testing.expectEqual(std.math.maxInt(u32), buffer.snapshot().items[0].sequence_no);
+    try testing.expectEqual(std.math.maxInt(u32), buffer.next_sequence_no);
+    try testing.expectError(error.NoSpaceLeft, buffer.append(.{
         .timestamp_ns = 2,
         .category = .info,
         .label = "overflow_guard",

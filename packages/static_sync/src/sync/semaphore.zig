@@ -4,6 +4,8 @@
 //! Single-threaded mode: `wait` and `timedWait` are absent; `tryWait` and `post`
 //!   remain available for cooperative single-threaded use.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const backoff = @import("backoff.zig");
 const caps = @import("caps.zig");
@@ -17,7 +19,7 @@ pub const supports_blocking_wait = caps.Caps.threads_enabled;
 pub const supports_timed_wait = caps.Caps.threads_enabled;
 
 comptime {
-    std.debug.assert(!supports_parking_wait or supports_blocking_wait);
+    assert(!supports_parking_wait or supports_blocking_wait);
     core.errors.assertVocabularySubset(error{WouldBlock});
     core.errors.assertVocabularySubset(error{ Timeout, Unsupported });
 }
@@ -29,10 +31,10 @@ comptime {
 /// this function to keep the arithmetic in one place.
 fn computePost(current: usize, permit_count: usize) usize {
     // Precondition: permit_count is positive (callers guard zero-count posts).
-    std.debug.assert(permit_count > 0);
+    assert(permit_count > 0);
     const result = current +| permit_count;
     // Postcondition: result is at least current (saturating add never decreases).
-    std.debug.assert(result >= current);
+    assert(result >= current);
     return result;
 }
 
@@ -42,11 +44,11 @@ fn computePost(current: usize, permit_count: usize) usize {
 /// Both branches call this function so the decrement logic is defined once.
 fn computeTryWait(current: usize) ?usize {
     // Precondition: current is a valid (non-negative) permit count.
-    std.debug.assert(current <= std.math.maxInt(usize));
+    assert(current <= std.math.maxInt(usize));
     if (current == 0) return null;
     const next = current - 1;
     // Postcondition: next is strictly less than current when a permit was available.
-    std.debug.assert(next < current);
+    assert(next < current);
     return next;
 }
 
@@ -63,7 +65,7 @@ pub const Semaphore = if (supports_blocking_wait) struct {
     /// Callers passing `permit_count == 0` are no-ops.
     pub fn post(self: *Semaphore, permit_count: usize) void {
         if (permit_count == 0) return;
-        std.debug.assert(permit_count > 0);
+        assert(permit_count > 0);
 
         // Bound CAS retries: under correct operation this loop succeeds within a few
         // attempts. Exhaustion indicates livelock or extreme contention.
@@ -100,14 +102,14 @@ pub const Semaphore = if (supports_blocking_wait) struct {
         while (cas_attempts < max_cas_retries) : (cas_attempts += 1) {
             const current_permits = self.permits.load(.acquire);
             const next_permits = computeTryWait(current_permits) orelse return error.WouldBlock;
-            std.debug.assert(next_permits < current_permits);
+            assert(next_permits < current_permits);
             if (self.permits.cmpxchgWeak(
                 current_permits,
                 next_permits,
                 .acq_rel,
                 .acquire,
             ) == null) {
-                std.debug.assert(self.permits.load(.acquire) <= current_permits);
+                assert(self.permits.load(.acquire) <= current_permits);
                 return;
             }
             std.atomic.spinLoopHint();
@@ -116,7 +118,7 @@ pub const Semaphore = if (supports_blocking_wait) struct {
     }
 
     pub fn wait(self: *Semaphore) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
 
         if (supports_parking_wait) {
             self.wait_mutex.lock();
@@ -146,7 +148,7 @@ pub const Semaphore = if (supports_blocking_wait) struct {
     }
 
     pub fn timedWait(self: *Semaphore, timeout_ns: u64) error{ Timeout, Unsupported }!void {
-        std.debug.assert(supports_timed_wait);
+        assert(supports_timed_wait);
 
         if (self.tryWait()) {
             return;
@@ -171,7 +173,7 @@ pub const Semaphore = if (supports_blocking_wait) struct {
                             error.Timeout => return error.Timeout,
                             error.Unsupported => return error.Unsupported,
                         };
-                        std.debug.assert(remaining_ns > 0);
+                        assert(remaining_ns > 0);
                         self.wait_condvar.timedWait(&self.wait_mutex, remaining_ns) catch |wait_err| switch (wait_err) {
                             error.Timeout => {
                                 self.tryWait() catch |try_wait_err| switch (try_wait_err) {
@@ -213,7 +215,7 @@ pub const Semaphore = if (supports_blocking_wait) struct {
 
     pub fn post(self: *Semaphore, permit_count: usize) void {
         if (permit_count == 0) return;
-        std.debug.assert(permit_count > 0);
+        assert(permit_count > 0);
 
         const max_cas_retries: u32 = 256;
         var cas_attempts: u32 = 0;
@@ -226,7 +228,7 @@ pub const Semaphore = if (supports_blocking_wait) struct {
                 .acq_rel,
                 .acquire,
             ) == null) {
-                std.debug.assert(self.permits.load(.acquire) >= next_permits);
+                assert(self.permits.load(.acquire) >= next_permits);
                 return;
             }
             std.atomic.spinLoopHint();
@@ -240,14 +242,14 @@ pub const Semaphore = if (supports_blocking_wait) struct {
         while (cas_attempts < max_cas_retries) : (cas_attempts += 1) {
             const current_permits = self.permits.load(.acquire);
             const next_permits = computeTryWait(current_permits) orelse return error.WouldBlock;
-            std.debug.assert(next_permits < current_permits);
+            assert(next_permits < current_permits);
             if (self.permits.cmpxchgWeak(
                 current_permits,
                 next_permits,
                 .acq_rel,
                 .acquire,
             ) == null) {
-                std.debug.assert(self.permits.load(.acquire) <= current_permits);
+                assert(self.permits.load(.acquire) <= current_permits);
                 return;
             }
             std.atomic.spinLoopHint();
@@ -259,15 +261,15 @@ pub const Semaphore = if (supports_blocking_wait) struct {
 test "semaphore blocking waits are gated by build mode" {
     // Goal: verify compile-time API shape tracks `single_threaded`.
     // Method: query declarations with `@hasDecl`.
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Semaphore, "wait"));
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Semaphore, "timedWait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Semaphore, "wait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Semaphore, "timedWait"));
 }
 
 test "semaphore tryWait semantics" {
     // Goal: verify permit consumption and would-block behavior.
     // Method: try wait empty, post once, then consume once.
     var semaphore = Semaphore{};
-    try std.testing.expectError(error.WouldBlock, semaphore.tryWait());
+    try testing.expectError(error.WouldBlock, semaphore.tryWait());
     semaphore.post(1);
     try semaphore.tryWait();
 }
@@ -277,7 +279,7 @@ test "semaphore post with zero permits is a no-op" {
     // Method: post zero and ensure `tryWait` still would-blocks.
     var semaphore = Semaphore{};
     semaphore.post(0);
-    try std.testing.expectError(error.WouldBlock, semaphore.tryWait());
+    try testing.expectError(error.WouldBlock, semaphore.tryWait());
 }
 
 test "semaphore post saturates at maxInt" {
@@ -286,7 +288,7 @@ test "semaphore post saturates at maxInt" {
     var semaphore = Semaphore{};
     semaphore.post(std.math.maxInt(usize));
     semaphore.post(1);
-    try std.testing.expectEqual(std.math.maxInt(usize), semaphore.permits.load(.acquire));
+    try testing.expectEqual(std.math.maxInt(usize), semaphore.permits.load(.acquire));
 }
 
 test "semaphore timedWait reports Timeout when empty" {
@@ -295,8 +297,8 @@ test "semaphore timedWait reports Timeout when empty" {
     if (!supports_timed_wait) return error.SkipZigTest;
 
     var semaphore = Semaphore{};
-    try std.testing.expectError(error.Timeout, semaphore.timedWait(0));
-    try std.testing.expectError(error.Timeout, semaphore.timedWait(std.time.ns_per_ms));
+    try testing.expectError(error.Timeout, semaphore.timedWait(0));
+    try testing.expectError(error.Timeout, semaphore.timedWait(std.time.ns_per_ms));
 }
 
 test "semaphore timedWait succeeds with preposted permit" {
@@ -329,7 +331,7 @@ test "semaphore wait unblocks after post from another thread" {
     defer thread.join();
 
     semaphore.wait();
-    try std.testing.expectError(error.WouldBlock, semaphore.tryWait());
+    try testing.expectError(error.WouldBlock, semaphore.tryWait());
 }
 
 test "semaphore timedWait unblocks after post from another thread" {
@@ -412,10 +414,10 @@ test "semaphore timedWait unblocks after post from another thread" {
     poster_thread.join();
     waiter_thread.join();
 
-    try std.testing.expect(poster_finished.load(.acquire));
-    try std.testing.expect(waiter_finished.load(.acquire));
-    try std.testing.expectEqual(@intFromEnum(Result.success), waiter_result.load(.acquire));
-    try std.testing.expectError(error.WouldBlock, semaphore.tryWait());
+    try testing.expect(poster_finished.load(.acquire));
+    try testing.expect(waiter_finished.load(.acquire));
+    try testing.expectEqual(@intFromEnum(Result.success), waiter_result.load(.acquire));
+    try testing.expectError(error.WouldBlock, semaphore.tryWait());
 }
 
 fn waitForFlag(flag: *std.atomic.Value(bool), timeout_ns: u64) !void {

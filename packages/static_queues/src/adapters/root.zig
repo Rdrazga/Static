@@ -3,13 +3,14 @@ pub const any_channel = @import("any_channel.zig");
 pub const any_registered_fanout_ring = @import("any_registered_fanout_ring.zig");
 
 const std = @import("std");
+const testing = std.testing;
 const spsc_mod = @import("../queues/spsc.zig");
 const channel_mod = @import("../queues/channel.zig");
 const spsc_channel_mod = @import("../queues/spsc_channel.zig");
 const broadcast_mod = @import("../queues/broadcast.zig");
 
 test "AnyTryQueue wraps a concrete try queue view" {
-    var queue = try spsc_mod.SpscQueue(u16).init(std.testing.allocator, .{ .capacity = 2 });
+    var queue = try spsc_mod.SpscQueue(u16).init(testing.allocator, .{ .capacity = 2 });
     defer queue.deinit();
 
     var any_queue = any_try_queue.AnyTryQueue(
@@ -20,11 +21,11 @@ test "AnyTryQueue wraps a concrete try queue view" {
     ).from(&queue);
 
     try any_queue.trySend(1);
-    try std.testing.expectEqual(@as(u16, 1), try any_queue.tryRecv());
+    try testing.expectEqual(@as(u16, 1), try any_queue.tryRecv());
 }
 
 test "AnyRegisteredFanoutRing wraps concrete fanout view" {
-    var fanout = try broadcast_mod.Broadcast(u16).init(std.testing.allocator, .{
+    var fanout = try broadcast_mod.Broadcast(u16).init(testing.allocator, .{
         .capacity = 4,
         .consumers_max = 2,
     });
@@ -42,7 +43,7 @@ test "AnyChannel is only used when blocking wait is enabled" {
     const C = channel_mod.Channel(u16);
     if (!C.supports_blocking_wait) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 2 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 2 });
     defer channel.deinit();
 
     const TimedWaitError = error{ Closed, Cancelled, Timeout, Unsupported };
@@ -57,16 +58,16 @@ test "AnyChannel is only used when blocking wait is enabled" {
     ).from(&channel);
 
     try any_channel_view.trySend(3);
-    try std.testing.expectEqual(@as(u16, 3), try any_channel_view.tryRecv());
+    try testing.expectEqual(@as(u16, 3), try any_channel_view.tryRecv());
     try any_channel_view.sendTimeout(4, null, std.time.ns_per_s);
-    try std.testing.expectEqual(@as(u16, 4), try any_channel_view.recvTimeout(null, std.time.ns_per_s));
+    try testing.expectEqual(@as(u16, 4), try any_channel_view.recvTimeout(null, std.time.ns_per_s));
 }
 
 test "AnyChannel also covers SpscChannel blocking wait contracts" {
     const C = spsc_channel_mod.SpscChannel(u16);
     if (!C.supports_blocking_wait) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 2 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 2 });
     defer channel.deinit();
 
     const TimedWaitError = error{ Closed, Cancelled, Timeout, Unsupported };
@@ -81,9 +82,9 @@ test "AnyChannel also covers SpscChannel blocking wait contracts" {
     ).from(&channel);
 
     try any_channel_view.trySend(5);
-    try std.testing.expectEqual(@as(u16, 5), try any_channel_view.tryRecv());
+    try testing.expectEqual(@as(u16, 5), try any_channel_view.tryRecv());
     try any_channel_view.sendTimeout(6, null, std.time.ns_per_s);
-    try std.testing.expectEqual(@as(u16, 6), try any_channel_view.recvTimeout(null, std.time.ns_per_s));
+    try testing.expectEqual(@as(u16, 6), try any_channel_view.recvTimeout(null, std.time.ns_per_s));
 }
 
 test {

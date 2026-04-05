@@ -7,6 +7,7 @@
 //!   make the abstraction cost explicit.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_hash = @import("static_hash");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -229,23 +230,23 @@ fn validateSemanticPreflight(
     four_values: []const u64,
     sixteen_values: []const u64,
 ) void {
-    std.debug.assert(
+    assert(
         static_hash.combineOrdered64(pair) !=
             static_hash.combineOrdered64(.{ .left = pair.right, .right = pair.left }),
     );
-    std.debug.assert(
+    assert(
         static_hash.combineUnordered64(pair) ==
             static_hash.combineUnordered64(.{ .left = pair.right, .right = pair.left }),
     );
-    std.debug.assert(
+    assert(
         foldUnorderedMultiset(four_values) ==
             foldUnorderedMultisetReverse(four_values),
     );
-    std.debug.assert(
+    assert(
         foldUnorderedMultiset(sixteen_values) ==
             foldUnorderedMultisetReverse(sixteen_values),
     );
-    std.debug.assert(
+    assert(
         static_hash.combineUnorderedMultiset64(
             foldUnorderedMultiset(four_values),
             four_values[0],
@@ -254,7 +255,7 @@ fn validateSemanticPreflight(
 }
 
 fn foldOrdered(values: []const u64) u64 {
-    std.debug.assert(values.len != 0);
+    assert(values.len != 0);
     var acc = values[0];
     for (values[1..]) |value| {
         acc = static_hash.combineOrdered64(.{

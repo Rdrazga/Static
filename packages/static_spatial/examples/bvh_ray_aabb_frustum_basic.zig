@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const spatial = @import("static_spatial");
 
 pub fn main() !void {
@@ -17,14 +18,14 @@ pub fn main() !void {
     var ray_hits: [8]u32 = undefined;
     const ray = spatial.Ray3.init(-1.0, 0.5, 0.5, 1.0, 0.0, 0.0);
     const ray_count = bvh.queryRay(ray, &ray_hits);
-    std.debug.assert(ray_count == 2);
+    assert(ray_count == 2);
 
     var aabb_hits: [8]u32 = undefined;
     const aabb_count = bvh.queryAABB(
         spatial.AABB3.init(-0.5, -0.5, -0.5, 3.5, 1.5, 1.5),
         &aabb_hits,
     );
-    std.debug.assert(aabb_count == 2);
+    assert(aabb_count == 2);
 
     const frustum = spatial.Frustum{
         .planes = .{
@@ -38,5 +39,5 @@ pub fn main() !void {
     };
     var frustum_hits: [8]u32 = undefined;
     const frustum_count = bvh.queryFrustum(frustum, &frustum_hits);
-    std.debug.assert(frustum_count >= 2);
+    assert(frustum_count >= 2);
 }

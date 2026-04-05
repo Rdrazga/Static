@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 
 const max_file_bytes: usize = 1024 * 1024;
 const max_agents_lines: u32 = 80;
@@ -259,7 +260,7 @@ fn readFile(
     io: std.Io,
     path: []const u8,
 ) ![]const u8 {
-    std.debug.assert(path.len != 0);
+    assert(path.len != 0);
     return try std.Io.Dir.cwd().readFileAlloc(
         io,
         path,
@@ -274,8 +275,8 @@ fn checkContains(
     content: []const u8,
     needle: []const u8,
 ) void {
-    std.debug.assert(path.len != 0);
-    std.debug.assert(needle.len != 0);
+    assert(path.len != 0);
+    assert(needle.len != 0);
 
     if (std.mem.indexOf(u8, content, needle) == null) {
         linter.fail("{s} is missing required text: {s}", .{ path, needle });
@@ -288,8 +289,8 @@ fn checkMaxLines(
     content: []const u8,
     line_count_max: u32,
 ) void {
-    std.debug.assert(path.len != 0);
-    std.debug.assert(line_count_max > 0);
+    assert(path.len != 0);
+    assert(line_count_max > 0);
 
     const line_count: u32 = countLines(content);
     if (line_count > line_count_max) {

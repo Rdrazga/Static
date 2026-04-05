@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -43,7 +44,7 @@ pub fn openOutputDir(
     io: std.Io,
     benchmark_name: []const u8,
 ) !std.Io.Dir {
-    std.debug.assert(benchmark_name.len > 0);
+    assert(benchmark_name.len > 0);
 
     const cwd = std.Io.Dir.cwd();
     var path_buffer: [192]u8 = undefined;
@@ -52,7 +53,7 @@ pub fn openOutputDir(
         ".zig-cache/static_hash/benchmarks/{s}",
         .{benchmark_name},
     );
-    std.debug.assert(output_dir_path.len > 0);
+    assert(output_dir_path.len > 0);
     return cwd.createDirPathOpen(io, output_dir_path, .{});
 }
 
@@ -68,12 +69,12 @@ pub fn writeReport(
     enforce_gate: bool,
     history: ?HistoryBuffers,
 ) !bench.workflow.WorkflowSummary {
-    std.debug.assert(benchmark_name.len > 0);
-    std.debug.assert(report_buffers.stats_storage.len > 0);
-    std.debug.assert(report_buffers.baseline_document_buffer.len > 0);
-    std.debug.assert(report_buffers.read_source_buffer.len > 0);
-    std.debug.assert(report_buffers.read_parse_buffer.len > 0);
-    std.debug.assert(report_buffers.comparison_storage.len > 0);
+    assert(benchmark_name.len > 0);
+    assert(report_buffers.stats_storage.len > 0);
+    assert(report_buffers.baseline_document_buffer.len > 0);
+    assert(report_buffers.read_source_buffer.len > 0);
+    assert(report_buffers.read_parse_buffer.len > 0);
+    assert(report_buffers.comparison_storage.len > 0);
 
     return bench.workflow.writeTextAndOptionalBaselineReport(writer, run_result, .{
         .io = io,

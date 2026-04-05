@@ -5,6 +5,8 @@
 //! large copies.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const queues = @import("static_queues");
 
 /// Public mailbox operating errors.
@@ -51,7 +53,7 @@ pub fn Mailbox(comptime T: type) type {
             self.queue.tryPush(value) catch |err| switch (err) {
                 error.WouldBlock => return error.NoSpaceLeft,
             };
-            std.debug.assert(self.queue.len() > 0);
+            assert(self.queue.len() > 0);
         }
 
         /// Dequeue and return the next mailbox value by copy.
@@ -91,52 +93,52 @@ fn mapInitError(err: queues.ring_buffer.Error) MailboxError {
 }
 
 test "mailbox preserves fifo ordering" {
-    var mailbox = try Mailbox(u32).init(std.testing.allocator, .{ .capacity = 3 });
+    var mailbox = try Mailbox(u32).init(testing.allocator, .{ .capacity = 3 });
     defer mailbox.deinit();
 
     try mailbox.send(1);
     try mailbox.send(2);
-    try std.testing.expectEqual(@as(u32, 1), try mailbox.recv());
-    try std.testing.expectEqual(@as(u32, 2), try mailbox.recv());
+    try testing.expectEqual(@as(u32, 1), try mailbox.recv());
+    try testing.expectEqual(@as(u32, 2), try mailbox.recv());
 }
 
 test "mailbox wraparound and full empty behavior" {
-    var mailbox = try Mailbox(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox = try Mailbox(u8).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox.deinit();
 
     try mailbox.send(9);
     try mailbox.send(10);
-    try std.testing.expectError(error.NoSpaceLeft, mailbox.send(11));
-    try std.testing.expectEqual(@as(u8, 9), try mailbox.recv());
+    try testing.expectError(error.NoSpaceLeft, mailbox.send(11));
+    try testing.expectEqual(@as(u8, 9), try mailbox.recv());
     try mailbox.send(12);
-    try std.testing.expectEqual(@as(u8, 10), try mailbox.recv());
-    try std.testing.expectEqual(@as(u8, 12), try mailbox.recv());
-    try std.testing.expectError(error.WouldBlock, mailbox.recv());
+    try testing.expectEqual(@as(u8, 10), try mailbox.recv());
+    try testing.expectEqual(@as(u8, 12), try mailbox.recv());
+    try testing.expectError(error.WouldBlock, mailbox.recv());
 }
 
 test "mailbox rejects invalid capacity and peek preserves the head item" {
-    try std.testing.expectError(error.InvalidConfig, Mailbox(u8).init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, Mailbox(u8).init(testing.allocator, .{
         .capacity = 0,
     }));
 
-    var mailbox = try Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox = try Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox.deinit();
 
-    try std.testing.expectError(error.WouldBlock, mailbox.peek());
+    try testing.expectError(error.WouldBlock, mailbox.peek());
     try mailbox.send(41);
     try mailbox.send(99);
-    try std.testing.expectEqual(@as(u32, 41), try mailbox.peek());
-    try std.testing.expectEqual(@as(usize, 2), mailbox.len());
-    try std.testing.expectEqual(@as(u32, 41), try mailbox.recv());
+    try testing.expectEqual(@as(u32, 41), try mailbox.peek());
+    try testing.expectEqual(@as(usize, 2), mailbox.len());
+    try testing.expectEqual(@as(u32, 41), try mailbox.recv());
 }
 
 test "mailbox reports remaining bounded send capacity" {
-    var mailbox = try Mailbox(u32).init(std.testing.allocator, .{ .capacity = 3 });
+    var mailbox = try Mailbox(u32).init(testing.allocator, .{ .capacity = 3 });
     defer mailbox.deinit();
 
-    try std.testing.expectEqual(@as(usize, 3), mailbox.freeSlots());
+    try testing.expectEqual(@as(usize, 3), mailbox.freeSlots());
     try mailbox.send(1);
-    try std.testing.expectEqual(@as(usize, 2), mailbox.freeSlots());
+    try testing.expectEqual(@as(usize, 2), mailbox.freeSlots());
     _ = try mailbox.recv();
-    try std.testing.expectEqual(@as(usize, 3), mailbox.freeSlots());
+    try testing.expectEqual(@as(usize, 3), mailbox.freeSlots());
 }

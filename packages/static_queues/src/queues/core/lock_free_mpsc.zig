@@ -6,6 +6,8 @@
 //! contention prevents progress within the configured retry bound.
 //! Batch operations: intentionally omitted for lock-free queues; loop manually for explicit retry/fairness control.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("../ring_buffer.zig");
 const memory = @import("static_memory");
 const sync = @import("static_sync");
@@ -14,8 +16,8 @@ const contracts = @import("../../contracts.zig");
 
 pub fn LockFreeMpscQueue(comptime T: type) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -86,14 +88,14 @@ pub fn LockFreeMpscQueue(comptime T: type) type {
                 .cas_retries_max = cfg.cas_retries_max,
                 .backoff_exponent_max = cfg.backoff_exponent_max,
             };
-            std.debug.assert(self.buffer.len == cfg.capacity);
-            std.debug.assert(self.head.load(.monotonic) == 0);
-            std.debug.assert(self.tail.load(.monotonic) == 0);
+            assert(self.buffer.len == cfg.capacity);
+            assert(self.head.load(.monotonic) == 0);
+            assert(self.tail.load(.monotonic) == 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
-            std.debug.assert(self.buffer.len > 0);
+            assert(self.buffer.len > 0);
             if (self.budget) |budget| {
                 budget.release(qi.bytesForItems(self.buffer.len, @sizeOf(Cell)));
             }
@@ -102,8 +104,8 @@ pub fn LockFreeMpscQueue(comptime T: type) type {
         }
 
         pub fn capacity(self: *const Self) usize {
-            std.debug.assert(self.buffer.len > 0);
-            std.debug.assert(std.math.isPowerOfTwo(self.buffer.len));
+            assert(self.buffer.len > 0);
+            assert(std.math.isPowerOfTwo(self.buffer.len));
             return self.buffer.len;
         }
 
@@ -188,42 +190,42 @@ pub fn LockFreeMpscQueue(comptime T: type) type {
 }
 
 test "lock-free mpsc queue wraparound and WouldBlock semantics" {
-    var q = try LockFreeMpscQueue(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var q = try LockFreeMpscQueue(u8).init(testing.allocator, .{ .capacity = 2 });
     defer q.deinit();
 
     try q.trySend(1);
     try q.trySend(2);
-    try std.testing.expectError(error.WouldBlock, q.trySend(3));
-    try std.testing.expectEqual(@as(u8, 1), try q.tryRecv());
+    try testing.expectError(error.WouldBlock, q.trySend(3));
+    try testing.expectEqual(@as(u8, 1), try q.tryRecv());
     try q.trySend(3);
-    try std.testing.expectEqual(@as(u8, 2), try q.tryRecv());
-    try std.testing.expectEqual(@as(u8, 3), try q.tryRecv());
-    try std.testing.expectError(error.WouldBlock, q.tryRecv());
+    try testing.expectEqual(@as(u8, 2), try q.tryRecv());
+    try testing.expectEqual(@as(u8, 3), try q.tryRecv());
+    try testing.expectError(error.WouldBlock, q.tryRecv());
 }
 
 test "lock-free mpsc queue rejects invalid retry config" {
-    try std.testing.expectError(error.InvalidConfig, LockFreeMpscQueue(u8).init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, LockFreeMpscQueue(u8).init(testing.allocator, .{
         .capacity = 4,
         .cas_retries_max = 0,
     }));
 }
 
 test "lock-free mpsc queue introspection methods reflect queue state" {
-    var q = try LockFreeMpscQueue(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var q = try LockFreeMpscQueue(u8).init(testing.allocator, .{ .capacity = 2 });
     defer q.deinit();
 
-    try std.testing.expectEqual(@as(usize, 2), q.capacity());
-    try std.testing.expectEqual(@as(usize, 0), q.len());
-    try std.testing.expect(q.isEmpty());
-    try std.testing.expect(!q.isFull());
+    try testing.expectEqual(@as(usize, 2), q.capacity());
+    try testing.expectEqual(@as(usize, 0), q.len());
+    try testing.expect(q.isEmpty());
+    try testing.expect(!q.isFull());
 
     try q.trySend(1);
-    try std.testing.expect(!q.isEmpty());
-    try std.testing.expect(!q.isFull());
+    try testing.expect(!q.isEmpty());
+    try testing.expect(!q.isFull());
 
     try q.trySend(2);
-    try std.testing.expect(q.isFull());
+    try testing.expect(q.isFull());
 
     _ = try q.tryRecv();
-    try std.testing.expect(!q.isFull());
+    try testing.expect(!q.isFull());
 }

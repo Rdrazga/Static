@@ -9,6 +9,8 @@
 //! Preconditions are enforced via assertions (programmer errors).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const scalar = @import("scalar.zig");
 const vec3_mod = @import("vec3.zig");
 const mat3_mod = @import("mat3.zig");
@@ -22,7 +24,7 @@ pub const Quat = extern struct {
 
     comptime {
         // Compile-time invariant: extern struct must be exactly 4 floats.
-        std.debug.assert(@sizeOf(Quat) == 4 * @sizeOf(f32));
+        assert(@sizeOf(Quat) == 4 * @sizeOf(f32));
     }
 
     // ── Constants ──────────────────────────────────────────────────────
@@ -42,7 +44,7 @@ pub const Quat = extern struct {
         angle_rad: f32,
     ) Quat {
         // Precondition: axis must be unit length (mirrors Mat3.fromRotation pattern).
-        std.debug.assert(vec3_mod.Vec3.approxEqual(
+        assert(vec3_mod.Vec3.approxEqual(
             vec3_mod.Vec3.splat(axis.lengthSq()),
             vec3_mod.Vec3.one,
             scalar.epsilon * 100.0,
@@ -71,7 +73,7 @@ pub const Quat = extern struct {
     /// Precondition: matrix represents a rotation (orthonormal basis).
     pub fn fromMat3(m: mat3_mod.Mat3) Quat {
         // Precondition: matrix must be orthonormal (det ≈ 1 means rotation, not reflection/scale).
-        std.debug.assert(@abs(mat3_mod.Mat3.determinant(m) - 1.0) <= scalar.epsilon * 1000.0);
+        assert(@abs(mat3_mod.Mat3.determinant(m) - 1.0) <= scalar.epsilon * 1000.0);
 
         const m00 = mat3_mod.Mat3.at(m, 0, 0);
         const m11 = mat3_mod.Mat3.at(m, 1, 1);
@@ -125,7 +127,7 @@ pub const Quat = extern struct {
         };
 
         // Postcondition: result must be approximately unit-length.
-        std.debug.assert(@abs(lengthSq(result) - 1.0) <= scalar.epsilon * 1000.0);
+        assert(@abs(lengthSq(result) - 1.0) <= scalar.epsilon * 1000.0);
         return result;
     }
 
@@ -135,7 +137,7 @@ pub const Quat = extern struct {
     pub inline fn fromMat4(m: mat4_mod.Mat4) Quat {
         // Precondition: upper-left 3x3 must have det ≈ 1.0 (pair assertion with fromMat3).
         const m3 = mat4_mod.Mat4.toMat3(m);
-        std.debug.assert(@abs(mat3_mod.Mat3.determinant(m3) - 1.0) <= scalar.epsilon * 1000.0);
+        assert(@abs(mat3_mod.Mat3.determinant(m3) - 1.0) <= scalar.epsilon * 1000.0);
         return fromMat3(m3);
     }
 
@@ -183,9 +185,9 @@ pub const Quat = extern struct {
         up_dir: vec3_mod.Vec3,
     ) Quat {
         // Precondition: forward_dir must be non-zero (zero cannot be normalized).
-        std.debug.assert(vec3_mod.Vec3.lengthSq(forward_dir) > 0.0);
+        assert(vec3_mod.Vec3.lengthSq(forward_dir) > 0.0);
         // Precondition: up_dir must be non-zero (zero cross product gives degenerate right axis).
-        std.debug.assert(vec3_mod.Vec3.lengthSq(up_dir) > 0.0);
+        assert(vec3_mod.Vec3.lengthSq(up_dir) > 0.0);
         const f = vec3_mod.Vec3.normalize(forward_dir);
         // Local +Z points backward, so -Z points forward.
         const z_axis = vec3_mod.Vec3.neg(f);
@@ -217,7 +219,7 @@ pub const Quat = extern struct {
     /// Precondition: quaternion must be non-zero.
     pub inline fn inverse(q: Quat) Quat {
         const len_sq = lengthSq(q);
-        std.debug.assert(len_sq != 0.0);
+        assert(len_sq != 0.0);
         const inv = 1.0 / len_sq;
         const c = conjugate(q);
         return .{
@@ -314,8 +316,8 @@ pub const Quat = extern struct {
     /// Flips sign if dot < 0; falls back to nlerp if dot > 0.9995.
     pub fn slerp(a: Quat, b: Quat, t: f32) Quat {
         // Precondition: both inputs must be unit quaternions.
-        std.debug.assert(@abs(lengthSq(a) - 1.0) <= scalar.epsilon * 1000.0);
-        std.debug.assert(@abs(lengthSq(b) - 1.0) <= scalar.epsilon * 1000.0);
+        assert(@abs(lengthSq(a) - 1.0) <= scalar.epsilon * 1000.0);
+        assert(@abs(lengthSq(b) - 1.0) <= scalar.epsilon * 1000.0);
 
         var b2 = b;
         var d = dot(a, b);
@@ -332,7 +334,7 @@ pub const Quat = extern struct {
         const sin_theta = @sin(theta);
         // d <= 0.9995 guarantees theta >= acos(0.9995) ≈ 0.032 rad, so
         // sin_theta >= sin(0.032) ≈ 0.032 >> 0. Guard against near-zero division.
-        std.debug.assert(sin_theta > scalar.epsilon);
+        assert(sin_theta > scalar.epsilon);
 
         const w1 = @sin((1.0 - t) * theta) / sin_theta;
         const w2 = @sin(t * theta) / sin_theta;
@@ -463,7 +465,7 @@ pub const Quat = extern struct {
 // ── Tests ─────────────────────────────────────────────────────────────
 
 const eps = scalar.epsilon;
-const expectApprox = std.testing.expectApproxEqAbs;
+const expectApprox = testing.expectApproxEqAbs;
 
 test "Quat identity rotation" {
     const v = vec3_mod.Vec3.init(1.0, 2.0, 3.0);
@@ -492,7 +494,7 @@ test "Quat inverse" {
     );
     const inv = Quat.inverse(q);
     const prod = Quat.mul(q, inv);
-    try std.testing.expect(
+    try testing.expect(
         Quat.approxEqual(prod, Quat.identity, 1.0e-4),
     );
 }
@@ -504,7 +506,7 @@ test "Quat mat3/mat4 roundtrip" {
     );
     const m = Quat.toMat4(q);
     const q2 = Quat.fromMat4(m);
-    try std.testing.expect(Quat.approxEqual(q, q2, 1.0e-4));
+    try testing.expect(Quat.approxEqual(q, q2, 1.0e-4));
 }
 
 test "Quat fromEuler/toEuler roundtrip" {
@@ -522,7 +524,7 @@ test "Quat fromEuler/toEuler roundtrip" {
 test "Quat fromTo parallel" {
     const dir = vec3_mod.Vec3.unit_x;
     const q = Quat.fromTo(dir, dir);
-    try std.testing.expect(
+    try testing.expect(
         Quat.approxEqual(q, Quat.identity, 1.0e-5),
     );
 }
@@ -532,7 +534,7 @@ test "Quat fromTo anti-parallel" {
     const to = vec3_mod.Vec3.neg(vec3_mod.Vec3.unit_x);
     const q = Quat.fromTo(from, to);
     // Should be a valid 180-degree rotation.
-    try std.testing.expect(Quat.isNormalized(q, 1.0e-4));
+    try testing.expect(Quat.isNormalized(q, 1.0e-4));
     const rotated = Quat.rotate(q, from);
     try expectApprox(rotated.x, to.x, 1.0e-4);
     try expectApprox(rotated.y, to.y, 1.0e-4);
@@ -550,8 +552,8 @@ test "Quat slerp endpoints" {
     );
     const s0 = Quat.slerp(a, b, 0.0);
     const s1 = Quat.slerp(a, b, 1.0);
-    try std.testing.expect(Quat.approxEqual(s0, a, 1.0e-5));
-    try std.testing.expect(Quat.approxEqual(s1, b, 1.0e-5));
+    try testing.expect(Quat.approxEqual(s0, a, 1.0e-5));
+    try testing.expect(Quat.approxEqual(s1, b, 1.0e-5));
 }
 
 test "Quat neg same rotation" {
@@ -570,9 +572,9 @@ test "Quat neg same rotation" {
 
 test "Quat isNormalized" {
     const q = Quat.init(1.0, 2.0, 3.0, 4.0);
-    try std.testing.expect(!Quat.isNormalized(q, 1.0e-4));
+    try testing.expect(!Quat.isNormalized(q, 1.0e-4));
     const nq = Quat.normalize(q);
-    try std.testing.expect(Quat.isNormalized(nq, 1.0e-4));
+    try testing.expect(Quat.isNormalized(nq, 1.0e-4));
 }
 
 test "Quat approxEqual accounts for double cover" {
@@ -583,9 +585,9 @@ test "Quat approxEqual accounts for double cover" {
     const nq = Quat.neg(q);
     // q and -q are NOT component-equal but represent the same
     // rotation, so approxEqual must return true.
-    try std.testing.expect(Quat.approxEqual(q, nq, 1.0e-5));
+    try testing.expect(Quat.approxEqual(q, nq, 1.0e-5));
     // Sanity: they are not component-identical.
     const direct = @abs(q.x - nq.x) + @abs(q.y - nq.y) +
         @abs(q.z - nq.z) + @abs(q.w - nq.w);
-    try std.testing.expect(direct > 0.1);
+    try testing.expect(direct > 0.1);
 }

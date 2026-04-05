@@ -1,6 +1,7 @@
 //! `static_serial` checksum-framed payload roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_serial = @import("static_serial");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -46,7 +47,7 @@ const FrameContext = struct {
 
         context.payload[0] +%= 1;
         context.sink = bench.case.blackBox(@as(u64, stored_checksum) ^ decoded_len);
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 

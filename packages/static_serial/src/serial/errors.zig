@@ -6,6 +6,7 @@
 //! Thread safety: not applicable — this module contains only type and comptime declarations.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const core = @import("static_core");
 
 /// SE-R2: Unified serial error taxonomy.
@@ -34,6 +35,6 @@ pub const SerialError = error{
 comptime {
     // Pair assertion: the error set has exactly the expected number of variants.
     // Update this count whenever a variant is added or removed.
-    std.debug.assert(@typeInfo(SerialError).error_set.?.len == 6);
+    assert(@typeInfo(SerialError).error_set.?.len == 6);
     core.errors.assertVocabularySubset(SerialError);
 }

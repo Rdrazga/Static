@@ -1,6 +1,8 @@
 //! Bounded deterministic retry/backpressure helper over logical time.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const trace = @import("../trace.zig");
 const clock = @import("clock.zig");
 const mailbox = @import("mailbox.zig");
@@ -136,7 +138,7 @@ fn removePendingAt(
     pending_count: *usize,
     index: usize,
 ) void {
-    std.debug.assert(index < pending_count.*);
+    assert(index < pending_count.*);
     var cursor = index;
     while (cursor + 1 < pending_count.*) : (cursor += 1) {
         storage[cursor] = storage[cursor + 1];
@@ -150,19 +152,19 @@ test "retry queue emits bounded retries after backoff and enforces max attempts"
         .backoff = .init(2),
         .max_attempts = 2,
     });
-    var retries = try mailbox.Mailbox(RetryEnvelope(u32)).init(std.testing.allocator, .{
+    var retries = try mailbox.Mailbox(RetryEnvelope(u32)).init(testing.allocator, .{
         .capacity = 4,
     });
     defer retries.deinit();
 
-    try std.testing.expectEqual(RetryDecision.queued, try queue.scheduleNext(.init(0), 0, 7, 90));
-    try std.testing.expectEqual(@as(usize, 1), queue.pendingItems().len);
-    try std.testing.expectEqual(@as(u32, 0), try queue.emitDueToMailbox(.init(1), &retries, null));
-    try std.testing.expectEqual(@as(u32, 1), try queue.emitDueToMailbox(.init(2), &retries, null));
+    try testing.expectEqual(RetryDecision.queued, try queue.scheduleNext(.init(0), 0, 7, 90));
+    try testing.expectEqual(@as(usize, 1), queue.pendingItems().len);
+    try testing.expectEqual(@as(u32, 0), try queue.emitDueToMailbox(.init(1), &retries, null));
+    try testing.expectEqual(@as(u32, 1), try queue.emitDueToMailbox(.init(2), &retries, null));
 
     const retry = try retries.recv();
-    try std.testing.expectEqual(@as(u32, 1), retry.attempt);
-    try std.testing.expectEqual(@as(u32, 7), retry.request_id);
+    try testing.expectEqual(@as(u32, 1), retry.attempt);
+    try testing.expectEqual(@as(u32, 7), retry.request_id);
 
-    try std.testing.expectEqual(RetryDecision.exhausted, try queue.scheduleNext(.init(2), 2, 7, 90));
+    try testing.expectEqual(RetryDecision.exhausted, try queue.scheduleNext(.init(2), 2, 7, 90));
 }

@@ -15,6 +15,7 @@
 //! polynomial evaluation operates on full @Vector(4, f32) — no scalar loops.
 
 const std = @import("std");
+const testing = std.testing;
 const vec4f = @import("vec4f.zig");
 
 const pi: f32 = 3.14159265358979323846;
@@ -170,10 +171,10 @@ test "sin4f at known values" {
     const v = vec4f.Vec4f.init(.{ 0.0, pi / 6.0, pi / 4.0, pi / 2.0 });
     const result = sin4f(v).toArray();
 
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), result[0], tolerance);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.5), result[1], tolerance);
-    try std.testing.expectApproxEqAbs(@as(f32, @sqrt(2.0) / 2.0), result[2], tolerance);
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), result[3], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), result[0], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.5), result[1], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, @sqrt(2.0) / 2.0), result[2], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), result[3], tolerance);
 }
 
 test "cos4f at known values" {
@@ -182,16 +183,16 @@ test "cos4f at known values" {
     const v = vec4f.Vec4f.init(.{ 0.0, pi / 6.0, pi / 4.0, pi / 2.0 });
     const result = cos4f(v).toArray();
 
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), result[0], tolerance);
-    try std.testing.expectApproxEqAbs(@as(f32, @sqrt(3.0) / 2.0), result[1], tolerance);
-    try std.testing.expectApproxEqAbs(@as(f32, @sqrt(2.0) / 2.0), result[2], tolerance);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), result[3], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), result[0], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, @sqrt(3.0) / 2.0), result[1], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, @sqrt(2.0) / 2.0), result[2], tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), result[3], tolerance);
 }
 
 test "sin4f at pi produces near-zero" {
     const v = vec4f.Vec4f.splat(pi);
     const result = sin4f(v).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), result[0], 2.0e-7);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), result[0], 2.0e-7);
 }
 
 test "sin/cos identity: sin^2 + cos^2 = 1" {
@@ -204,7 +205,7 @@ test "sin/cos identity: sin^2 + cos^2 = 1" {
     const c2 = vec4f.Vec4f.mul(c, c);
     const sum = vec4f.Vec4f.add(s2, c2).toArray();
     for (sum) |val| {
-        try std.testing.expectApproxEqAbs(@as(f32, 1.0), val, 1.0e-5);
+        try testing.expectApproxEqAbs(@as(f32, 1.0), val, 1.0e-5);
     }
 }
 
@@ -224,25 +225,25 @@ test "sincos4f matches sin4f and cos4f" {
     const cos_both = both.cos.toArray();
 
     inline for (0..4) |i| {
-        try std.testing.expectApproxEqAbs(sin_only[i], sin_both[i], 1.0e-6);
-        try std.testing.expectApproxEqAbs(cos_only[i], cos_both[i], 1.0e-6);
+        try testing.expectApproxEqAbs(sin_only[i], sin_both[i], 1.0e-6);
+        try testing.expectApproxEqAbs(cos_only[i], cos_both[i], 1.0e-6);
     }
 }
 
 test "tan4f at known values away from poles" {
     const v = vec4f.Vec4f.init(.{ 0.0, pi / 6.0, -pi / 4.0, pi / 3.0 });
     const result = tan4f(v).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), result[0], 2.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.57735026), result[1], 2.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, -1.0), result[2], 2.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 1.7320508), result[3], 3.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), result[0], 2.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.57735026), result[1], 2.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, -1.0), result[2], 2.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 1.7320508), result[3], 3.0e-6);
 }
 
 test "scalar fallbacks match vector lane 0" {
     const x: f32 = 0.7;
     const v = vec4f.Vec4f.splat(x);
-    try std.testing.expectApproxEqAbs(sin4f(v).extract(0), sin_scalar(x), 1.0e-7);
-    try std.testing.expectApproxEqAbs(cos4f(v).extract(0), cos_scalar(x), 1.0e-7);
+    try testing.expectApproxEqAbs(sin4f(v).extract(0), sin_scalar(x), 1.0e-7);
+    try testing.expectApproxEqAbs(cos4f(v).extract(0), cos_scalar(x), 1.0e-7);
 }
 
 test "boundary-range inputs stay finite" {
@@ -250,8 +251,8 @@ test "boundary-range inputs stay finite" {
     const s = sin4f(v).toArray();
     const c = cos4f(v).toArray();
     inline for (0..4) |i| {
-        try std.testing.expect(std.math.isFinite(s[i]));
-        try std.testing.expect(std.math.isFinite(c[i]));
+        try testing.expect(std.math.isFinite(s[i]));
+        try testing.expect(std.math.isFinite(c[i]));
     }
 }
 

@@ -2,6 +2,9 @@
 //! handle validation. Verifies that stale handles are rejected after removal and
 //! that live handles always resolve to the correct value.
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
+const testing = std.testing;
 const static_collections = @import("static_collections");
 const static_testing = @import("static_testing");
 
@@ -46,22 +49,22 @@ const ReferenceState = struct {
         self.next_value = 1;
         self.pending_reuse = null;
         self.stale_handle = null;
-        std.debug.assert(self.len == 0);
-        std.debug.assert(self.pending_reuse == null);
+        assert(self.len == 0);
+        assert(self.pending_reuse == null);
     }
 
     fn insert(self: *@This(), handle: Handle, value: u32) void {
-        std.debug.assert(self.len < max_live_handles);
+        assert(self.len < max_live_handles);
         if (self.pending_reuse) |expected| {
-            std.debug.assert(handle.index == expected.index);
-            std.debug.assert(handle.generation != expected.generation);
+            assert(handle.index == expected.index);
+            assert(handle.generation != expected.generation);
             self.pending_reuse = null;
         }
         self.handles[self.len] = handle;
         self.values[self.len] = value;
         self.len += 1;
         self.next_value += 1;
-        std.debug.assert(self.len <= max_live_handles);
+        assert(self.len <= max_live_handles);
     }
 
     fn removeOldest(self: *@This()) ?Removed {
@@ -78,7 +81,7 @@ const ReferenceState = struct {
         self.len -= 1;
         self.pending_reuse = removed.handle;
         self.stale_handle = removed.handle;
-        std.debug.assert(self.len <= max_live_handles);
+        assert(self.len <= max_live_handles);
         return removed;
     }
 };
@@ -92,16 +95,16 @@ const Context = struct {
         if (self.map_initialized) {
             self.map.deinit();
         }
-        self.map = SlotMap.init(std.testing.allocator, .{ .budget = null }) catch
-            |err| std.debug.panic("resetState: SlotMap.init failed: {s}", .{@errorName(err)});
+        self.map = SlotMap.init(testing.allocator, .{ .budget = null }) catch
+            |err| panic("resetState: SlotMap.init failed: {s}", .{@errorName(err)});
         self.map_initialized = true;
         self.reference.reset();
-        std.debug.assert(self.map.len() == 0);
+        assert(self.map.len() == 0);
     }
 
     fn validate(self: *@This()) checker.CheckResult {
         var digest: u128 = @as(u128, self.map.len());
-        std.debug.assert(self.map.len() == self.reference.len);
+        assert(self.map.len() == self.reference.len);
         for (self.reference.handles[0..self.reference.len], 0..) |handle, index| {
             const actual = self.map.get(handle) orelse {
                 return checker.CheckResult.fail(&slot_map_violation, checker.CheckpointDigest.init(digest));
@@ -203,12 +206,12 @@ test "slot map runtime sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 96), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(@as(u32, 96), summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 test "slot map reuses the most recently removed slot first" {
-    var sm = try SlotMap.init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap.init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const first = try sm.insert(1);
@@ -219,22 +222,22 @@ test "slot map reuses the most recently removed slot first" {
     _ = try sm.remove(first);
 
     const reuse_first = try sm.insert(4);
-    try std.testing.expectEqual(first.index, reuse_first.index);
-    try std.testing.expect(reuse_first.generation != first.generation);
+    try testing.expectEqual(first.index, reuse_first.index);
+    try testing.expect(reuse_first.generation != first.generation);
 
     const reuse_second = try sm.insert(5);
-    try std.testing.expectEqual(second.index, reuse_second.index);
-    try std.testing.expect(reuse_second.generation != second.generation);
+    try testing.expectEqual(second.index, reuse_second.index);
+    try testing.expect(reuse_second.generation != second.generation);
 
-    try std.testing.expectEqual(@as(u32, 3), sm.get(third).?.*);
-    try std.testing.expect(sm.get(first) == null);
-    try std.testing.expect(sm.get(second) == null);
-    try std.testing.expectError(error.NotFound, sm.remove(first));
-    try std.testing.expectError(error.NotFound, sm.remove(second));
+    try testing.expectEqual(@as(u32, 3), sm.get(third).?.*);
+    try testing.expect(sm.get(first) == null);
+    try testing.expect(sm.get(second) == null);
+    try testing.expectError(error.NotFound, sm.remove(first));
+    try testing.expectError(error.NotFound, sm.remove(second));
 }
 
 test "slot map iterator yields handle and pointer pairs until the next structural mutation" {
-    var sm = try SlotMap.init(std.testing.allocator, .{ .budget = null });
+    var sm = try SlotMap.init(testing.allocator, .{ .budget = null });
     defer sm.deinit();
 
     const first = try sm.insert(10);
@@ -246,17 +249,17 @@ test "slot map iterator yields handle and pointer pairs until the next structura
     var seen: usize = 0;
     while (it.next()) |entry| {
         const current = sm.get(entry.handle) orelse unreachable;
-        try std.testing.expect(entry.value_ptr == current);
+        try testing.expect(entry.value_ptr == current);
         entry.value_ptr.* += 1;
         seen += 1;
     }
 
-    try std.testing.expectEqual(@as(usize, 2), seen);
-    try std.testing.expectEqual(@as(u32, 11), sm.get(first).?.*);
+    try testing.expectEqual(@as(usize, 2), seen);
+    try testing.expectEqual(@as(u32, 11), sm.get(first).?.*);
 
     sm.clear();
-    try std.testing.expectEqual(@as(usize, 0), sm.len());
-    try std.testing.expect(sm.get(first) == null);
+    try testing.expectEqual(@as(usize, 0), sm.len());
+    try testing.expect(sm.get(first) == null);
 }
 
 fn nextAction(

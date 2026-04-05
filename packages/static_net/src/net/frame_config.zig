@@ -1,6 +1,7 @@
 //! Frame codec configuration and constants.
 
 const std = @import("std");
+const testing = std.testing;
 const core = @import("static_core");
 const errors = @import("errors.zig");
 
@@ -59,11 +60,11 @@ fn serialVarintLen(value: u32) usize {
 
 test "frame config validates required bounds" {
     try (Config{ .max_payload_bytes = 64 }).validate();
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
         (Config{ .max_payload_bytes = 0 }).validate(),
     );
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
         (Config{
             .max_payload_bytes = 16,
@@ -74,8 +75,8 @@ test "frame config validates required bounds" {
 
 test "frame encoded length is deterministic and bounded" {
     const cfg = try (Config{ .max_payload_bytes = 256 }).init();
-    try std.testing.expectEqual(@as(usize, 3), try encodedLength(cfg, 0));
-    try std.testing.expectEqual(@as(usize, 13), try encodedLength(cfg, 10));
+    try testing.expectEqual(@as(usize, 3), try encodedLength(cfg, 0));
+    try testing.expectEqual(@as(usize, 13), try encodedLength(cfg, 10));
 }
 
 test "checksum mode rejects empty payload at encode boundary" {
@@ -83,5 +84,5 @@ test "checksum mode rejects empty payload at encode boundary" {
         .max_payload_bytes = 256,
         .checksum_mode = .enabled,
     }).init();
-    try std.testing.expectError(error.InvalidInput, encodedLength(cfg, 0));
+    try testing.expectError(error.InvalidInput, encodedLength(cfg, 0));
 }

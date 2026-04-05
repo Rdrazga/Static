@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -49,7 +51,7 @@ const RepairRunner = struct {
     fn closeOpenStream(self: *@This()) void {
         if (self.stream) |stream| {
             self.runtime.closeHandle(stream.handle) catch |err| {
-                std.debug.assert(err == error.Closed);
+                assert(err == error.Closed);
             };
             self.stream = null;
         }
@@ -69,10 +71,10 @@ const RepairRunner = struct {
         context: *system.SystemContext(Fixture),
         steps_max: u32,
     ) anyerror!liveness.PhaseExecution {
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("retry_policy"));
-        std.debug.assert(context.traceBufferPtr() != null);
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("retry_policy"));
+        assert(context.traceBufferPtr() != null);
 
         try self.ensureConnected(context);
 
@@ -92,8 +94,8 @@ const RepairRunner = struct {
             const timeout_id = try self.runtime.submitStreamRead(self.stream.?, timeout_buffer, 0);
             _ = try self.runtime.pump(1);
             const timeout_completion = self.runtime.poll() orelse return error.MissingCompletion;
-            try std.testing.expectEqual(timeout_id, timeout_completion.operation_id);
-            try std.testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
+            try testing.expectEqual(timeout_id, timeout_completion.operation_id);
+            try testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
 
             self.timeout_seq = try support.appendEvent(
                 context,
@@ -142,7 +144,7 @@ const RepairRunner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) void {
-        std.debug.assert(context.hasComponent("retry_policy"));
+        assert(context.hasComponent("retry_policy"));
         self.repaired = true;
     }
 
@@ -151,8 +153,8 @@ const RepairRunner = struct {
         context: *system.SystemContext(Fixture),
         steps_max: u32,
     ) anyerror!liveness.PhaseExecution {
-        std.debug.assert(self.repaired);
-        std.debug.assert(self.stream != null);
+        assert(self.repaired);
+        assert(self.stream != null);
 
         var steps: u32 = 0;
         if (self.retry_scheduled and !self.write_complete and steps < steps_max) {
@@ -172,8 +174,8 @@ const RepairRunner = struct {
             const write_id = try self.runtime.submitStreamWrite(self.stream.?, write_buffer, null);
             _ = try self.runtime.pump(1);
             const write_completion = self.runtime.poll() orelse return error.MissingCompletion;
-            try std.testing.expectEqual(write_id, write_completion.operation_id);
-            try std.testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
+            try testing.expectEqual(write_id, write_completion.operation_id);
+            try testing.expectEqual(static_io.types.CompletionStatus.success, write_completion.status);
 
             self.write_seq = try support.appendEvent(
                 context,
@@ -213,9 +215,9 @@ const RepairRunner = struct {
             const read_id = try self.runtime.submitStreamRead(self.stream.?, read_buffer, null);
             _ = try self.runtime.pump(1);
             const read_completion = self.runtime.poll() orelse return error.MissingCompletion;
-            try std.testing.expectEqual(read_id, read_completion.operation_id);
-            try std.testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
-            try std.testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
+            try testing.expectEqual(read_id, read_completion.operation_id);
+            try testing.expectEqual(static_io.types.CompletionStatus.success, read_completion.status);
+            try testing.expectEqualStrings("ok", read_completion.buffer.usedSlice());
 
             _ = try support.appendEvent(
                 context,
@@ -325,7 +327,7 @@ const RepairRunner = struct {
 
 fn initFixture(fixture: *Fixture) !void {
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(41),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -338,14 +340,14 @@ test "static_io runtime retry flow converges under testing.system repair livenes
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 3,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
@@ -385,9 +387,9 @@ test "static_io runtime retry flow converges under testing.system repair livenes
         },
     );
 
-    try std.testing.expect(execution.summary.converged);
-    try std.testing.expect(execution.summary.pending_reason == null);
-    try std.testing.expectEqual(@as(usize, components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 8);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.summary.converged);
+    try testing.expect(execution.summary.pending_reason == null);
+    try testing.expectEqual(@as(usize, components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 8);
+    try testing.expect(execution.retained_bundle == null);
 }

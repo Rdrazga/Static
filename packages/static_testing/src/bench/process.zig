@@ -8,6 +8,8 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const config_mod = @import("config.zig");
 const runner = @import("runner.zig");
 
@@ -71,7 +73,7 @@ pub const ProcessBenchmarkCase = struct {
 
     /// Construct one process benchmark case.
     pub fn init(options: ProcessBenchmarkCaseOptions) ProcessBenchmarkCase {
-        std.debug.assert(options.name.len > 0);
+        assert(options.name.len > 0);
         assertValidArgv(options.argv);
 
         return .{
@@ -94,10 +96,10 @@ pub const ProcessBenchmarkCase = struct {
     /// by the child command itself.
     pub fn prepare(self: ProcessBenchmarkCase, phase: ProcessRunPhase, run_index: u32) void {
         if (self.prepare_fn) |prepare_fn| {
-            std.debug.assert(self.prepare_context != null);
+            assert(self.prepare_context != null);
             prepare_fn(self.prepare_context.?, phase, run_index);
         } else {
-            std.debug.assert(self.prepare_context == null);
+            assert(self.prepare_context == null);
         }
     }
 };
@@ -323,8 +325,8 @@ fn waitForChildWithTimeout(
     child: *std.process.Child,
     timeout_ns_max: u64,
 ) ProcessBenchmarkError!std.process.Child.Term {
-    std.debug.assert(child.id != null);
-    std.debug.assert(timeout_ns_max > 0);
+    assert(child.id != null);
+    assert(timeout_ns_max > 0);
 
     const child_id = child.id.?;
     var wait_state = WaitThreadState{
@@ -450,8 +452,8 @@ fn maxOptionalUsize(current: ?usize, candidate: ?usize) ?usize {
 }
 
 fn validateMeasureRunIndexSpace(benchmark: config_mod.BenchmarkConfig) ProcessBenchmarkError!void {
-    std.debug.assert(benchmark.measure_iterations > 0);
-    std.debug.assert(benchmark.sample_count > 0);
+    assert(benchmark.measure_iterations > 0);
+    assert(benchmark.sample_count > 0);
 
     const measure_runs_total = std.math.mul(u64, benchmark.sample_count, benchmark.measure_iterations) catch {
         return error.Overflow;
@@ -465,8 +467,8 @@ fn measuredRunIndex(
     measure_iterations: u32,
     measure_index: u32,
 ) ProcessBenchmarkError!u32 {
-    std.debug.assert(measure_iterations > 0);
-    std.debug.assert(measure_index < measure_iterations);
+    assert(measure_iterations > 0);
+    assert(measure_index < measure_iterations);
 
     const run_index_base = std.math.mul(u32, sample_index, measure_iterations) catch {
         return error.Overflow;
@@ -477,9 +479,9 @@ fn measuredRunIndex(
 }
 
 fn assertValidArgv(argv: []const []const u8) void {
-    std.debug.assert(argv.len > 0);
+    assert(argv.len > 0);
     for (argv) |arg| {
-        std.debug.assert(arg.len > 0);
+        assert(arg.len > 0);
     }
 }
 
@@ -518,8 +520,8 @@ test "process benchmark config rejects invalid inputs" {
     });
     var samples: [1]runner.BenchmarkSample = undefined;
 
-    try std.testing.expectError(error.InvalidConfig, runProcessBenchmark(
-        std.testing.io,
+    try testing.expectError(error.InvalidConfig, runProcessBenchmark(
+        testing.io,
         &benchmark_case,
         .{
             .benchmark = .{
@@ -537,7 +539,7 @@ test "process benchmark config rejects invalid inputs" {
 test "runProcessBenchmark executes a trivial command and excludes warmups" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -559,23 +561,23 @@ test "runProcessBenchmark executes a trivial command and excludes warmups" {
         else => return err,
     };
 
-    try std.testing.expectEqual(@as(usize, 3), result.samples.len);
-    try std.testing.expectEqual(@as(u32, 1), result.warmup_iterations);
-    try std.testing.expectEqual(
+    try testing.expectEqual(@as(usize, 3), result.samples.len);
+    try testing.expectEqual(@as(u32, 1), result.warmup_iterations);
+    try testing.expectEqual(
         config_mod.BenchmarkConfig.smokeDefaults().measure_iterations,
         result.measure_iterations,
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         config_mod.BenchmarkConfig.smokeDefaults().measure_iterations,
         result.samples[0].iteration_count,
     );
-    try std.testing.expectEqualStrings("success", result.asCaseResult().name);
+    try testing.expectEqualStrings("success", result.asCaseResult().name);
 }
 
 test "runProcessBenchmark returns timeout for a long-running command" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -586,7 +588,7 @@ test "runProcessBenchmark returns timeout for a long-running command" {
     });
     var samples: [1]runner.BenchmarkSample = undefined;
 
-    try std.testing.expectError(error.Timeout, runProcessBenchmark(
+    try testing.expectError(error.Timeout, runProcessBenchmark(
         threaded_io.io(),
         &benchmark_case,
         .{
@@ -605,7 +607,7 @@ test "runProcessBenchmark returns timeout for a long-running command" {
 test "runProcessBenchmark propagates warmup process failures" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -616,7 +618,7 @@ test "runProcessBenchmark propagates warmup process failures" {
     });
     var samples: [1]runner.BenchmarkSample = undefined;
 
-    try std.testing.expectError(error.ProcessFailed, runProcessBenchmark(
+    try testing.expectError(error.ProcessFailed, runProcessBenchmark(
         threaded_io.io(),
         &benchmark_case,
         .{
@@ -634,12 +636,12 @@ test "runProcessBenchmark propagates warmup process failures" {
 test "runProcessBenchmark supports env maps and prepare hooks" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
 
-    var environ_map = std.process.Environ.Map.init(std.testing.allocator);
+    var environ_map = std.process.Environ.Map.init(testing.allocator);
     defer environ_map.deinit();
     try environ_map.put("STATIC_TESTING_PREP", "ready");
 
@@ -682,9 +684,9 @@ test "runProcessBenchmark supports env maps and prepare hooks" {
         else => return err,
     };
 
-    try std.testing.expectEqual(@as(u32, 1), prepare_context.warmups_total);
-    try std.testing.expectEqual(@as(u32, 2), prepare_context.measures_total);
-    try std.testing.expectEqual(@as(usize, 2), result.samples.len);
+    try testing.expectEqual(@as(u32, 1), prepare_context.warmups_total);
+    try testing.expectEqual(@as(u32, 2), prepare_context.measures_total);
+    try testing.expectEqual(@as(usize, 2), result.samples.len);
 }
 
 test "process benchmark defaults leave resource statistics disabled" {
@@ -692,7 +694,7 @@ test "process benchmark defaults leave resource statistics disabled" {
         .benchmark = config_mod.BenchmarkConfig.smokeDefaults(),
     };
 
-    try std.testing.expect(!benchmark_config.request_resource_usage_statistics);
+    try testing.expect(!benchmark_config.request_resource_usage_statistics);
 }
 
 test "process benchmark rejects prepare-hook configs whose measured run indexes overflow u32" {
@@ -708,8 +710,8 @@ test "process benchmark rejects prepare-hook configs whose measured run indexes 
     });
     var samples: [2]runner.BenchmarkSample = undefined;
 
-    try std.testing.expectError(error.Overflow, runProcessBenchmark(
-        std.testing.io,
+    try testing.expectError(error.Overflow, runProcessBenchmark(
+        testing.io,
         &benchmark_case,
         .{
             .benchmark = .{

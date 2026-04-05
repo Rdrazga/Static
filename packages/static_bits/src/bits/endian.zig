@@ -6,6 +6,8 @@
 //! Thread safety: thread-safe for read-only access and for disjoint mutable buffers.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 
 /// Byte order used by the load/store helpers.
@@ -105,9 +107,9 @@ pub fn readInt(
     const end = std.math.add(usize, offset, size) catch return error.Overflow;
     if (end > bytes.len) return error.EndOfStream;
 
-    std.debug.assert(end >= offset);
+    assert(end >= offset);
     const window = bytes[offset..end];
-    std.debug.assert(window.len == size);
+    assert(window.len == size);
 
     const ptr: *const [@sizeOf(T)]u8 = @ptrCast(window.ptr);
     return std.mem.readInt(T, ptr, endian);
@@ -130,9 +132,9 @@ pub fn writeInt(
     const end = std.math.add(usize, offset, size) catch return error.Overflow;
     if (end > bytes.len) return error.NoSpaceLeft;
 
-    std.debug.assert(end >= offset);
+    assert(end >= offset);
     const window = bytes[offset..end];
-    std.debug.assert(window.len == size);
+    assert(window.len == size);
 
     const ptr: *[@sizeOf(T)]u8 = @ptrCast(window.ptr);
     std.mem.writeInt(T, ptr, value, endian);
@@ -193,38 +195,38 @@ pub fn writeIntAt(
 
 test "read/write endian helpers are bounded and deterministic" {
     var buf = [_]u8{ 0x44, 0x33, 0x22, 0x11 };
-    try std.testing.expectEqual(@as(u32, 0x11223344), try readInt(&buf, 0, u32, .little));
-    try std.testing.expectEqual(@as(u32, 0x44332211), try readInt(&buf, 0, u32, .big));
+    try testing.expectEqual(@as(u32, 0x11223344), try readInt(&buf, 0, u32, .little));
+    try testing.expectEqual(@as(u32, 0x44332211), try readInt(&buf, 0, u32, .big));
 
     try writeInt(&buf, 0, @as(u16, 0xABCD), .big);
-    try std.testing.expectEqualSlices(u8, &.{ 0xAB, 0xCD, 0x22, 0x11 }, &buf);
-    try std.testing.expectError(error.EndOfStream, readInt(&buf, 3, u16, .little));
-    try std.testing.expectError(error.NoSpaceLeft, writeInt(buf[0..1], 0, @as(u16, 1), .little));
+    try testing.expectEqualSlices(u8, &.{ 0xAB, 0xCD, 0x22, 0x11 }, &buf);
+    try testing.expectError(error.EndOfStream, readInt(&buf, 3, u16, .little));
+    try testing.expectError(error.NoSpaceLeft, writeInt(buf[0..1], 0, @as(u16, 1), .little));
 }
 
 test "loadInt is equivalent to readInt at offset 0" {
     const buf = [_]u8{ 0x01, 0x00, 0x00, 0x00 };
     const via_load = try loadInt(u32, &buf, .little);
     const via_read = try readInt(&buf, 0, u32, .little);
-    try std.testing.expectEqual(via_read, via_load);
-    try std.testing.expectEqual(@as(u32, 1), via_load);
+    try testing.expectEqual(via_read, via_load);
+    try testing.expectEqual(@as(u32, 1), via_load);
 }
 
 test "readInt at interior offset" {
     const buf = [_]u8{ 0xFF, 0x01, 0x02 };
     const v = try readInt(&buf, 1, u16, .little);
-    try std.testing.expectEqual(@as(u16, 0x0201), v);
+    try testing.expectEqual(@as(u16, 0x0201), v);
 }
 
 test "read/write endian helpers report arithmetic overflow" {
     const empty_in = [_]u8{};
     var empty_out = [_]u8{};
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.Overflow,
         readInt(&empty_in, std.math.maxInt(usize), u16, .little),
     );
-    try std.testing.expectError(
+    try testing.expectError(
         error.Overflow,
         writeInt(&empty_out, std.math.maxInt(usize), @as(u16, 0xAA55), .little),
     );
@@ -232,42 +234,42 @@ test "read/write endian helpers report arithmetic overflow" {
 
 test "loadInt forwards readInt errors" {
     const short = [_]u8{0x01};
-    try std.testing.expectError(error.EndOfStream, loadInt(u16, &short, .little));
+    try testing.expectError(error.EndOfStream, loadInt(u16, &short, .little));
 }
 
 test "storeInt is equivalent to writeInt at offset 0" {
     var buf = [_]u8{ 0x00, 0x00, 0x00, 0x00 };
     try storeInt(&buf, @as(u32, 0x11223344), .little);
-    try std.testing.expectEqualSlices(u8, &.{ 0x44, 0x33, 0x22, 0x11 }, &buf);
+    try testing.expectEqualSlices(u8, &.{ 0x44, 0x33, 0x22, 0x11 }, &buf);
     try storeInt(&buf, @as(u16, 0xABCD), .big);
-    try std.testing.expectEqualSlices(u8, &.{ 0xAB, 0xCD, 0x22, 0x11 }, &buf);
-    try std.testing.expectError(error.NoSpaceLeft, storeInt(buf[0..1], @as(u32, 1), .little));
+    try testing.expectEqualSlices(u8, &.{ 0xAB, 0xCD, 0x22, 0x11 }, &buf);
+    try testing.expectError(error.NoSpaceLeft, storeInt(buf[0..1], @as(u32, 1), .little));
 }
 
 test "read/write endian helpers handle signed integers" {
     var buf = [_]u8{ 0xFE, 0xFF };
-    try std.testing.expectEqual(@as(i16, -2), try readInt(&buf, 0, i16, .little));
-    try std.testing.expectEqual(@as(i16, -2), try loadInt(i16, &buf, .little));
+    try testing.expectEqual(@as(i16, -2), try readInt(&buf, 0, i16, .little));
+    try testing.expectEqual(@as(i16, -2), try loadInt(i16, &buf, .little));
 
     try writeInt(&buf, 0, @as(i16, -128), .big);
-    try std.testing.expectEqual(@as(i16, -128), try readInt(&buf, 0, i16, .big));
+    try testing.expectEqual(@as(i16, -128), try readInt(&buf, 0, i16, .big));
 
     try storeInt(&buf, @as(i16, 0x0102), .little);
-    try std.testing.expectEqual(@as(i16, 0x0102), try loadInt(i16, &buf, .little));
+    try testing.expectEqual(@as(i16, 0x0102), try loadInt(i16, &buf, .little));
 
     var fixed = [_]u8{ 0xFF, 0x80 };
-    try std.testing.expectEqual(@as(i16, -128), readIntAt(i16, &fixed, 0, .big));
+    try testing.expectEqual(@as(i16, -128), readIntAt(i16, &fixed, 0, .big));
     writeIntAt(&fixed, 0, @as(i16, 0x0102), .little);
-    try std.testing.expectEqual(@as(i16, 0x0102), readIntAt(i16, &fixed, 0, .little));
+    try testing.expectEqual(@as(i16, 0x0102), readIntAt(i16, &fixed, 0, .little));
 }
 
 test "fixed-array endian helpers enforce compile-time offsets" {
     var bytes = [_]u8{ 0x34, 0x12, 0x78, 0x56 };
-    try std.testing.expectEqual(@as(u16, 0x1234), readIntAt(u16, &bytes, 0, .little));
-    try std.testing.expectEqual(@as(u16, 0x7856), readIntAt(u16, &bytes, 2, .big));
+    try testing.expectEqual(@as(u16, 0x1234), readIntAt(u16, &bytes, 0, .little));
+    try testing.expectEqual(@as(u16, 0x7856), readIntAt(u16, &bytes, 2, .big));
 
     writeIntAt(&bytes, 0, @as(u16, 0xA1B2), .big);
-    try std.testing.expectEqualSlices(u8, &.{ 0xA1, 0xB2, 0x78, 0x56 }, &bytes);
+    try testing.expectEqualSlices(u8, &.{ 0xA1, 0xB2, 0x78, 0x56 }, &bytes);
     writeIntAt(&bytes, 0, @as(u32, 0x11223344), .little);
-    try std.testing.expectEqualSlices(u8, &.{ 0x44, 0x33, 0x22, 0x11 }, &bytes);
+    try testing.expectEqualSlices(u8, &.{ 0x44, 0x33, 0x22, 0x11 }, &bytes);
 }

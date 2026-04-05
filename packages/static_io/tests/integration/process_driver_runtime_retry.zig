@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 const integration_options = @import("static_io_integration_options");
 
@@ -13,7 +14,7 @@ const trace = static_testing.testing.trace;
 test "static_io runtime child roundtrips through process_driver after bounded retry" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -28,9 +29,9 @@ test "static_io runtime child roundtrips through process_driver after bounded re
     const request_id = try driver.sendRequest(.echo, "hello");
     var payload_buffer: [16]u8 = undefined;
     const response = try driver.recvResponse(&payload_buffer);
-    try std.testing.expectEqual(request_id, response.header.request_id);
-    try std.testing.expectEqual(static_testing.testing.driver_protocol.DriverMessageKind.ok, response.header.kind);
-    try std.testing.expectEqualStrings("hello", response.payload);
+    try testing.expectEqual(request_id, response.header.request_id);
+    try testing.expectEqual(static_testing.testing.driver_protocol.DriverMessageKind.ok, response.header.kind);
+    try testing.expectEqualStrings("hello", response.payload);
 
     try driver.shutdown();
 }
@@ -38,10 +39,10 @@ test "static_io runtime child roundtrips through process_driver after bounded re
 test "static_io process-driver failure bundle retains malformed child stderr" {
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -58,11 +59,11 @@ test "static_io process-driver failure bundle retains malformed child stderr" {
 
     _ = try driver.sendRequest(.ping, &.{});
     var payload_buffer: [1]u8 = undefined;
-    try std.testing.expectError(error.Unsupported, driver.recvResponse(&payload_buffer));
+    try testing.expectError(error.Unsupported, driver.recvResponse(&payload_buffer));
 
     const captured_stderr = driver.capturedStderr();
-    try std.testing.expect(captured_stderr != null);
-    try std.testing.expect(std.mem.indexOf(u8, captured_stderr.?.bytes, "runtime child emitted malformed response") != null);
+    try testing.expect(captured_stderr != null);
+    try testing.expect(std.mem.indexOf(u8, captured_stderr.?.bytes, "runtime child emitted malformed response") != null);
 
     const run_identity = identity.makeRunIdentity(.{
         .package_name = "static_io",
@@ -131,8 +132,8 @@ test "static_io process-driver failure bundle retains malformed child stderr" {
         .stderr_buffer = &read_stderr_buffer,
     });
 
-    try std.testing.expectEqualStrings("process_driver_runtime_malformed", bundle.manifest_document.run_name);
-    try std.testing.expect(bundle.stdout_capture == null);
-    try std.testing.expect(bundle.stderr_capture != null);
-    try std.testing.expect(std.mem.indexOf(u8, bundle.stderr_capture.?, "runtime child emitted malformed response") != null);
+    try testing.expectEqualStrings("process_driver_runtime_malformed", bundle.manifest_document.run_name);
+    try testing.expect(bundle.stdout_capture == null);
+    try testing.expect(bundle.stderr_capture != null);
+    try testing.expect(std.mem.indexOf(u8, bundle.stderr_capture.?, "runtime child emitted malformed response") != null);
 }

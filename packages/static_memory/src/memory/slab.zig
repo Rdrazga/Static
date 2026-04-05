@@ -11,6 +11,8 @@
 //! counted in the capacity report. Slab is 56 bytes on 64-bit targets.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const CapacityReport = @import("capacity_report.zig").CapacityReport;
 const Pool = @import("pool.zig").Pool;
 const PoolError = @import("pool.zig").PoolError;
@@ -64,8 +66,8 @@ pub const Slab = struct {
     // It must be >= the raw struct size so the full header always fits within the reserved
     // prefix, and it must be a multiple of the header alignment.
     comptime {
-        std.debug.assert(fallback_header_size >= @sizeOf(FallbackHeader));
-        std.debug.assert(fallback_header_size % fallback_header_align == 0);
+        assert(fallback_header_size >= @sizeOf(FallbackHeader));
+        assert(fallback_header_size % fallback_header_align == 0);
     }
 
     const vtable: std.mem.Allocator.VTable = .{
@@ -90,8 +92,8 @@ pub const Slab = struct {
         }
 
         if (std.debug.runtime_safety) {
-            std.debug.assert(self.used_bytes == used_bytes);
-            std.debug.assert(self.high_water_bytes >= used_bytes);
+            assert(self.used_bytes == used_bytes);
+            assert(self.high_water_bytes >= used_bytes);
         }
 
         return .{
@@ -174,7 +176,7 @@ pub const Slab = struct {
 
     pub fn allocator(self: *Slab) std.mem.Allocator {
         self.assertInvariants();
-        std.debug.assert(@intFromPtr(self) != 0);
+        assert(@intFromPtr(self) != 0);
         return .{ .ptr = self, .vtable = &vtable };
     }
 
@@ -192,7 +194,7 @@ pub const Slab = struct {
             };
 
             // Precondition: pool.allocBlock succeeded, so a slot existed. Accounting must stay bounded.
-            std.debug.assert(@as(u64, class.size) <= std.math.maxInt(u64) - self.used_bytes);
+            assert(@as(u64, class.size) <= std.math.maxInt(u64) - self.used_bytes);
             // Overflow is unreachable: allocation tracking must stay within total slab capacity.
             self.used_bytes = std.math.add(u64, self.used_bytes, @as(u64, class.size)) catch unreachable;
             if (self.used_bytes > self.high_water_bytes) self.high_water_bytes = self.used_bytes;
@@ -215,7 +217,7 @@ pub const Slab = struct {
             class.pool.freeBlock(block) catch return error.InvalidBlock;
 
             // Precondition: used_bytes cannot underflow if allocations are balanced.
-            std.debug.assert(@as(u64, class.size) <= self.used_bytes);
+            assert(@as(u64, class.size) <= self.used_bytes);
             // Overflow is unreachable: used_bytes tracks live allocations; free cannot exceed alloc count.
             self.used_bytes = std.math.sub(u64, self.used_bytes, @as(u64, class.size)) catch unreachable;
             return;
@@ -228,32 +230,32 @@ pub const Slab = struct {
     pub fn maxClassSize(self: *const Slab) u32 {
         self.assertInvariants();
         // Postcondition: max_size must equal the last class's size as tracked in assertInvariants.
-        std.debug.assert(self.max_size == self.classes[self.classes.len - 1].size);
+        assert(self.max_size == self.classes[self.classes.len - 1].size);
         return self.max_size;
     }
 
     fn mulU64Saturating(a: u64, b: u64) u64 {
         const result = std.math.mul(u64, a, b) catch std.math.maxInt(u64);
         // Postcondition: result must be maxInt(u64) on overflow, never a wrapped value.
-        std.debug.assert(result <= std.math.maxInt(u64));
+        assert(result <= std.math.maxInt(u64));
         // Pair assertion: if both inputs are non-zero, the result must also be non-zero.
-        if (a != 0 and b != 0) std.debug.assert(result != 0);
+        if (a != 0 and b != 0) assert(result != 0);
         return result;
     }
 
     fn classAlign(size: u32) u32 {
-        std.debug.assert(size != 0);
+        assert(size != 0);
         const neg = (~size) +% 1;
         const out = size & neg;
-        std.debug.assert(out != 0);
-        std.debug.assert(std.math.isPowerOfTwo(out));
-        std.debug.assert(size % out == 0);
+        assert(out != 0);
+        assert(std.math.isPowerOfTwo(out));
+        assert(size % out == 0);
         return out;
     }
 
     fn lowerBoundClass(classes: []Class, len: u32) usize {
         // Precondition: classes must be non-empty to make binary search meaningful.
-        std.debug.assert(classes.len != 0);
+        assert(classes.len != 0);
         var lo: usize = 0;
         var hi: usize = classes.len;
         while (lo < hi) {
@@ -265,20 +267,20 @@ pub const Slab = struct {
             }
         }
         // Postcondition: lo is in [0, classes.len].
-        std.debug.assert(lo <= classes.len);
+        assert(lo <= classes.len);
         return lo;
     }
 
     fn findClass(self: *Slab, len: u32, alignment: u32) ?*Class {
         // Precondition: alignment must be a power of two.
-        std.debug.assert(alignment != 0);
+        assert(alignment != 0);
         const start = lowerBoundClass(self.classes, len);
         if (start == self.classes.len) return null;
         var i: usize = start;
         while (i < self.classes.len) : (i += 1) {
             const class = &self.classes[i];
             // Invariant: the class at or beyond start must have size >= len (by binary search).
-            std.debug.assert(class.size >= len);
+            assert(class.size >= len);
             if (alignment <= class.alignment) return class;
         }
         return null;
@@ -286,9 +288,9 @@ pub const Slab = struct {
 
     fn classByPtr(self: *Slab, ptr: [*]u8) ?*Class {
         // Precondition: pointer must be non-null.
-        std.debug.assert(@intFromPtr(ptr) != 0);
+        assert(@intFromPtr(ptr) != 0);
         // Precondition: slab must be initialized.
-        std.debug.assert(self.classes.len != 0);
+        assert(self.classes.len != 0);
         for (self.classes) |*class| {
             if (class.pool.ownsPtr(ptr)) return class;
         }
@@ -299,8 +301,8 @@ pub const Slab = struct {
         if (alignment == 0) return null;
 
         const payload_align: usize = @max(alignment, fallback_header_align);
-        std.debug.assert(std.math.isPowerOfTwo(payload_align));
-        std.debug.assert(payload_align <= std.math.maxInt(u32));
+        assert(std.math.isPowerOfTwo(payload_align));
+        assert(payload_align <= std.math.maxInt(u32));
         const alloc_alignment = std.mem.Alignment.fromByteUnits(payload_align);
 
         const alloc_len = std.math.add(usize, fallback_header_size, len) catch return null;
@@ -324,7 +326,7 @@ pub const Slab = struct {
 
         const payload_end = std.math.add(usize, payload_addr, len) catch return null;
         const base_end = std.math.add(usize, base_addr, padded_len) catch return null;
-        std.debug.assert(payload_end <= base_end);
+        assert(payload_end <= base_end);
 
         const payload_ptr: [*]u8 = @ptrFromInt(payload_addr);
         return payload_ptr[0..len];
@@ -398,27 +400,27 @@ pub const Slab = struct {
 
         const align_bytes = alignment.toByteUnits();
         if (align_bytes == 0 or align_bytes > std.math.maxInt(u32)) {
-            if (std.debug.runtime_safety) std.debug.assert(false);
+            if (std.debug.runtime_safety) assert(false);
             return;
         }
 
         self.free(memory, @intCast(align_bytes)) catch {
-            if (std.debug.runtime_safety) std.debug.assert(false);
+            if (std.debug.runtime_safety) assert(false);
             return;
         };
     }
 
     fn assertInvariants(self: *const Slab) void {
-        std.debug.assert(self.classes.len != 0);
-        std.debug.assert(self.max_size == self.classes[self.classes.len - 1].size);
-        std.debug.assert(self.high_water_bytes >= self.used_bytes);
+        assert(self.classes.len != 0);
+        assert(self.max_size == self.classes[self.classes.len - 1].size);
+        assert(self.high_water_bytes >= self.used_bytes);
 
         var prev: u32 = 0;
         for (self.classes, 0..) |class, i| {
-            std.debug.assert(class.size != 0);
-            std.debug.assert(class.pool.total() != 0);
-            std.debug.assert(class.alignment == classAlign(class.size));
-            if (i > 0) std.debug.assert(class.size > prev);
+            assert(class.size != 0);
+            assert(class.pool.total() != 0);
+            assert(class.alignment == classAlign(class.size));
+            if (i > 0) assert(class.size > prev);
             prev = class.size;
         }
     }
@@ -429,7 +431,7 @@ test "slab alloc/free within classes" {
     const sizes = [_]u32{ 32, 64 };
     const counts = [_]u32{ 1, 1 };
 
-    var slab = try Slab.init(std.testing.allocator, .{
+    var slab = try Slab.init(testing.allocator, .{
         .class_sizes = &sizes,
         .class_counts = &counts,
         .allow_large_fallback = false,
@@ -437,12 +439,12 @@ test "slab alloc/free within classes" {
     defer slab.deinit();
 
     const a = try slab.alloc(16, 8);
-    try std.testing.expectEqual(@as(usize, 16), a.len);
-    try std.testing.expectError(error.NoSpaceLeft, slab.alloc(16, 8));
+    try testing.expectEqual(@as(usize, 16), a.len);
+    try testing.expectError(error.NoSpaceLeft, slab.alloc(16, 8));
     try slab.free(a, 8);
 
     const b = try slab.alloc(16, 8);
-    try std.testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(b.ptr));
+    try testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(b.ptr));
     try slab.free(b, 8);
 }
 
@@ -450,7 +452,7 @@ test "slab rejects unsorted class sizes" {
     // Verifies that size classes must be strictly increasing.
     const sizes = [_]u32{ 64, 32 };
     const counts = [_]u32{ 1, 1 };
-    try std.testing.expectError(error.InvalidConfig, Slab.init(std.testing.allocator, .{
+    try testing.expectError(error.InvalidConfig, Slab.init(testing.allocator, .{
         .class_sizes = &sizes,
         .class_counts = &counts,
         .allow_large_fallback = false,
@@ -462,14 +464,14 @@ test "slab unsupported size without fallback" {
     const sizes = [_]u32{32};
     const counts = [_]u32{1};
 
-    var slab = try Slab.init(std.testing.allocator, .{
+    var slab = try Slab.init(testing.allocator, .{
         .class_sizes = &sizes,
         .class_counts = &counts,
         .allow_large_fallback = false,
     });
     defer slab.deinit();
 
-    try std.testing.expectError(error.UnsupportedSize, slab.alloc(64, 8));
+    try testing.expectError(error.UnsupportedSize, slab.alloc(64, 8));
 }
 
 test "slab large-allocation fallback alloc/free" {
@@ -477,7 +479,7 @@ test "slab large-allocation fallback alloc/free" {
     const sizes = [_]u32{32};
     const counts = [_]u32{1};
 
-    var slab = try Slab.init(std.testing.allocator, .{
+    var slab = try Slab.init(testing.allocator, .{
         .class_sizes = &sizes,
         .class_counts = &counts,
         .allow_large_fallback = true,
@@ -485,9 +487,9 @@ test "slab large-allocation fallback alloc/free" {
     defer slab.deinit();
 
     const mem = try slab.alloc(64, 8);
-    try std.testing.expectEqual(@as(usize, 64), mem.len);
-    try std.testing.expect(@intFromPtr(mem.ptr) % 8 == 0);
+    try testing.expectEqual(@as(usize, 64), mem.len);
+    try testing.expect(@intFromPtr(mem.ptr) % 8 == 0);
 
-    try std.testing.expectError(error.InvalidBlock, slab.free(mem, 16));
+    try testing.expectError(error.InvalidBlock, slab.free(mem, 16));
     try slab.free(mem, 8);
 }

@@ -1,6 +1,7 @@
 //! `static_io` runtime submit/complete roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -21,8 +22,8 @@ const RuntimeContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *RuntimeContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.pool.capacity() != 0);
-        std.debug.assert(context.runtime.cfg.max_in_flight != 0);
+        assert(context.pool.capacity() != 0);
+        assert(context.runtime.cfg.max_in_flight != 0);
 
         const buffer = context.pool.acquire() catch unreachable;
         const op_id = context.runtime.submit(.{ .nop = buffer }) catch unreachable;
@@ -33,7 +34,7 @@ const RuntimeContext = struct {
         if (completion.status != .success) unreachable;
         context.pool.release(completion.buffer) catch unreachable;
         context.sink = bench.case.blackBox(completion.operation_id);
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 
@@ -111,8 +112,8 @@ fn validateSemanticPreflight() void {
     const op_id = runtime.submit(.{ .nop = buffer }) catch unreachable;
     _ = runtime.pump(1) catch unreachable;
     const completion = runtime.poll() orelse unreachable;
-    std.debug.assert(completion.operation_id == op_id);
-    std.debug.assert(completion.status == .success);
+    assert(completion.operation_id == op_id);
+    assert(completion.status == .success);
     pool.release(completion.buffer) catch unreachable;
-    std.debug.assert(pool.available() == pool.capacity());
+    assert(pool.available() == pool.capacity());
 }

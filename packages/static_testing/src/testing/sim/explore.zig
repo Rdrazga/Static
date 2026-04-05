@@ -1,6 +1,8 @@
 //! Bounded schedule-exploration control plane over deterministic simulation primitives.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const artifact = @import("../../artifact/root.zig");
 const checker = @import("../checker.zig");
 const seed_mod = @import("../seed.zig");
@@ -369,12 +371,12 @@ fn makePctBiasCandidate(
 
 fn assertExecution(execution: ExplorationScenarioExecution) void {
     if (execution.check_result.passed) {
-        std.debug.assert(execution.check_result.violations.len == 0);
+        assert(execution.check_result.violations.len == 0);
     } else {
-        std.debug.assert(execution.check_result.violations.len > 0);
+        assert(execution.check_result.violations.len > 0);
     }
     if (execution.trace_provenance_summary != null) {
-        std.debug.assert(execution.trace_metadata != null);
+        assert(execution.trace_metadata != null);
     }
 }
 
@@ -558,7 +560,7 @@ test "runExploration rejects zero schedules" {
         .run_fn = Context.run,
     };
 
-    try std.testing.expectError(error.InvalidInput, runExploration(error{}, .{
+    try testing.expectError(error.InvalidInput, runExploration(error{}, .{
         .base_seed = .init(1),
         .schedules_max = 0,
     }, scenario, null));
@@ -573,11 +575,11 @@ test "portfolio candidate starts with first and then seeded schedules" {
     const first_candidate = makeCandidate(config, 0);
     const seeded_candidate = makeCandidate(config, 1);
 
-    try std.testing.expectEqualStrings("first", first_candidate.schedule_metadata.mode_label);
-    try std.testing.expect(first_candidate.schedule_metadata.schedule_seed == null);
-    try std.testing.expectEqualStrings("seeded", seeded_candidate.schedule_metadata.mode_label);
-    try std.testing.expect(seeded_candidate.schedule_metadata.schedule_seed != null);
-    try std.testing.expectEqual(@as(u64, seeded_candidate.scheduler_seed.value), seeded_candidate.schedule_metadata.schedule_seed.?.value);
+    try testing.expectEqualStrings("first", first_candidate.schedule_metadata.mode_label);
+    try testing.expect(first_candidate.schedule_metadata.schedule_seed == null);
+    try testing.expectEqualStrings("seeded", seeded_candidate.schedule_metadata.mode_label);
+    try testing.expect(seeded_candidate.schedule_metadata.schedule_seed != null);
+    try testing.expectEqual(@as(u64, seeded_candidate.scheduler_seed.value), seeded_candidate.schedule_metadata.schedule_seed.?.value);
 }
 
 test "pct bias candidate carries deterministic preemption metadata in the scheduler config" {
@@ -589,12 +591,12 @@ test "pct bias candidate carries deterministic preemption metadata in the schedu
 
     const candidate = makeCandidate(config, 2);
 
-    try std.testing.expectEqual(@as(u32, 2), candidate.schedule_index);
-    try std.testing.expectEqual(scheduler.SchedulerStrategy.pct_bias, candidate.scheduler_config.strategy);
-    try std.testing.expectEqual(@as(u32, 2), candidate.scheduler_config.pct_preemption_step);
-    try std.testing.expectEqualStrings("pct_bias", candidate.schedule_metadata.mode_label);
-    try std.testing.expect(candidate.schedule_metadata.schedule_seed != null);
-    try std.testing.expectEqual(candidate.scheduler_seed.value, candidate.schedule_metadata.schedule_seed.?.value);
+    try testing.expectEqual(@as(u32, 2), candidate.schedule_index);
+    try testing.expectEqual(scheduler.SchedulerStrategy.pct_bias, candidate.scheduler_config.strategy);
+    try testing.expectEqual(@as(u32, 2), candidate.scheduler_config.pct_preemption_step);
+    try testing.expectEqualStrings("pct_bias", candidate.schedule_metadata.mode_label);
+    try testing.expect(candidate.schedule_metadata.schedule_seed != null);
+    try testing.expectEqual(candidate.scheduler_seed.value, candidate.schedule_metadata.schedule_seed.?.value);
 }
 
 test "runExploration retains the first failing decision stream" {
@@ -652,16 +654,16 @@ test "runExploration retains the first failing decision stream" {
         .decision_buffer = &decision_buffer,
     });
 
-    try std.testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.failed_schedule_count);
-    try std.testing.expect(summary.first_failure != null);
-    try std.testing.expectEqualStrings("seeded", summary.first_failure.?.schedule_mode);
-    try std.testing.expectEqual(@as(u32, 1), summary.first_failure.?.schedule_index);
-    try std.testing.expectEqual(@as(u32, 1), summary.first_failure.?.recorded_decision_count);
-    try std.testing.expectEqual(@as(usize, 1), summary.first_failure.?.recorded_decisions.len);
-    try std.testing.expectEqual(@as(u32, 22), summary.first_failure.?.recorded_decisions[0].chosen_id);
-    try std.testing.expect(summary.first_failure.?.trace_metadata != null);
-    try std.testing.expect(summary.first_failure.?.trace_provenance_summary != null);
+    try testing.expectEqual(@as(u32, 3), summary.executed_schedule_count);
+    try testing.expectEqual(@as(u32, 2), summary.failed_schedule_count);
+    try testing.expect(summary.first_failure != null);
+    try testing.expectEqualStrings("seeded", summary.first_failure.?.schedule_mode);
+    try testing.expectEqual(@as(u32, 1), summary.first_failure.?.schedule_index);
+    try testing.expectEqual(@as(u32, 1), summary.first_failure.?.recorded_decision_count);
+    try testing.expectEqual(@as(usize, 1), summary.first_failure.?.recorded_decisions.len);
+    try testing.expectEqual(@as(u32, 22), summary.first_failure.?.recorded_decisions[0].chosen_id);
+    try testing.expect(summary.first_failure.?.trace_metadata != null);
+    try testing.expect(summary.first_failure.?.trace_provenance_summary != null);
 }
 
 test "formatExplorationSummary produces stable plain text" {
@@ -688,7 +690,7 @@ test "formatExplorationSummary produces stable plain text" {
     };
 
     const text = try formatExplorationSummary(&buffer, summary);
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "executed=4 failed=1 first_mode=seeded first_schedule=1 first_decisions=1",
         text,
     );
@@ -740,16 +742,16 @@ test "failure record binary round-trips through shared storage format" {
     var mode_buffer: [32]u8 = undefined;
     var decoded_decisions: [4]scheduler.ScheduleDecision = undefined;
     const decoded = try decodeFailureRecordBinary(encoded, &mode_buffer, &decoded_decisions);
-    try std.testing.expectEqual(@as(u32, 3), decoded.schedule_index);
-    try std.testing.expectEqualStrings("seeded", decoded.schedule_mode);
-    try std.testing.expect(decoded.schedule_seed != null);
-    try std.testing.expectEqual(@as(u64, 19), decoded.schedule_seed.?.value);
-    try std.testing.expectEqual(@as(u32, 2), decoded.recorded_decision_count);
-    try std.testing.expectEqual(@as(usize, 2), decoded.recorded_decisions.len);
-    try std.testing.expectEqual(@as(u32, 22), decoded.recorded_decisions[0].chosen_id);
-    try std.testing.expect(decoded.trace_metadata != null);
-    try std.testing.expect(decoded.trace_provenance_summary != null);
-    try std.testing.expect(decoded.trace_provenance_summary.?.has_provenance);
+    try testing.expectEqual(@as(u32, 3), decoded.schedule_index);
+    try testing.expectEqualStrings("seeded", decoded.schedule_mode);
+    try testing.expect(decoded.schedule_seed != null);
+    try testing.expectEqual(@as(u64, 19), decoded.schedule_seed.?.value);
+    try testing.expectEqual(@as(u32, 2), decoded.recorded_decision_count);
+    try testing.expectEqual(@as(usize, 2), decoded.recorded_decisions.len);
+    try testing.expectEqual(@as(u32, 22), decoded.recorded_decisions[0].chosen_id);
+    try testing.expect(decoded.trace_metadata != null);
+    try testing.expect(decoded.trace_provenance_summary != null);
+    try testing.expect(decoded.trace_provenance_summary.?.has_provenance);
 }
 
 test "failure record binary rejects unsupported version" {
@@ -775,17 +777,17 @@ test "failure record binary rejects unsupported version" {
 
     var mode_buffer: [16]u8 = undefined;
     var decoded_decisions: [1]scheduler.ScheduleDecision = undefined;
-    try std.testing.expectError(
+    try testing.expectError(
         error.Unsupported,
         decodeFailureRecordBinary(encoded[0..encoded.len], &mode_buffer, &decoded_decisions),
     );
 }
 
 test "failure record log retains bounded latest record" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -843,23 +845,23 @@ test "failure record log retains bounded latest record" {
         .decision_buffer = &decision_buffer,
     })).?;
 
-    try std.testing.expectEqual(@as(u32, 3), latest.schedule_index);
-    try std.testing.expectEqual(@as(u64, 11), latest.schedule_seed.?.value);
-    try std.testing.expectEqual(@as(u32, 1), latest.recorded_decision_count);
-    try std.testing.expect(latest.trace_metadata == null);
+    try testing.expectEqual(@as(u32, 3), latest.schedule_index);
+    try testing.expectEqual(@as(u64, 11), latest.schedule_seed.?.value);
+    try testing.expectEqual(@as(u32, 1), latest.recorded_decision_count);
+    try testing.expect(latest.trace_metadata == null);
 
     const stored = try artifact.record_log.readLogFile(io, tmp_dir.dir, "exploration_failures.binlog", &file_buffer);
     var iter = try artifact.record_log.iterateRecords(stored);
     var count: usize = 0;
     while (try iter.next()) |_| count += 1;
-    try std.testing.expectEqual(@as(usize, 2), count);
+    try testing.expectEqual(@as(usize, 2), count);
 }
 
 test "readMostRecentFailureRecord can skip decision decoding explicitly" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -900,8 +902,8 @@ test "readMostRecentFailureRecord can skip decision decoding explicitly" {
         .mode_buffer = &mode_buffer,
     })).?;
 
-    try std.testing.expectEqual(@as(u32, 4), latest.schedule_index);
-    try std.testing.expectEqual(@as(u32, 1), latest.recorded_decision_count);
-    try std.testing.expectEqual(@as(usize, 0), latest.recorded_decisions.len);
-    try std.testing.expect(latest.trace_provenance_summary == null);
+    try testing.expectEqual(@as(u32, 4), latest.schedule_index);
+    try testing.expectEqual(@as(u32, 1), latest.recorded_decision_count);
+    try testing.expectEqual(@as(usize, 0), latest.recorded_decisions.len);
+    try testing.expect(latest.trace_provenance_summary == null);
 }

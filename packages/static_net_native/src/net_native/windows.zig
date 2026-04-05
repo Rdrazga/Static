@@ -1,6 +1,8 @@
 //! Windows-native endpoint adapters.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const common = @import("common.zig");
 
 pub const Endpoint = common.Endpoint;
@@ -35,7 +37,7 @@ pub const SockaddrAny = union(enum) {
 
     /// Returns a zero-address socket for the requested address family.
     pub fn anyForFamily(family: i32) SockaddrAny {
-        std.debug.assert(family == windows.ws2_32.AF.INET or family == windows.ws2_32.AF.INET6);
+        assert(family == windows.ws2_32.AF.INET or family == windows.ws2_32.AF.INET6);
         if (family == windows.ws2_32.AF.INET) {
             return .{ .ipv4 = .{
                 .family = windows.ws2_32.AF.INET,
@@ -119,7 +121,7 @@ test "windows sockaddr ipv4 round trips through storage" {
     } };
     const sockaddr = SockaddrAny.fromEndpoint(endpoint);
     const storage: *const windows.ws2_32.sockaddr.storage = @ptrCast(@alignCast(sockaddr.ptr()));
-    try std.testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
+    try testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
 }
 
 test "windows sockaddr ipv6 round trips through storage" {
@@ -129,33 +131,33 @@ test "windows sockaddr ipv6 round trips through storage" {
     } };
     const sockaddr = SockaddrAny.fromEndpoint(endpoint);
     const storage: *const windows.ws2_32.sockaddr.storage = @ptrCast(@alignCast(sockaddr.ptr()));
-    try std.testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
+    try testing.expectEqualDeep(endpoint, endpointFromStorage(storage).?);
 }
 
 test "windows anyForFamily returns zeroed ipv4 storage" {
     const sockaddr = SockaddrAny.anyForFamily(windows.ws2_32.AF.INET);
 
-    try std.testing.expect(sockaddr == .ipv4);
-    try std.testing.expectEqual(windows.ws2_32.AF.INET, sockaddr.ipv4.family);
-    try std.testing.expectEqual(@as(u16, 0), sockaddr.ipv4.port);
-    try std.testing.expectEqual(@as(u32, 0), sockaddr.ipv4.addr);
-    try std.testing.expectEqualDeep([_]u8{0} ** 8, sockaddr.ipv4.zero);
+    try testing.expect(sockaddr == .ipv4);
+    try testing.expectEqual(windows.ws2_32.AF.INET, sockaddr.ipv4.family);
+    try testing.expectEqual(@as(u16, 0), sockaddr.ipv4.port);
+    try testing.expectEqual(@as(u32, 0), sockaddr.ipv4.addr);
+    try testing.expectEqualDeep([_]u8{0} ** 8, sockaddr.ipv4.zero);
 }
 
 test "windows anyForFamily returns zeroed ipv6 storage" {
     const sockaddr = SockaddrAny.anyForFamily(windows.ws2_32.AF.INET6);
 
-    try std.testing.expect(sockaddr == .ipv6);
-    try std.testing.expectEqual(windows.ws2_32.AF.INET6, sockaddr.ipv6.family);
-    try std.testing.expectEqual(@as(u16, 0), sockaddr.ipv6.port);
-    try std.testing.expectEqual(@as(u32, 0), sockaddr.ipv6.flowinfo);
-    try std.testing.expectEqualDeep([_]u8{0} ** 16, sockaddr.ipv6.addr);
-    try std.testing.expectEqual(@as(u32, 0), sockaddr.ipv6.scope_id);
+    try testing.expect(sockaddr == .ipv6);
+    try testing.expectEqual(windows.ws2_32.AF.INET6, sockaddr.ipv6.family);
+    try testing.expectEqual(@as(u16, 0), sockaddr.ipv6.port);
+    try testing.expectEqual(@as(u32, 0), sockaddr.ipv6.flowinfo);
+    try testing.expectEqualDeep([_]u8{0} ** 16, sockaddr.ipv6.addr);
+    try testing.expectEqual(@as(u32, 0), sockaddr.ipv6.scope_id);
 }
 
 test "windows storage rejects unsupported family" {
     var storage = std.mem.zeroes(windows.ws2_32.sockaddr.storage);
     storage.family = 0;
 
-    try std.testing.expect(endpointFromStorage(&storage) == null);
+    try testing.expect(endpointFromStorage(&storage) == null);
 }

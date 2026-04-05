@@ -1,6 +1,8 @@
 //! Shared `static_io` value types.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const collections = @import("static_collections");
 const static_net = @import("static_net");
@@ -44,21 +46,21 @@ pub const Buffer = struct {
 
     /// Returns total byte capacity of the buffer.
     pub fn capacity(self: Buffer) u32 {
-        std.debug.assert(self.bytes.len <= std.math.maxInt(u32));
+        assert(self.bytes.len <= std.math.maxInt(u32));
         return @intCast(self.bytes.len);
     }
 
     /// Updates logical used length if it is within bounds.
     pub fn setUsedLen(self: *Buffer, used_len: u32) BufferError!void {
-        std.debug.assert(self.bytes.len <= std.math.maxInt(u32));
+        assert(self.bytes.len <= std.math.maxInt(u32));
         if (used_len > self.bytes.len) return error.InvalidInput;
         self.used_len = used_len;
     }
 
     /// Returns the logical prefix `[0..used_len]`.
     pub fn usedSlice(self: Buffer) []u8 {
-        std.debug.assert(self.bytes.len <= std.math.maxInt(u32));
-        std.debug.assert(self.used_len <= self.bytes.len);
+        assert(self.bytes.len <= std.math.maxInt(u32));
+        assert(self.used_len <= self.bytes.len);
         return self.bytes[0..self.used_len];
     }
 };
@@ -193,6 +195,6 @@ test "buffer used length checks bounds" {
     var storage: [8]u8 = [_]u8{0} ** 8;
     var buffer = Buffer{ .bytes = &storage };
     try buffer.setUsedLen(8);
-    try std.testing.expectEqual(@as(usize, 8), buffer.usedSlice().len);
-    try std.testing.expectError(error.InvalidInput, buffer.setUsedLen(9));
+    try testing.expectEqual(@as(usize, 8), buffer.usedSlice().len);
+    try testing.expectError(error.InvalidInput, buffer.setUsedLen(9));
 }

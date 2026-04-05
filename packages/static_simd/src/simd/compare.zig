@@ -15,6 +15,7 @@
 //! Thread safety: all operations are pure functions; no shared state.
 
 const std = @import("std");
+const testing = std.testing;
 const vec_type = @import("vec_type.zig");
 const masked = @import("masked.zig");
 
@@ -108,52 +109,52 @@ test "4-lane f32 comparisons produce expected mask bits" {
     const b = vec_type.Vec4f.init(.{ 1.0, 3.0, 2.0, 4.0 });
 
     const eq = cmpEq(a, b);
-    try std.testing.expectEqual(@as(u4, 0b1001), eq.toBits());
+    try testing.expectEqual(@as(u4, 0b1001), eq.toBits());
 
     const lt = cmpLt(a, b);
-    try std.testing.expectEqual(@as(u4, 0b0010), lt.toBits());
+    try testing.expectEqual(@as(u4, 0b0010), lt.toBits());
 
     const le = cmpLe(a, b);
-    try std.testing.expectEqual(@as(u4, 0b1011), le.toBits());
+    try testing.expectEqual(@as(u4, 0b1011), le.toBits());
 
     const gt = cmpGt(a, b);
-    try std.testing.expectEqual(@as(u4, 0b0100), gt.toBits());
+    try testing.expectEqual(@as(u4, 0b0100), gt.toBits());
 
     const ge = cmpGe(a, b);
-    try std.testing.expectEqual(@as(u4, 0b1101), ge.toBits());
+    try testing.expectEqual(@as(u4, 0b1101), ge.toBits());
 }
 
 test "8-lane f32 comparisons produce expected mask bits" {
     const a = vec_type.Vec8f.fromArray(.{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 });
     const b = vec_type.Vec8f.fromArray(.{ 0.0, 2.0, 1.0, 3.0, 5.0, 4.0, 6.0, 8.0 });
 
-    try std.testing.expectEqual(@as(u8, 0b01001001), cmpEq(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b10010010), cmpLt(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b11011011), cmpLe(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b00100100), cmpGt(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b01101101), cmpGe(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b01001001), cmpEq(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b10010010), cmpLt(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b11011011), cmpLe(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b00100100), cmpGt(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b01101101), cmpGe(a, b).toBits());
 }
 
 test "4-lane i32 comparisons produce expected mask bits" {
     const a = vec_type.Vec4i.init(.{ 0, -1, 5, 5 });
     const b = vec_type.Vec4i.init(.{ 0, 0, 5, 4 });
 
-    try std.testing.expectEqual(@as(u4, 0b0101), cmpEq(a, b).toBits());
-    try std.testing.expectEqual(@as(u4, 0b0010), cmpLt(a, b).toBits());
-    try std.testing.expectEqual(@as(u4, 0b0111), cmpLe(a, b).toBits());
-    try std.testing.expectEqual(@as(u4, 0b1000), cmpGt(a, b).toBits());
-    try std.testing.expectEqual(@as(u4, 0b1101), cmpGe(a, b).toBits());
+    try testing.expectEqual(@as(u4, 0b0101), cmpEq(a, b).toBits());
+    try testing.expectEqual(@as(u4, 0b0010), cmpLt(a, b).toBits());
+    try testing.expectEqual(@as(u4, 0b0111), cmpLe(a, b).toBits());
+    try testing.expectEqual(@as(u4, 0b1000), cmpGt(a, b).toBits());
+    try testing.expectEqual(@as(u4, 0b1101), cmpGe(a, b).toBits());
 }
 
 test "8-lane i32 comparisons produce expected mask bits" {
     const a = vec_type.Vec8i.fromArray(.{ 0, -1, 5, 7, 9, 11, 13, 15 });
     const b = vec_type.Vec8i.fromArray(.{ 0, 0, 4, 7, 10, 10, 13, 16 });
 
-    try std.testing.expectEqual(@as(u8, 0b01001001), cmpEq(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b10010010), cmpLt(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b11011011), cmpLe(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b00100100), cmpGt(a, b).toBits());
-    try std.testing.expectEqual(@as(u8, 0b01101101), cmpGe(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b01001001), cmpEq(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b10010010), cmpLt(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b11011011), cmpLe(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b00100100), cmpGt(a, b).toBits());
+    try testing.expectEqual(@as(u8, 0b01101101), cmpGe(a, b).toBits());
 }
 
 // Backward-compat alias smoke test: ensure the old names still compile.
@@ -161,10 +162,10 @@ test "backward-compat aliases cmpEq4f/cmpLt8i still work" {
     const a4 = vec_type.Vec4f.init(.{ 1.0, 2.0, 3.0, 4.0 });
     const b4 = vec_type.Vec4f.init(.{ 1.0, 3.0, 2.0, 4.0 });
     const eq4 = cmpEq4f(a4, b4);
-    try std.testing.expectEqual(@as(u4, 0b1001), eq4.toBits());
+    try testing.expectEqual(@as(u4, 0b1001), eq4.toBits());
 
     const a8i = vec_type.Vec8i.fromArray(.{ 0, -1, 5, 7, 9, 11, 13, 15 });
     const b8i = vec_type.Vec8i.fromArray(.{ 0, 0, 4, 7, 10, 10, 13, 16 });
     const lt8 = cmpLt8i(a8i, b8i);
-    try std.testing.expectEqual(@as(u8, 0b10010010), lt8.toBits());
+    try testing.expectEqual(@as(u8, 0b10010010), lt8.toBits());
 }

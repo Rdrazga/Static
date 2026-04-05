@@ -16,6 +16,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const assert = std.debug.assert;
 const primitives = @import("primitives.zig");
 const AABB2 = primitives.AABB2;
 const AABB3 = primitives.AABB3;
@@ -38,20 +39,20 @@ pub fn SparseGrid(comptime T: type) type {
         allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator, cell_size: f32) Self {
-            std.debug.assert(cell_size > 0.0);
+            assert(cell_size > 0.0);
             // Postcondition: cell_size is stored accurately (not NaN or inf).
             const self = Self{
                 .cells = CellMap.init(allocator),
                 .cell_size = cell_size,
                 .allocator = allocator,
             };
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: cell_size must still be valid (catches double-deinit).
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             var it = self.cells.iterator();
             while (it.next()) |entry| {
                 entry.value_ptr.deinit(self.allocator);
@@ -61,7 +62,7 @@ pub fn SparseGrid(comptime T: type) type {
 
         fn cellKey(self: *const Self, x: f32, y: f32) CellKey {
             // Precondition: cell_size must be positive (verified at init).
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             return .{
                 .cx = @intFromFloat(@floor(x / self.cell_size)),
                 .cy = @intFromFloat(@floor(y / self.cell_size)),
@@ -87,14 +88,14 @@ pub fn SparseGrid(comptime T: type) type {
 
         pub fn clear(self: *Self) void {
             // Precondition: cell_size must still be valid.
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             var it = self.cells.iterator();
             while (it.next()) |entry| {
                 entry.value_ptr.deinit(self.allocator);
             }
             self.cells.clearRetainingCapacity();
             // Postcondition: all cells are removed.
-            std.debug.assert(self.cells.count() == 0);
+            assert(self.cells.count() == 0);
         }
     };
 }
@@ -115,20 +116,20 @@ pub fn SparseGrid3D(comptime T: type) type {
         allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator, cell_size: f32) Self {
-            std.debug.assert(cell_size > 0.0);
+            assert(cell_size > 0.0);
             // Postcondition: cell_size is stored accurately (not NaN or inf).
             const self = Self{
                 .cells = CellMap.init(allocator),
                 .cell_size = cell_size,
                 .allocator = allocator,
             };
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: cell_size must still be valid (catches double-deinit).
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             var it = self.cells.iterator();
             while (it.next()) |entry| {
                 entry.value_ptr.deinit(self.allocator);
@@ -138,7 +139,7 @@ pub fn SparseGrid3D(comptime T: type) type {
 
         fn cellKey(self: *const Self, x: f32, y: f32, z: f32) CellKey {
             // Precondition: cell_size must be positive (verified at init).
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             return .{
                 .cx = @intFromFloat(@floor(x / self.cell_size)),
                 .cy = @intFromFloat(@floor(y / self.cell_size)),
@@ -165,14 +166,14 @@ pub fn SparseGrid3D(comptime T: type) type {
 
         pub fn clear(self: *Self) void {
             // Precondition: cell_size must still be valid.
-            std.debug.assert(self.cell_size > 0.0);
+            assert(self.cell_size > 0.0);
             var it = self.cells.iterator();
             while (it.next()) |entry| {
                 entry.value_ptr.deinit(self.allocator);
             }
             self.cells.clearRetainingCapacity();
             // Postcondition: all cells are removed.
-            std.debug.assert(self.cells.count() == 0);
+            assert(self.cells.count() == 0);
         }
     };
 }

@@ -1,10 +1,11 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const math = @import("static_math");
 
 const tolerance: f32 = 1.0e-4;
 
 fn assertVec2Approx(actual: math.Vec2, expected: math.Vec2) void {
-    std.debug.assert(math.Vec2.approxEqual(actual, expected, tolerance));
+    assert(math.Vec2.approxEqual(actual, expected, tolerance));
 }
 
 pub fn main() void {

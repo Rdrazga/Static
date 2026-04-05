@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_memory = @import("static_memory");
 const static_testing = @import("static_testing");
 
@@ -82,7 +84,7 @@ const Context = struct {
         if (self.arena_initialized) {
             self.arena.deinit();
         }
-        self.arena = Arena.init(std.testing.allocator, ArenaCapacity) catch unreachable;
+        self.arena = Arena.init(testing.allocator, ArenaCapacity) catch unreachable;
         self.arena_initialized = true;
         self.first_allocation = null;
         self.saw_reset = false;
@@ -91,25 +93,25 @@ const Context = struct {
         self.expected_high_water = 0;
         self.expected_overflow_count = 0;
 
-        std.debug.assert(self.arena.capacity() == ArenaCapacity);
-        std.debug.assert(self.arena.used() == 0);
-        std.debug.assert(self.arena.remaining() == ArenaCapacity);
+        assert(self.arena.capacity() == ArenaCapacity);
+        assert(self.arena.used() == 0);
+        assert(self.arena.remaining() == ArenaCapacity);
     }
 
     fn expectState(self: *const @This()) void {
-        std.debug.assert(self.arena_initialized);
-        std.debug.assert(self.arena.capacity() == ArenaCapacity);
-        std.debug.assert(self.arena.used() == self.expected_used);
-        std.debug.assert(self.arena.remaining() == ArenaCapacity - self.expected_used);
-        std.debug.assert(self.arena.highWater() == self.expected_high_water);
-        std.debug.assert(self.arena.overflowCount() == self.expected_overflow_count);
+        assert(self.arena_initialized);
+        assert(self.arena.capacity() == ArenaCapacity);
+        assert(self.arena.used() == self.expected_used);
+        assert(self.arena.remaining() == ArenaCapacity - self.expected_used);
+        assert(self.arena.highWater() == self.expected_high_water);
+        assert(self.arena.overflowCount() == self.expected_overflow_count);
 
         const report = self.arena.report();
-        std.debug.assert(report.unit == .bytes);
-        std.debug.assert(report.used == self.expected_used);
-        std.debug.assert(report.capacity == ArenaCapacity);
-        std.debug.assert(report.high_water == self.expected_high_water);
-        std.debug.assert(report.overflow_count == self.expected_overflow_count);
+        assert(report.unit == .bytes);
+        assert(report.used == self.expected_used);
+        assert(report.capacity == ArenaCapacity);
+        assert(report.high_water == self.expected_high_water);
+        assert(report.overflow_count == self.expected_overflow_count);
     }
 
     fn alloc(self: *@This(), size: usize) checker.CheckResult {
@@ -117,9 +119,9 @@ const Context = struct {
         const block = alloc_if.alloc(u8, size) catch {
             return checker.CheckResult.fail(&violation, null);
         };
-        std.debug.assert(block.len == size);
+        assert(block.len == size);
         if (self.first_allocation == null) {
-            std.debug.assert(self.first_allocation == null);
+            assert(self.first_allocation == null);
             self.first_allocation = block;
         } else if (self.saw_reset and self.first_allocation.?.ptr == block.ptr) {
             self.saw_reuse_after_reset = true;
@@ -128,7 +130,7 @@ const Context = struct {
         if (self.expected_used > self.expected_high_water) {
             self.expected_high_water = self.expected_used;
         }
-        std.debug.assert(self.arena.used() == self.expected_used);
+        assert(self.arena.used() == self.expected_used);
         self.expectState();
         return checker.CheckResult.pass(null);
     }
@@ -143,8 +145,8 @@ const Context = struct {
                 self.expected_overflow_count += 1;
                 const attempted_end = self.expected_used + @as(u64, size);
                 if (attempted_end > self.expected_high_water) self.expected_high_water = attempted_end;
-                std.debug.assert(self.expected_overflow_count == before_overflow_count + 1);
-                std.debug.assert(self.expected_high_water >= before_high_water);
+                assert(self.expected_overflow_count == before_overflow_count + 1);
+                assert(self.expected_high_water >= before_high_water);
                 self.expectState();
                 return checker.CheckResult.pass(null);
             },
@@ -154,12 +156,12 @@ const Context = struct {
     }
 
     fn resetArena(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.arena.used() == self.expected_used);
+        assert(self.arena.used() == self.expected_used);
         self.arena.reset();
         self.saw_reset = true;
         self.expected_used = 0;
-        std.debug.assert(self.arena.used() == 0);
-        std.debug.assert(self.arena.remaining() == ArenaCapacity);
+        assert(self.arena.used() == 0);
+        assert(self.arena.remaining() == ArenaCapacity);
         self.expectState();
         return checker.CheckResult.pass(null);
     }
@@ -214,8 +216,8 @@ test "arena reset and overflow behavior stays aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -224,8 +226,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 

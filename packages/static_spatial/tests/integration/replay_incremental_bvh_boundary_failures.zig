@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_spatial = @import("static_spatial");
 const static_testing = @import("static_testing");
 
@@ -153,13 +155,13 @@ const Context = struct {
 
     fn resetState(self: *@This()) void {
         if (self.initialized) self.bvh.deinit();
-        self.bvh = BVH.init(std.testing.allocator);
+        self.bvh = BVH.init(testing.allocator);
         self.initialized = true;
         self.leaves = [_]LeafState{ .{}, .{}, .{} };
         self.query_buffer = [_]u32{0} ** 4;
         self.saw_far_refit = false;
         self.saw_removed_clear = false;
-        std.debug.assert(self.bvh.count() == 0);
+        assert(self.bvh.count() == 0);
     }
 
     fn validateCount(self: *const @This()) checker.CheckResult {
@@ -167,7 +169,7 @@ const Context = struct {
         for (self.leaves) |leaf_state| {
             if (leaf_state.live) expected_count += 1;
         }
-        std.debug.assert(self.bvh.count() == expected_count);
+        assert(self.bvh.count() == expected_count);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(@as(u128, expected_count)));
     }
 
@@ -177,7 +179,7 @@ const Context = struct {
 
     fn insertLeaf(self: *@This(), slot: LeafSlot, bounds: AABB3, value: u32) checker.CheckResult {
         const leaf_state = self.leafState(slot);
-        std.debug.assert(!leaf_state.live);
+        assert(!leaf_state.live);
         const handle = self.bvh.insert(bounds, value) catch return checker.CheckResult.fail(&violation, null);
         leaf_state.* = .{
             .live = true,
@@ -217,8 +219,8 @@ const Context = struct {
             }
         }
 
-        std.debug.assert(expected_count <= self.query_buffer.len);
-        std.debug.assert(hit_count >= @as(u32, @intCast(expected_count)));
+        assert(expected_count <= self.query_buffer.len);
+        assert(hit_count >= @as(u32, @intCast(expected_count)));
         const actual = self.query_buffer[0..expected_count];
 
         if (actual.len != expected_count) return checker.CheckResult.fail(&violation, null);
@@ -236,12 +238,12 @@ const Context = struct {
         if (!count_check.passed) return count_check;
 
         switch (case_index) {
-            0, 1, 2, 3, 4, 5 => std.debug.assert(self.bvh.count() == 1),
-            6 => std.debug.assert(self.bvh.count() == 0),
+            0, 1, 2, 3, 4, 5 => assert(self.bvh.count() == 1),
+            6 => assert(self.bvh.count() == 0),
             else => unreachable,
         }
-        if (case_index == 5) std.debug.assert(self.saw_far_refit);
-        if (case_index == 6) std.debug.assert(self.saw_removed_clear);
+        if (case_index == 5) assert(self.saw_far_refit);
+        if (case_index == 6) assert(self.saw_removed_clear);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(@as(u128, case_index)));
     }
 };
@@ -257,10 +259,10 @@ test "incremental BVH boundary failures stay replayable through shared model and
     var action_storage: [ActionCount]model.RecordedAction = undefined;
     var reduction_scratch: [ActionCount]model.RecordedAction = undefined;
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -310,8 +312,8 @@ test "incremental BVH boundary failures stay replayable through shared model and
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 test "incremental BVH boundary failures retain replay artifacts and actions.zon" {
@@ -322,10 +324,10 @@ test "incremental BVH boundary failures retain replay artifacts and actions.zon"
     context.resetState();
     defer if (context.initialized) context.bvh.deinit();
 
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -378,9 +380,9 @@ test "incremental BVH boundary failures retain replay artifacts and actions.zon"
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     var read_artifact_buffer: [512]u8 = undefined;
     var read_manifest_source: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
@@ -398,9 +400,9 @@ test "incremental BVH boundary failures retain replay artifacts and actions.zon"
         .violations_buffer = &read_violations_source,
         .violations_parse_buffer = &read_violations_parse,
     });
-    try std.testing.expectEqualStrings("static_spatial", bundle.manifest_document.package_name);
-    try std.testing.expectEqualStrings("incremental_bvh_boundary_retained_failure", bundle.manifest_document.run_name);
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings("static_spatial", bundle.manifest_document.package_name);
+    try testing.expectEqualStrings("incremental_bvh_boundary_retained_failure", bundle.manifest_document.run_name);
+    try testing.expectEqualStrings(
         retained_failure_violation[0].code,
         bundle.violations_document.violations[0].code,
     );
@@ -415,9 +417,9 @@ test "incremental BVH boundary failures retain replay artifacts and actions.zon"
         .action_document_source_buffer = &read_action_document_source_buffer,
         .action_document_parse_buffer = &read_action_document_parse_buffer,
     });
-    try std.testing.expect(recorded_actions.action_document != null);
-    try std.testing.expectEqual(failed_case.recorded_actions.len, recorded_actions.actions.len);
-    try std.testing.expectEqualStrings(
+    try testing.expect(recorded_actions.action_document != null);
+    try testing.expectEqual(failed_case.recorded_actions.len, recorded_actions.actions.len);
+    try testing.expectEqualStrings(
         "query_touching",
         recorded_actions.action_document.?.actions[recorded_actions.actions.len - 1].label,
     );
@@ -430,9 +432,9 @@ test "incremental BVH boundary failures retain replay artifacts and actions.zon"
         .finish_fn = finishRetainedFailure,
         .describe_action_fn = describe,
     }, failed_case.run_identity, recorded_actions.actions);
-    try std.testing.expect(!replay.check_result.passed);
-    try std.testing.expectEqual(failed_case.failing_action_index, replay.failing_action_index);
-    try std.testing.expectEqual(failed_case.trace_metadata.event_count, replay.trace_metadata.event_count);
+    try testing.expect(!replay.check_result.passed);
+    try testing.expectEqual(failed_case.failing_action_index, replay.failing_action_index);
+    try testing.expectEqual(failed_case.trace_metadata.event_count, replay.trace_metadata.event_count);
 }
 
 fn nextAction(
@@ -441,8 +443,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 
@@ -453,7 +455,7 @@ fn step(
     action: model.RecordedAction,
 ) error{}!model.ModelStep {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     const tag: ActionTag = @enumFromInt(action.tag);
     const result = switch (tag) {
         .insert_point_a => context.insertLeaf(.a, point_aabb, 10),
@@ -499,8 +501,8 @@ fn nextRetainedFailureAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index == 0);
-    std.debug.assert(action_index < RetainedFailureActionCount);
+    assert(run_identity.case_index == 0);
+    assert(action_index < RetainedFailureActionCount);
     return switch (action_index) {
         0 => .{ .tag = @intFromEnum(ActionTag.insert_point_a) },
         1 => .{ .tag = @intFromEnum(ActionTag.insert_face_b) },
@@ -515,8 +517,8 @@ fn stepRetainedFailure(
     action_index: u32,
     action: model.RecordedAction,
 ) error{}!model.ModelStep {
-    std.debug.assert(run_identity.case_index == 0);
-    std.debug.assert(action_index < RetainedFailureActionCount);
+    assert(run_identity.case_index == 0);
+    assert(action_index < RetainedFailureActionCount);
 
     const context: *Context = @ptrCast(@alignCast(context_ptr));
     const tag: ActionTag = @enumFromInt(action.tag);
@@ -543,7 +545,7 @@ fn finish(
     _: u32,
 ) error{}!checker.CheckResult {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     return context.finish(run_identity.case_index);
 }
 
@@ -552,8 +554,8 @@ fn finishRetainedFailure(
     run_identity: identity.RunIdentity,
     executed_action_count: u32,
 ) error{}!checker.CheckResult {
-    std.debug.assert(run_identity.case_index == 0);
-    std.debug.assert(executed_action_count <= RetainedFailureActionCount);
+    assert(run_identity.case_index == 0);
+    assert(executed_action_count <= RetainedFailureActionCount);
     const context: *Context = @ptrCast(@alignCast(context_ptr));
     return context.validateCount();
 }

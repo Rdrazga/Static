@@ -1,6 +1,7 @@
 //! Demonstrates a bounded swarm campaign over the deterministic simulation layer.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const checker = testing.testing.checker;
@@ -104,15 +105,15 @@ pub fn main() !void {
         },
     });
 
-    std.debug.assert(summary.executed_run_count == 4);
-    std.debug.assert(summary.failed_run_count == 1);
-    std.debug.assert(summary.retained_failure_count == 1);
-    std.debug.assert(summary.first_failure != null);
-    std.debug.assert(scenario_context.seen_variant_mask == 0b11);
-    std.debug.assert(progress_context.report_count == 2);
+    assert(summary.executed_run_count == 4);
+    assert(summary.failed_run_count == 1);
+    assert(summary.retained_failure_count == 1);
+    assert(summary.first_failure != null);
+    assert(scenario_context.seen_variant_mask == 0b11);
+    assert(progress_context.report_count == 2);
 
     const first_failure = summary.first_failure.?;
-    std.debug.assert(first_failure.persistedEntryName() != null);
+    assert(first_failure.persistedEntryName() != null);
     var read_artifact_buffer: [256]u8 = undefined;
     var read_manifest_buffer: [failure_bundle.recommended_manifest_source_len]u8 = undefined;
     var read_manifest_parse_buffer: [failure_bundle.recommended_manifest_parse_len]u8 = undefined;
@@ -143,10 +144,10 @@ pub fn main() !void {
             .violations_parse_buffer = &read_violations_parse_buffer,
         },
     );
-    std.debug.assert(retained_entry.replay_artifact_view.identity.seed.value == first_failure.run_identity.seed.value);
-    std.debug.assert(std.mem.eql(u8, retained_entry.manifest_document.campaign_profile.?, "stress"));
-    std.debug.assert(retained_entry.trace_document != null);
-    std.debug.assert(retained_entry.retained_trace != null);
+    assert(retained_entry.replay_artifact_view.identity.seed.value == first_failure.run_identity.seed.value);
+    assert(std.mem.eql(u8, retained_entry.manifest_document.campaign_profile.?, "stress"));
+    assert(retained_entry.trace_document != null);
+    assert(retained_entry.retained_trace != null);
 
     const campaign_summary = (try swarm.summarizeCampaignRecords(
         io,
@@ -163,12 +164,12 @@ pub fn main() !void {
         &campaign_summary_buffer,
         campaign_summary,
     );
-    std.debug.assert(campaign_summary.total_run_count == 4);
-    std.debug.assert(campaign_summary.failed_run_count == 1);
-    std.debug.assert(campaign_summary.retained_failure_count == 1);
-    std.debug.assert(campaign_summary.variant_summaries.len == 2);
-    std.debug.assert(campaign_summary.retained_seed_suggestions.len == 1);
-    std.debug.assert(std.mem.indexOf(u8, campaign_summary_text, "campaign runs=4 failed=1 retained=1 variants=2") != null);
+    assert(campaign_summary.total_run_count == 4);
+    assert(campaign_summary.failed_run_count == 1);
+    assert(campaign_summary.retained_failure_count == 1);
+    assert(campaign_summary.variant_summaries.len == 2);
+    assert(campaign_summary.retained_seed_suggestions.len == 1);
+    assert(std.mem.indexOf(u8, campaign_summary_text, "campaign runs=4 failed=1 retained=1 variants=2") != null);
 }
 
 fn cleanupOutputDir(

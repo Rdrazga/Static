@@ -1,6 +1,8 @@
 //! Bounded deterministic storage-durability simulator over logical time.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const trace = @import("../trace.zig");
 const clock = @import("clock.zig");
 const mailbox = @import("mailbox.zig");
@@ -556,7 +558,7 @@ fn removePendingAt(
     pending_count: *usize,
     index: usize,
 ) void {
-    std.debug.assert(index < pending_count.*);
+    assert(index < pending_count.*);
     var cursor = index;
     while (cursor + 1 < pending_count.*) : (cursor += 1) {
         storage[cursor] = storage[cursor + 1];
@@ -572,29 +574,29 @@ test "storage durability drops pending writes across crash and allows recovery" 
         .read_delay = .init(1),
         .crash_behavior = .drop_pending_writes,
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 4,
     });
     defer completions.deinit();
 
     try simulator.submitWrite(.init(0), 1, 9, 111);
-    try std.testing.expectEqual(@as(usize, 1), simulator.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), simulator.pendingItems().len);
 
-    try std.testing.expectEqual(@as(u32, 1), try simulator.crash(.init(0), null));
-    try std.testing.expect(simulator.isCrashed());
-    try std.testing.expectEqual(@as(usize, 0), simulator.pendingItems().len);
-    try std.testing.expectError(error.Unavailable, simulator.submitRead(.init(0), 2, 9));
+    try testing.expectEqual(@as(u32, 1), try simulator.crash(.init(0), null));
+    try testing.expect(simulator.isCrashed());
+    try testing.expectEqual(@as(usize, 0), simulator.pendingItems().len);
+    try testing.expectError(error.Unavailable, simulator.submitRead(.init(0), 2, 9));
 
     try simulator.recover(.init(1), null);
-    try std.testing.expect(!simulator.isCrashed());
+    try testing.expect(!simulator.isCrashed());
 
     try simulator.submitRead(.init(1), 3, 9);
     const delivered = try simulator.deliverDueToMailbox(.init(2), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), delivered.missing_count);
+    try testing.expectEqual(@as(u32, 1), delivered.missing_count);
     const missing = try completions.recv();
-    try std.testing.expectEqual(OperationKind.read, missing.kind);
-    try std.testing.expectEqual(CompletionStatus.missing, missing.status);
-    try std.testing.expect(missing.value == null);
+    try testing.expectEqual(OperationKind.read, missing.kind);
+    try testing.expectEqual(CompletionStatus.missing, missing.status);
+    try testing.expect(missing.value == null);
 }
 
 test "storage durability supports write and read corruption policies" {
@@ -606,25 +608,25 @@ test "storage durability supports write and read corruption policies" {
         .write_corruption = .{ .fixed_value = 7 },
         .read_corruption = .{ .fixed_value = 9 },
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 4,
     });
     defer completions.deinit();
 
     try simulator.submitWrite(.init(0), 1, 4, 100);
     const writes = try simulator.deliverDueToMailbox(.init(1), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), writes.corrupted_count);
+    try testing.expectEqual(@as(u32, 1), writes.corrupted_count);
     const write_result = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.corrupted, write_result.status);
-    try std.testing.expectEqual(@as(u32, 7), write_result.value.?);
+    try testing.expectEqual(CompletionStatus.corrupted, write_result.status);
+    try testing.expectEqual(@as(u32, 7), write_result.value.?);
 
     try simulator.submitRead(.init(1), 2, 4);
     const reads = try simulator.deliverDueToMailbox(.init(2), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), reads.corrupted_count);
+    try testing.expectEqual(@as(u32, 1), reads.corrupted_count);
     const read_result = try completions.recv();
-    try std.testing.expectEqual(OperationKind.read, read_result.kind);
-    try std.testing.expectEqual(CompletionStatus.corrupted, read_result.status);
-    try std.testing.expectEqual(@as(u32, 9), read_result.value.?);
+    try testing.expectEqual(OperationKind.read, read_result.kind);
+    try testing.expectEqual(CompletionStatus.corrupted, read_result.status);
+    try testing.expectEqual(@as(u32, 9), read_result.value.?);
 }
 
 test "storage durability can stabilize reads and writes after recover" {
@@ -637,7 +639,7 @@ test "storage durability can stabilize reads and writes after recover" {
         .write_corruption = .{ .fixed_value = 7 },
         .read_corruption = .{ .fixed_value = 9 },
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 6,
     });
     defer completions.deinit();
@@ -645,8 +647,8 @@ test "storage durability can stabilize reads and writes after recover" {
     try simulator.submitWrite(.init(0), 1, 4, 100);
     _ = try simulator.deliverDueToMailbox(.init(1), &completions, null);
     const fault_phase_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.corrupted, fault_phase_write.status);
-    try std.testing.expectEqual(@as(u32, 7), fault_phase_write.value.?);
+    try testing.expectEqual(CompletionStatus.corrupted, fault_phase_write.status);
+    try testing.expectEqual(@as(u32, 7), fault_phase_write.value.?);
 
     _ = try simulator.crash(.init(1), null);
     try simulator.recover(.init(2), null);
@@ -654,15 +656,15 @@ test "storage durability can stabilize reads and writes after recover" {
     try simulator.submitWrite(.init(2), 2, 4, 200);
     _ = try simulator.deliverDueToMailbox(.init(3), &completions, null);
     const repair_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, repair_write.status);
-    try std.testing.expectEqual(@as(u32, 200), repair_write.value.?);
+    try testing.expectEqual(CompletionStatus.success, repair_write.status);
+    try testing.expectEqual(@as(u32, 200), repair_write.value.?);
 
     try simulator.submitRead(.init(3), 3, 4);
     _ = try simulator.deliverDueToMailbox(.init(4), &completions, null);
     const repair_read = try completions.recv();
-    try std.testing.expectEqual(OperationKind.read, repair_read.kind);
-    try std.testing.expectEqual(CompletionStatus.success, repair_read.status);
-    try std.testing.expectEqual(@as(u32, 200), repair_read.value.?);
+    try testing.expectEqual(OperationKind.read, repair_read.kind);
+    try testing.expectEqual(CompletionStatus.success, repair_read.status);
+    try testing.expectEqual(@as(u32, 200), repair_read.value.?);
 }
 
 test "storage durability does not stabilize faults before the first crash" {
@@ -674,7 +676,7 @@ test "storage durability does not stabilize faults before the first crash" {
         .recoverability_policy = .stabilize_after_recover,
         .write_corruption = .{ .fixed_value = 7 },
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 6,
     });
     defer completions.deinit();
@@ -683,16 +685,16 @@ test "storage durability does not stabilize faults before the first crash" {
     try simulator.submitWrite(.init(0), 1, 4, 100);
     _ = try simulator.deliverDueToMailbox(.init(1), &completions, null);
     const fault_phase_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.corrupted, fault_phase_write.status);
-    try std.testing.expectEqual(@as(u32, 7), fault_phase_write.value.?);
+    try testing.expectEqual(CompletionStatus.corrupted, fault_phase_write.status);
+    try testing.expectEqual(@as(u32, 7), fault_phase_write.value.?);
 
     _ = try simulator.crash(.init(1), null);
     try simulator.recover(.init(2), null);
     try simulator.submitWrite(.init(2), 2, 4, 200);
     _ = try simulator.deliverDueToMailbox(.init(3), &completions, null);
     const repair_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, repair_write.status);
-    try std.testing.expectEqual(@as(u32, 200), repair_write.value.?);
+    try testing.expectEqual(CompletionStatus.success, repair_write.status);
+    try testing.expectEqual(@as(u32, 200), repair_write.value.?);
 }
 
 test "storage durability supports misdirected write placement faults and repair-phase stabilization" {
@@ -704,48 +706,48 @@ test "storage durability supports misdirected write placement faults and repair-
         .recoverability_policy = .stabilize_after_recover,
         .write_placement = .{ .fixed_slot = 9 },
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 8,
     });
     defer completions.deinit();
 
     try simulator.submitWrite(.init(0), 1, 4, 100);
     const fault_summary = try simulator.deliverDueToMailbox(.init(1), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), fault_summary.corrupted_count);
+    try testing.expectEqual(@as(u32, 1), fault_summary.corrupted_count);
     const fault_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.corrupted, fault_write.status);
-    try std.testing.expectEqual(@as(u32, 100), fault_write.value.?);
-    try std.testing.expectEqual(@as(usize, 1), simulator.storedItems().len);
-    try std.testing.expectEqual(@as(u32, 9), simulator.storedItems()[0].slot_id);
-    try std.testing.expectEqual(@as(u32, 100), simulator.storedItems()[0].value);
+    try testing.expectEqual(CompletionStatus.corrupted, fault_write.status);
+    try testing.expectEqual(@as(u32, 100), fault_write.value.?);
+    try testing.expectEqual(@as(usize, 1), simulator.storedItems().len);
+    try testing.expectEqual(@as(u32, 9), simulator.storedItems()[0].slot_id);
+    try testing.expectEqual(@as(u32, 100), simulator.storedItems()[0].value);
 
     try simulator.submitRead(.init(1), 2, 4);
     const missing_summary = try simulator.deliverDueToMailbox(.init(2), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), missing_summary.missing_count);
-    try std.testing.expectEqual(CompletionStatus.missing, (try completions.recv()).status);
+    try testing.expectEqual(@as(u32, 1), missing_summary.missing_count);
+    try testing.expectEqual(CompletionStatus.missing, (try completions.recv()).status);
 
     try simulator.submitRead(.init(2), 3, 9);
     const redirected_summary = try simulator.deliverDueToMailbox(.init(3), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), redirected_summary.read_success_count);
+    try testing.expectEqual(@as(u32, 1), redirected_summary.read_success_count);
     const redirected_read = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, redirected_read.status);
-    try std.testing.expectEqual(@as(u32, 100), redirected_read.value.?);
+    try testing.expectEqual(CompletionStatus.success, redirected_read.status);
+    try testing.expectEqual(@as(u32, 100), redirected_read.value.?);
 
     _ = try simulator.crash(.init(3), null);
     try simulator.recover(.init(4), null);
     try simulator.submitWrite(.init(4), 4, 4, 222);
     const repair_summary = try simulator.deliverDueToMailbox(.init(5), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), repair_summary.write_success_count);
+    try testing.expectEqual(@as(u32, 1), repair_summary.write_success_count);
     const repair_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, repair_write.status);
-    try std.testing.expectEqual(@as(u32, 222), repair_write.value.?);
+    try testing.expectEqual(CompletionStatus.success, repair_write.status);
+    try testing.expectEqual(@as(u32, 222), repair_write.value.?);
 
     try simulator.submitRead(.init(5), 5, 4);
     const repair_read_summary = try simulator.deliverDueToMailbox(.init(6), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), repair_read_summary.read_success_count);
+    try testing.expectEqual(@as(u32, 1), repair_read_summary.read_success_count);
     const repair_read = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, repair_read.status);
-    try std.testing.expectEqual(@as(u32, 222), repair_read.value.?);
+    try testing.expectEqual(CompletionStatus.success, repair_read.status);
+    try testing.expectEqual(@as(u32, 222), repair_read.value.?);
 }
 
 test "storage durability supports acknowledged-but-not-durable writes and repair-phase stabilization" {
@@ -757,41 +759,41 @@ test "storage durability supports acknowledged-but-not-durable writes and repair
         .recoverability_policy = .stabilize_after_recover,
         .write_persistence = .acknowledge_without_store,
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 8,
     });
     defer completions.deinit();
 
     try simulator.submitWrite(.init(0), 1, 4, 100);
     const omission_summary = try simulator.deliverDueToMailbox(.init(1), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), omission_summary.write_success_count);
+    try testing.expectEqual(@as(u32, 1), omission_summary.write_success_count);
     const omitted_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, omitted_write.status);
-    try std.testing.expectEqual(@as(u32, 100), omitted_write.value.?);
-    try std.testing.expectEqual(@as(usize, 0), simulator.storedItems().len);
+    try testing.expectEqual(CompletionStatus.success, omitted_write.status);
+    try testing.expectEqual(@as(u32, 100), omitted_write.value.?);
+    try testing.expectEqual(@as(usize, 0), simulator.storedItems().len);
 
     try simulator.submitRead(.init(1), 2, 4);
     const missing_summary = try simulator.deliverDueToMailbox(.init(2), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), missing_summary.missing_count);
-    try std.testing.expectEqual(CompletionStatus.missing, (try completions.recv()).status);
+    try testing.expectEqual(@as(u32, 1), missing_summary.missing_count);
+    try testing.expectEqual(CompletionStatus.missing, (try completions.recv()).status);
 
     _ = try simulator.crash(.init(2), null);
     try simulator.recover(.init(3), null);
     try simulator.submitWrite(.init(3), 3, 4, 222);
     const repair_summary = try simulator.deliverDueToMailbox(.init(4), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), repair_summary.write_success_count);
+    try testing.expectEqual(@as(u32, 1), repair_summary.write_success_count);
     const repair_write = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, repair_write.status);
-    try std.testing.expectEqual(@as(u32, 222), repair_write.value.?);
-    try std.testing.expectEqual(@as(usize, 1), simulator.storedItems().len);
-    try std.testing.expectEqual(@as(u32, 222), simulator.storedItems()[0].value);
+    try testing.expectEqual(CompletionStatus.success, repair_write.status);
+    try testing.expectEqual(@as(u32, 222), repair_write.value.?);
+    try testing.expectEqual(@as(usize, 1), simulator.storedItems().len);
+    try testing.expectEqual(@as(u32, 222), simulator.storedItems()[0].value);
 
     try simulator.submitRead(.init(4), 4, 4);
     const repair_read_summary = try simulator.deliverDueToMailbox(.init(5), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), repair_read_summary.read_success_count);
+    try testing.expectEqual(@as(u32, 1), repair_read_summary.read_success_count);
     const repair_read = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, repair_read.status);
-    try std.testing.expectEqual(@as(u32, 222), repair_read.value.?);
+    try testing.expectEqual(CompletionStatus.success, repair_read.status);
+    try testing.expectEqual(@as(u32, 222), repair_read.value.?);
 }
 
 test "storage durability can record and replay pending operations plus stored state" {
@@ -804,7 +806,7 @@ test "storage durability can record and replay pending operations plus stored st
         .write_corruption = .{ .fixed_value = 7 },
         .read_corruption = .{ .fixed_value = 9 },
     });
-    var source_completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var source_completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 6,
     });
     defer source_completions.deinit();
@@ -812,8 +814,8 @@ test "storage durability can record and replay pending operations plus stored st
     try source.submitWrite(.init(0), 1, 4, 100);
     _ = try source.deliverDueToMailbox(.init(1), &source_completions, null);
     const initial_write = try source_completions.recv();
-    try std.testing.expectEqual(CompletionStatus.corrupted, initial_write.status);
-    try std.testing.expectEqual(@as(u32, 7), initial_write.value.?);
+    try testing.expectEqual(CompletionStatus.corrupted, initial_write.status);
+    try testing.expectEqual(@as(u32, 7), initial_write.value.?);
 
     _ = try source.crash(.init(1), null);
     try source.recover(.init(2), null);
@@ -823,11 +825,11 @@ test "storage durability can record and replay pending operations plus stored st
     var recorded_pending: [6]PendingOperation(u32) = undefined;
     var recorded_stored: [4]StoredValue(u32) = undefined;
     const recorded = try source.recordState(&recorded_pending, &recorded_stored);
-    try std.testing.expectEqual(@as(usize, 2), recorded.pending.len);
-    try std.testing.expectEqual(@as(usize, 1), recorded.stored.len);
-    try std.testing.expect(!recorded.crashed);
-    try std.testing.expect(recorded.stabilized_after_recover);
-    try std.testing.expectEqual(@as(u32, 7), recorded.stored[0].value);
+    try testing.expectEqual(@as(usize, 2), recorded.pending.len);
+    try testing.expectEqual(@as(usize, 1), recorded.stored.len);
+    try testing.expect(!recorded.crashed);
+    try testing.expect(recorded.stabilized_after_recover);
+    try testing.expectEqual(@as(u32, 7), recorded.stored[0].value);
 
     var replay_pending_storage: [6]PendingOperation(u32) = undefined;
     var replay_stored_storage: [4]StoredValue(u32) = undefined;
@@ -839,25 +841,25 @@ test "storage durability can record and replay pending operations plus stored st
         .read_corruption = .{ .fixed_value = 900 },
     });
     try replay.replayRecordedState(recorded);
-    try std.testing.expect(!replay.isCrashed());
+    try testing.expect(!replay.isCrashed());
 
-    var replay_completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var replay_completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 6,
     });
     defer replay_completions.deinit();
     const replay_summary = try replay.deliverDueToMailbox(.init(3), &replay_completions, null);
-    try std.testing.expectEqual(@as(u32, 1), replay_summary.write_success_count);
-    try std.testing.expectEqual(@as(u32, 1), replay_summary.read_success_count);
+    try testing.expectEqual(@as(u32, 1), replay_summary.write_success_count);
+    try testing.expectEqual(@as(u32, 1), replay_summary.read_success_count);
 
     const replay_write = try replay_completions.recv();
-    try std.testing.expectEqual(OperationKind.write, replay_write.kind);
-    try std.testing.expectEqual(CompletionStatus.success, replay_write.status);
-    try std.testing.expectEqual(@as(u32, 222), replay_write.value.?);
+    try testing.expectEqual(OperationKind.write, replay_write.kind);
+    try testing.expectEqual(CompletionStatus.success, replay_write.status);
+    try testing.expectEqual(@as(u32, 222), replay_write.value.?);
 
     const replay_read = try replay_completions.recv();
-    try std.testing.expectEqual(OperationKind.read, replay_read.kind);
-    try std.testing.expectEqual(CompletionStatus.success, replay_read.status);
-    try std.testing.expectEqual(@as(u32, 7), replay_read.value.?);
+    try testing.expectEqual(OperationKind.read, replay_read.kind);
+    try testing.expectEqual(CompletionStatus.success, replay_read.status);
+    try testing.expectEqual(@as(u32, 7), replay_read.value.?);
 }
 
 test "storage durability traces crash recover and operation outcomes" {
@@ -867,7 +869,7 @@ test "storage durability traces crash recover and operation outcomes" {
         .write_delay = .init(1),
         .read_delay = .init(1),
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 4,
     });
     defer completions.deinit();
@@ -881,9 +883,9 @@ test "storage durability traces crash recover and operation outcomes" {
     _ = try simulator.deliverDueToMailbox(.init(2), &completions, &trace_buffer);
 
     const snapshot = trace_buffer.snapshot();
-    try std.testing.expectEqualStrings("storage_durability.crash", snapshot.items[0].label);
-    try std.testing.expectEqualStrings("storage_durability.recover", snapshot.items[1].label);
-    try std.testing.expectEqualStrings("storage_durability.write.success", snapshot.items[2].label);
+    try testing.expectEqualStrings("storage_durability.crash", snapshot.items[0].label);
+    try testing.expectEqualStrings("storage_durability.recover", snapshot.items[1].label);
+    try testing.expectEqualStrings("storage_durability.write.success", snapshot.items[2].label);
 }
 
 test "storage durability replay rejects non-empty state and invalid recorded inputs" {
@@ -909,7 +911,7 @@ test "storage durability replay rejects non-empty state and invalid recorded inp
         .crashed = false,
         .stabilized_after_recover = false,
     };
-    try std.testing.expectError(error.InvalidInput, simulator.replayRecordedState(valid_recorded));
+    try testing.expectError(error.InvalidInput, simulator.replayRecordedState(valid_recorded));
 
     var empty_pending_storage: [1]PendingOperation(u32) = undefined;
     var empty_stored_storage: [1]StoredValue(u32) = undefined;
@@ -931,7 +933,7 @@ test "storage durability replay rejects non-empty state and invalid recorded inp
         .crashed = false,
         .stabilized_after_recover = false,
     };
-    try std.testing.expectError(error.InvalidInput, empty.replayRecordedState(invalid_recorded));
+    try testing.expectError(error.InvalidInput, empty.replayRecordedState(invalid_recorded));
 
     const invalid_stabilized = RecordedState(u32){
         .pending = &[_]PendingOperation(u32){},
@@ -939,11 +941,11 @@ test "storage durability replay rejects non-empty state and invalid recorded inp
         .crashed = false,
         .stabilized_after_recover = true,
     };
-    try std.testing.expectError(error.InvalidInput, empty.replayRecordedState(invalid_stabilized));
+    try testing.expectError(error.InvalidInput, empty.replayRecordedState(invalid_stabilized));
 
     var too_small_pending: [0]PendingOperation(u32) = .{};
     var too_small_stored: [0]StoredValue(u32) = .{};
-    try std.testing.expectError(error.NoSpaceLeft, simulator.recordState(&too_small_pending, &too_small_stored));
+    try testing.expectError(error.NoSpaceLeft, simulator.recordState(&too_small_pending, &too_small_stored));
 }
 
 test "storage durability rejects read submissions that carry a payload" {
@@ -954,13 +956,13 @@ test "storage durability rejects read submissions that carry a payload" {
         .read_delay = .init(1),
     });
 
-    try std.testing.expectError(error.InvalidInput, simulator.submitAfter(.init(0), .init(1), .{
+    try testing.expectError(error.InvalidInput, simulator.submitAfter(.init(0), .init(1), .{
         .request_id = 1,
         .kind = .read,
         .slot_id = 4,
         .value = 99,
     }));
-    try std.testing.expectEqual(@as(usize, 0), simulator.pendingItems().len);
+    try testing.expectEqual(@as(usize, 0), simulator.pendingItems().len);
 }
 
 test "storage durability leaves operations pending when trace capacity is exhausted" {
@@ -970,7 +972,7 @@ test "storage durability leaves operations pending when trace capacity is exhaus
         .write_delay = .init(1),
         .read_delay = .init(1),
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 4,
     });
     defer completions.deinit();
@@ -984,26 +986,26 @@ test "storage durability leaves operations pending when trace capacity is exhaus
     });
 
     try simulator.submitWrite(.init(0), 1, 8, 55);
-    try std.testing.expectError(
+    try testing.expectError(
         error.NoSpaceLeft,
         simulator.deliverDueToMailbox(.init(1), &completions, &trace_buffer),
     );
-    try std.testing.expectEqual(@as(usize, 1), simulator.pendingItems().len);
-    try std.testing.expectEqual(@as(usize, 0), completions.len());
-    try std.testing.expectEqual(@as(usize, 0), simulator.storedItems().len);
+    try testing.expectEqual(@as(usize, 1), simulator.pendingItems().len);
+    try testing.expectEqual(@as(usize, 0), completions.len());
+    try testing.expectEqual(@as(usize, 0), simulator.storedItems().len);
 
     trace_buffer.reset();
     const delivered = try simulator.deliverDueToMailbox(.init(1), &completions, &trace_buffer);
-    try std.testing.expectEqual(@as(u32, 1), delivered.write_success_count);
-    try std.testing.expectEqual(@as(usize, 0), simulator.pendingItems().len);
-    try std.testing.expectEqual(@as(usize, 1), simulator.storedItems().len);
-    try std.testing.expectEqual(CompletionStatus.success, (try completions.recv()).status);
+    try testing.expectEqual(@as(u32, 1), delivered.write_success_count);
+    try testing.expectEqual(@as(usize, 0), simulator.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), simulator.storedItems().len);
+    try testing.expectEqual(CompletionStatus.success, (try completions.recv()).status);
 }
 
 test "storage durability rejects invalid write placement config" {
     var pending_storage: [1]PendingOperation(u32) = undefined;
     var stored_storage: [1]StoredValue(u32) = undefined;
-    try std.testing.expectError(error.InvalidConfig, StorageDurability(u32).init(&pending_storage, &stored_storage, .{
+    try testing.expectError(error.InvalidConfig, StorageDurability(u32).init(&pending_storage, &stored_storage, .{
         .write_delay = .init(1),
         .read_delay = .init(1),
         .write_placement = .{ .fixed_slot = 0 },

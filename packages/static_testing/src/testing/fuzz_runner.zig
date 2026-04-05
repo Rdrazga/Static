@@ -2,6 +2,8 @@
 //! and optional seed reduction.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const checker = @import("checker.zig");
 const corpus = @import("corpus.zig");
@@ -189,7 +191,7 @@ fn finalizeFailure(
             );
             final_execution = try runner.target.run(final_identity);
             assertCheckResult(final_execution.check_result);
-            std.debug.assert(!final_execution.check_result.passed);
+            assert(!final_execution.check_result.passed);
         }
     }
 
@@ -230,9 +232,9 @@ fn persistFailure(
 
 fn assertCheckResult(result: checker.CheckResult) void {
     if (result.passed) {
-        std.debug.assert(result.violations.len == 0);
+        assert(result.violations.len == 0);
     } else {
-        std.debug.assert(result.violations.len > 0);
+        assert(result.violations.len > 0);
     }
 }
 
@@ -255,7 +257,7 @@ test "runFuzzCases rejects invalid fuzz configs" {
     };
     const Runner = FuzzRunner(error{}, error{});
 
-    try std.testing.expectError(error.InvalidInput, runFuzzCases(error{}, error{}, Runner{
+    try testing.expectError(error.InvalidInput, runFuzzCases(error{}, error{}, Runner{
         .config = .{
             .package_name = "",
             .run_name = "invalid",
@@ -269,7 +271,7 @@ test "runFuzzCases rejects invalid fuzz configs" {
         },
     }));
 
-    try std.testing.expectError(error.InvalidInput, runFuzzCases(error{}, error{}, Runner{
+    try testing.expectError(error.InvalidInput, runFuzzCases(error{}, error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid_budget",
@@ -305,7 +307,7 @@ test "runFuzzCases rejects invalid fuzz configs" {
         },
     }));
 
-    try std.testing.expectError(error.InvalidInput, runFuzzCases(error{}, error{}, Runner{
+    try testing.expectError(error.InvalidInput, runFuzzCases(error{}, error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "invalid_success_budget",
@@ -397,13 +399,13 @@ test "runFuzzCases reproduces the same first failing seed across runs" {
         },
     });
 
-    try std.testing.expect(first.failed_case != null);
-    try std.testing.expect(second.failed_case != null);
-    try std.testing.expectEqual(
+    try testing.expect(first.failed_case != null);
+    try testing.expect(second.failed_case != null);
+    try testing.expectEqual(
         first.failed_case.?.run_identity.case_index,
         second.failed_case.?.run_identity.case_index,
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         first.failed_case.?.run_identity.seed.value,
         second.failed_case.?.run_identity.seed.value,
     );
@@ -485,9 +487,9 @@ test "runFuzzCases applies a seed reducer only after a failing case" {
         },
     });
 
-    try std.testing.expect(result.failed_case != null);
-    try std.testing.expect(result.failed_case.?.reduced_seed != null);
-    try std.testing.expect(reducer_context.calls_total > 0);
+    try testing.expect(result.failed_case != null);
+    try testing.expect(result.failed_case.?.reduced_seed != null);
+    try testing.expect(reducer_context.calls_total > 0);
 }
 
 test "runFuzzCases does not call the reducer when all cases pass" {
@@ -547,9 +549,9 @@ test "runFuzzCases does not call the reducer when all cases pass" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 4), result.executed_case_count);
-    try std.testing.expect(result.failed_case == null);
-    try std.testing.expectEqual(@as(u32, 0), reducer_context.calls_total);
+    try testing.expectEqual(@as(u32, 4), result.executed_case_count);
+    try testing.expect(result.failed_case == null);
+    try testing.expectEqual(@as(u32, 0), reducer_context.calls_total);
 }
 
 test "runFuzzCases keeps failed cases in-memory when persistence is disabled" {
@@ -588,9 +590,9 @@ test "runFuzzCases keeps failed cases in-memory when persistence is disabled" {
         },
     });
 
-    try std.testing.expectEqual(@as(u32, 1), result.executed_case_count);
-    try std.testing.expect(result.failed_case != null);
-    try std.testing.expect(result.failed_case.?.persisted_entry_name == null);
+    try testing.expectEqual(@as(u32, 1), result.executed_case_count);
+    try testing.expect(result.failed_case != null);
+    try testing.expect(result.failed_case.?.persisted_entry_name == null);
 }
 
 test "runFuzzCases propagates persistence buffer limits" {
@@ -614,10 +616,10 @@ test "runFuzzCases propagates persistence buffer limits" {
         }
     };
     const Runner = FuzzRunner(error{}, error{});
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -625,7 +627,7 @@ test "runFuzzCases propagates persistence buffer limits" {
     var artifact_buffer: [8]u8 = undefined;
     var entry_name_buffer: [128]u8 = undefined;
 
-    try std.testing.expectError(error.NoSpaceLeft, runFuzzCases(error{}, error{}, Runner{
+    try testing.expectError(error.NoSpaceLeft, runFuzzCases(error{}, error{}, Runner{
         .config = .{
             .package_name = "static_testing",
             .run_name = "persistence_buffer_limit",

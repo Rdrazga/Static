@@ -1,6 +1,8 @@
 //! Benchmark case definitions and anti-elision helpers.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// Supported benchmark parameter payload types.
 pub const ParameterValue = union(enum) {
@@ -42,7 +44,7 @@ pub const BenchmarkCase = struct {
 
     /// Construct one benchmark case from caller-provided metadata and callback.
     pub fn init(options: BenchmarkCaseOptions) BenchmarkCase {
-        std.debug.assert(options.name.len > 0);
+        assert(options.name.len > 0);
         assertUniqueParameterKeys(options.parameters);
         assertValidTags(options.tags);
 
@@ -76,23 +78,23 @@ pub fn blackBox(value: anytype) @TypeOf(value) {
 pub fn blackBoxPointer(pointer: anytype) void {
     const Pointer = @TypeOf(pointer);
     const pointer_info = @typeInfo(Pointer);
-    comptime std.debug.assert(pointer_info == .pointer);
+    comptime assert(pointer_info == .pointer);
 
     std.mem.doNotOptimizeAway(pointer);
 }
 
 fn assertUniqueParameterKeys(parameters: []const Parameter) void {
     for (parameters, 0..) |parameter, index| {
-        std.debug.assert(parameter.key.len > 0);
+        assert(parameter.key.len > 0);
         for (parameters[0..index]) |previous| {
-            std.debug.assert(!std.mem.eql(u8, parameter.key, previous.key));
+            assert(!std.mem.eql(u8, parameter.key, previous.key));
         }
     }
 }
 
 fn assertValidTags(tags: []const []const u8) void {
     for (tags) |tag| {
-        std.debug.assert(tag.len > 0);
+        assert(tag.len > 0);
     }
 }
 
@@ -118,14 +120,14 @@ test "benchmark case preserves metadata and callback" {
     });
     benchmark_case.run();
 
-    try std.testing.expectEqualStrings("increment", benchmark_case.name);
-    try std.testing.expectEqual(@as(usize, 1), benchmark_case.tags.len);
-    try std.testing.expectEqual(@as(usize, 1), benchmark_case.parameters.len);
-    try std.testing.expectEqual(@as(u32, 1), context_value);
+    try testing.expectEqualStrings("increment", benchmark_case.name);
+    try testing.expectEqual(@as(usize, 1), benchmark_case.tags.len);
+    try testing.expectEqual(@as(usize, 1), benchmark_case.parameters.len);
+    try testing.expectEqual(@as(u32, 1), context_value);
 }
 
 test "blackBox returns the preserved value" {
-    try std.testing.expectEqual(@as(u64, 7), blackBox(@as(u64, 7)));
+    try testing.expectEqual(@as(u64, 7), blackBox(@as(u64, 7)));
 }
 
 test "blackBoxPointer preserves pointer identity without copying pointee" {
@@ -137,6 +139,6 @@ test "blackBoxPointer preserves pointer identity without copying pointee" {
 
     blackBoxPointer(before);
 
-    try std.testing.expect(before == &large);
-    try std.testing.expectEqual(@as(u64, 8), large.values[7]);
+    try testing.expect(before == &large);
+    try testing.expectEqual(@as(u64, 8), large.values[7]);
 }

@@ -2,6 +2,7 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const static_net_native = @import("static_net_native");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -44,7 +45,7 @@ const CaseContext = struct {
                 @as(u64, @intCast(sockaddr.len())),
             ),
         );
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 

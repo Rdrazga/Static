@@ -12,6 +12,8 @@
 //! Thread safety: not thread-safe; use one instance per thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const Pcg32 = struct {
     state: u64,
@@ -27,14 +29,14 @@ pub const Pcg32 = struct {
         _ = result.nextU32();
         // Postcondition: PCG requires the increment to be odd so it and the
         // modulus (2^64) are coprime, guaranteeing a full-period LCG.
-        std.debug.assert((result.inc & 1) == 1);
+        assert((result.inc & 1) == 1);
         return result;
     }
 
     pub fn nextU32(self: *Pcg32) u32 {
         // Precondition: the increment must remain odd throughout the generator's
         // lifetime. A zero or even increment collapses the period.
-        std.debug.assert((self.inc & 1) == 1);
+        assert((self.inc & 1) == 1);
         const old_state = self.state;
         self.state = old_state *% 6364136223846793005 +% self.inc;
 
@@ -57,8 +59,8 @@ pub const Pcg32 = struct {
         const child = init(child_seed, child_sequence);
         // Postcondition: advancing the parent (via nextU64 calls) must have
         // changed its state, and the child must differ from the parent.
-        std.debug.assert(self.state != parent_state or self.inc != parent_inc);
-        std.debug.assert(child.state != self.state or child.inc != self.inc);
+        assert(self.state != parent_state or self.inc != parent_inc);
+        assert(child.state != self.state or child.inc != self.inc);
         return child;
     }
 
@@ -74,14 +76,14 @@ test "Pcg32 deterministic for same seed and sequence" {
 
     var index: usize = 0;
     while (index < 32) : (index += 1) {
-        try std.testing.expectEqual(a.nextU32(), b.nextU32());
+        try testing.expectEqual(a.nextU32(), b.nextU32());
     }
 }
 
 test "Pcg32 sequences differ when sequence stream differs" {
     var a = Pcg32.init(42, 7);
     var b = Pcg32.init(42, 9);
-    try std.testing.expect(a.nextU32() != b.nextU32());
+    try testing.expect(a.nextU32() != b.nextU32());
 }
 
 test "Pcg32 split creates deterministic child stream" {
@@ -93,6 +95,6 @@ test "Pcg32 split creates deterministic child stream" {
 
     var index: usize = 0;
     while (index < 16) : (index += 1) {
-        try std.testing.expectEqual(child_a.nextU64(), child_b.nextU64());
+        try testing.expectEqual(child_a.nextU64(), child_b.nextU64());
     }
 }

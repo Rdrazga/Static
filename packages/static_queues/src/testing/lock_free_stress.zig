@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const caps = @import("../queues/caps.zig");
 const lock_free_mpsc_mod = @import("../queues/lock_free_mpsc.zig");
 const chase_lev_mod = @import("../queues/chase_lev_deque.zig");
@@ -101,11 +102,11 @@ pub fn runLockFreeMpscStress(allocator: std.mem.Allocator, cfg: StressConfig) !v
         recordConsumedValue(value, seen, &received_count, &duplicate_count, &out_of_range_count);
     }
 
-    try std.testing.expectEqual(@as(u32, @intCast(producer_count)), producer_done.load(.acquire));
-    try std.testing.expect(!producer_failed.load(.acquire));
-    try std.testing.expectEqual(@as(u32, 0), duplicate_count.load(.acquire));
-    try std.testing.expectEqual(@as(u32, 0), out_of_range_count.load(.acquire));
-    try std.testing.expectEqual(total_items, received_count.load(.acquire));
+    try testing.expectEqual(@as(u32, @intCast(producer_count)), producer_done.load(.acquire));
+    try testing.expect(!producer_failed.load(.acquire));
+    try testing.expectEqual(@as(u32, 0), duplicate_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 0), out_of_range_count.load(.acquire));
+    try testing.expectEqual(total_items, received_count.load(.acquire));
 }
 
 pub fn runChaseLevStress(allocator: std.mem.Allocator, cfg: StressConfig) !void {
@@ -240,11 +241,11 @@ pub fn runChaseLevStress(allocator: std.mem.Allocator, cfg: StressConfig) !void 
         recordConsumedValue(value, seen, &consumed_count, &duplicate_count, &out_of_range_count);
     }
 
-    try std.testing.expect(!push_failed.load(.acquire));
-    try std.testing.expectEqual(total_items, produced_count.load(.acquire));
-    try std.testing.expectEqual(@as(u32, 0), duplicate_count.load(.acquire));
-    try std.testing.expectEqual(@as(u32, 0), out_of_range_count.load(.acquire));
-    try std.testing.expectEqual(produced_count.load(.acquire), consumed_count.load(.acquire));
+    try testing.expect(!push_failed.load(.acquire));
+    try testing.expectEqual(total_items, produced_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 0), duplicate_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 0), out_of_range_count.load(.acquire));
+    try testing.expectEqual(produced_count.load(.acquire), consumed_count.load(.acquire));
 }
 
 fn recordConsumedValue(

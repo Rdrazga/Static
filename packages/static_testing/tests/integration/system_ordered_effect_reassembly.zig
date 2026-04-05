@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const checker = static_testing.testing.checker;
@@ -9,7 +10,7 @@ const temporal = static_testing.testing.temporal;
 test "system harness reassembles out-of-order replies through ordered effect sequencing" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 24) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -22,7 +23,7 @@ test "system harness reassembles out-of-order replies through ordered effect seq
     defer sim_fixture.deinit();
 
     var release_mailbox = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 4 },
     );
     defer release_mailbox.deinit();
@@ -54,8 +55,8 @@ test "system harness reassembles out-of-order replies through ordered effect seq
             self: *@This(),
             context: *system.SystemContext(@TypeOf(sim_fixture)),
         ) anyerror!checker.CheckResult {
-            try std.testing.expect(context.hasComponent("ordered_effects"));
-            try std.testing.expect(context.hasComponent("release_mailbox"));
+            try testing.expect(context.hasComponent("ordered_effects"));
+            try testing.expect(context.hasComponent("release_mailbox"));
 
             _ = try context.appendTraceEvent(
                 &self.next_trace_sequence_no,
@@ -83,7 +84,7 @@ test "system harness reassembles out-of-order replies through ordered effect seq
                 );
                 self.arrival_trace_sequence_by_effect[@intCast(arrival.effect_sequence_no)] = arrival_trace_sequence_no;
 
-                try std.testing.expectEqual(
+                try testing.expectEqual(
                     ordered_effect.InsertStatus.accepted,
                     self.sequencer.insert(
                         self.next_expected_effect_sequence_no,
@@ -106,11 +107,11 @@ test "system harness reassembles out-of-order replies through ordered effect seq
                 }
             }
 
-            try std.testing.expectEqual(@as(usize, 0), self.sequencer.pendingCount());
-            try std.testing.expectEqual(@as(usize, 4), self.sequencer.free());
-            try std.testing.expectEqual(@as(u32, 11), try self.mailbox.recv());
-            try std.testing.expectEqual(@as(u32, 22), try self.mailbox.recv());
-            try std.testing.expectEqual(@as(u32, 33), try self.mailbox.recv());
+            try testing.expectEqual(@as(usize, 0), self.sequencer.pendingCount());
+            try testing.expectEqual(@as(usize, 4), self.sequencer.free());
+            try testing.expectEqual(@as(u32, 11), try self.mailbox.recv());
+            try testing.expectEqual(@as(u32, 22), try self.mailbox.recv());
+            try testing.expectEqual(@as(u32, 33), try self.mailbox.recv());
 
             const snapshot = context.traceSnapshot().?;
 
@@ -119,21 +120,21 @@ test "system harness reassembles out-of-order replies through ordered effect seq
                 .{ .label = "reply.arrival", .surface_label = "ordered_effects", .value = 22 },
                 .{ .label = "reply.arrival", .surface_label = "ordered_effects", .value = 11 },
             );
-            try std.testing.expect(arrivals_out_of_order.check_result.passed);
+            try testing.expect(arrivals_out_of_order.check_result.passed);
 
             const first_release_before_second = try temporal.checkHappensBefore(
                 snapshot,
                 .{ .label = "reply.release", .surface_label = "ordered_effects", .value = 11 },
                 .{ .label = "reply.release", .surface_label = "ordered_effects", .value = 22 },
             );
-            try std.testing.expect(first_release_before_second.check_result.passed);
+            try testing.expect(first_release_before_second.check_result.passed);
 
             const second_release_before_third = try temporal.checkHappensBefore(
                 snapshot,
                 .{ .label = "reply.release", .surface_label = "ordered_effects", .value = 22 },
                 .{ .label = "reply.release", .surface_label = "ordered_effects", .value = 33 },
             );
-            try std.testing.expect(second_release_before_third.check_result.passed);
+            try testing.expect(second_release_before_third.check_result.passed);
 
             return checker.CheckResult.pass(null);
         }
@@ -147,6 +148,6 @@ test "system harness reassembles out-of-order replies through ordered effect seq
         .components = &components,
     }, &runner, Runner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(u32, 7), execution.trace_metadata.event_count);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(u32, 7), execution.trace_metadata.event_count);
 }

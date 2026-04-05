@@ -14,6 +14,8 @@
 //! - `init`: O(cells_x * cells_y * max_per_cell) allocation.
 //! - All operations after init are allocation-free.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const primitives = @import("primitives.zig");
 const AABB2 = primitives.AABB2;
 const GridConfig = primitives.GridConfig;
@@ -23,7 +25,7 @@ pub const LooseGridError = error{ CellFull, OutOfBounds };
 pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
     comptime {
         if (max_per_cell == 0) @compileError("LooseGrid max_per_cell must be > 0");
-        std.debug.assert(@sizeOf(T) > 0);
+        assert(@sizeOf(T) > 0);
     }
     return struct {
         const Self = @This();
@@ -49,8 +51,8 @@ pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
             allocator: std.mem.Allocator,
             config: GridConfig,
         ) !Self {
-            std.debug.assert(config.cells_x > 0);
-            std.debug.assert(config.cells_y > 0);
+            assert(config.cells_x > 0);
+            assert(config.cells_y > 0);
             const total = config.totalCells();
             const items = try allocator.alloc(
                 Entry,
@@ -73,8 +75,8 @@ pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
 
         pub fn deinit(self: *Self) void {
             // Precondition: all slices must be consistent with the grid config.
-            std.debug.assert(self.counts.len == self.config.totalCells());
-            std.debug.assert(self.loose_bounds.len == self.config.totalCells());
+            assert(self.counts.len == self.config.totalCells());
+            assert(self.loose_bounds.len == self.config.totalCells());
             self.allocator.free(self.items);
             self.allocator.free(self.counts);
             self.allocator.free(self.loose_bounds);
@@ -88,8 +90,8 @@ pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
         ) LooseGridError!void {
             // Precondition: AABB must not be inverted (AABB2.init asserts this,
             // but we pair-assert here for insertions that bypass init).
-            std.debug.assert(aabb.min_x <= aabb.max_x);
-            std.debug.assert(aabb.min_y <= aabb.max_y);
+            assert(aabb.min_x <= aabb.max_x);
+            assert(aabb.min_y <= aabb.max_y);
             const c = aabb.center();
             const cell = self.config.cellIndex(c.x, c.y) orelse
                 return LooseGridError.OutOfBounds;
@@ -106,7 +108,7 @@ pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
             };
             self.counts[idx] = count + 1;
             // Postcondition: the cell count must have incremented.
-            std.debug.assert(self.counts[idx] == count + 1);
+            assert(self.counts[idx] == count + 1);
             self.loose_bounds[idx] = AABB2.merge(
                 self.loose_bounds[idx],
                 aabb,
@@ -141,11 +143,11 @@ pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
                 cell.cy,
             );
             // Precondition: cell index must be within the counts array.
-            std.debug.assert(idx < self.counts.len);
+            assert(idx < self.counts.len);
             var written: u32 = 0;
             const count = self.counts[idx];
             // Precondition: per-cell count must not exceed the per-cell capacity.
-            std.debug.assert(count <= max_per_cell);
+            assert(count <= max_per_cell);
             const base = idx * max_per_cell;
             for (self.items[base..base + count]) |entry| {
                 if (entry.bounds.contains(x, y)) {
@@ -237,8 +239,8 @@ pub fn LooseGrid(comptime T: type, comptime max_per_cell: u32) type {
 
         pub fn clear(self: *Self) void {
             // Precondition: counts and loose_bounds must match the grid cell count.
-            std.debug.assert(self.counts.len == self.config.totalCells());
-            std.debug.assert(self.loose_bounds.len == self.config.totalCells());
+            assert(self.counts.len == self.config.totalCells());
+            assert(self.loose_bounds.len == self.config.totalCells());
             @memset(self.counts, 0);
             @memset(self.loose_bounds, empty_bounds);
         }
@@ -263,7 +265,7 @@ fn testConfig() GridConfig {
 test "LooseGrid insertAABB and queryPoint" {
     const Grid = LooseGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -276,24 +278,24 @@ test "LooseGrid insertAABB and queryPoint" {
     // Query a point inside the AABB.
     var buf: [8]u32 = undefined;
     const n1 = grid.queryPoint(10.0, 10.0, &buf);
-    try std.testing.expectEqual(@as(u32, 1), n1);
-    try std.testing.expectEqual(@as(u32, 42), buf[0]);
+    try testing.expectEqual(@as(u32, 1), n1);
+    try testing.expectEqual(@as(u32, 42), buf[0]);
 
     // Query a point outside the AABB but inside the same cell.
     const n2 = grid.queryPoint(19.0, 19.0, &buf);
-    try std.testing.expectEqual(@as(u32, 0), n2);
+    try testing.expectEqual(@as(u32, 0), n2);
 
     // Query via AABB that overlaps the inserted bounds.
     const query = AABB2.init(0.0, 0.0, 5.0, 5.0);
     const n3 = grid.queryAABB(query, &buf);
-    try std.testing.expectEqual(@as(u32, 1), n3);
-    try std.testing.expectEqual(@as(u32, 42), buf[0]);
+    try testing.expectEqual(@as(u32, 1), n3);
+    try testing.expectEqual(@as(u32, 42), buf[0]);
 }
 
 test "LooseGrid clear" {
     const Grid = LooseGrid(u32, 4);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -303,13 +305,13 @@ test "LooseGrid clear" {
 
     var buf: [8]u32 = undefined;
     const n = grid.queryPoint(5.0, 5.0, &buf);
-    try std.testing.expectEqual(@as(u32, 0), n);
+    try testing.expectEqual(@as(u32, 0), n);
 }
 
 test "LooseGrid capacity overflow" {
     const Grid = LooseGrid(u32, 2);
     var grid = try Grid.init(
-        std.testing.allocator,
+        testing.allocator,
         testConfig(),
     );
     defer grid.deinit();
@@ -318,7 +320,7 @@ test "LooseGrid capacity overflow" {
     try grid.insertPoint(5.0, 5.0, 2);
 
     const result = grid.insertPoint(5.0, 5.0, 3);
-    try std.testing.expectError(
+    try testing.expectError(
         LooseGridError.CellFull,
         result,
     );

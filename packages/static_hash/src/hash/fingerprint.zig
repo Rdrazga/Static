@@ -21,6 +21,8 @@
 //!   immutable within a version.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const combine = @import("combine.zig");
 
 const Wyhash = std.hash.Wyhash;
@@ -39,7 +41,7 @@ pub const Seed = u64;
 /// Preconditions: if data.len > 0, data.ptr must be non-null.
 /// Postconditions: returns deterministic 64-bit fingerprint of data.
 pub fn fingerprint64(data: []const u8) u64 {
-    std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+    assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
     return Wyhash.hash(0, data);
 }
 
@@ -50,7 +52,7 @@ pub fn fingerprint64(data: []const u8) u64 {
 /// Preconditions: if data.len > 0, data.ptr must be non-null.
 /// Postconditions: returns deterministic 64-bit fingerprint of data with given seed.
 pub fn fingerprint64Seeded(seed: Seed, data: []const u8) u64 {
-    std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+    assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
     return Wyhash.hash(seed, data);
 }
 
@@ -58,7 +60,7 @@ pub fn fingerprint64Seeded(seed: Seed, data: []const u8) u64 {
 ///
 /// Postconditions: low 64 bits use seed 0, high 64 bits use the golden ratio.
 pub fn fingerprint128(data: []const u8) u128 {
-    std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+    assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
     return fingerprint128Seeded(0, 0x9e3779b97f4a7c15, data);
 }
 
@@ -70,8 +72,8 @@ pub fn fingerprint128(data: []const u8) u128 {
 pub fn fingerprint128Seeded(seed_a: Seed, seed_b: Seed, data: []const u8) u128 {
     // Identical seeds produce identical high/low halves, which defeats the
     // collision-resistance benefit of a 128-bit fingerprint.
-    std.debug.assert(seed_a != seed_b);
-    std.debug.assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
+    assert(seed_a != seed_b);
+    assert(data.len == 0 or @intFromPtr(data.ptr) != 0);
     const low = Wyhash.hash(seed_a, data);
     const high = Wyhash.hash(seed_b, data);
     return @as(u128, high) << 64 | low;
@@ -98,10 +100,10 @@ pub const Fingerprint64V1 = struct {
 
     comptime {
         // FNV-1a constants must be non-zero for correct mixing.
-        std.debug.assert(fnv64_offset_basis != 0);
-        std.debug.assert(fnv64_prime != 0);
+        assert(fnv64_offset_basis != 0);
+        assert(fnv64_prime != 0);
         // Prime must be odd for invertibility in mod 2^64.
-        std.debug.assert(fnv64_prime % 2 == 1);
+        assert(fnv64_prime % 2 == 1);
     }
 
     state: u64 = fnv64_offset_basis,
@@ -112,7 +114,7 @@ pub const Fingerprint64V1 = struct {
     pub fn init() Fingerprint64V1 {
         const result: Fingerprint64V1 = .{};
         // Postcondition: state starts at the canonical offset basis.
-        std.debug.assert(result.state == fnv64_offset_basis);
+        assert(result.state == fnv64_offset_basis);
         return result;
     }
 
@@ -124,7 +126,7 @@ pub const Fingerprint64V1 = struct {
     /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
     /// Postconditions: state updated with every byte.
     pub fn update(self: *Fingerprint64V1, bytes: []const u8) void {
-        std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+        assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
         for (bytes) |b| {
             self.state ^= b;
             self.state *%= fnv64_prime;
@@ -161,27 +163,27 @@ pub const Fingerprint64V1 = struct {
 test "fingerprint64 one-shot is deterministic" {
     const a = fingerprint64("test data");
     const b = fingerprint64("test data");
-    try std.testing.expectEqual(a, b);
+    try testing.expectEqual(a, b);
 }
 
 test "fingerprint64Seeded differs across seeds" {
     const a = fingerprint64Seeded(1, "test data");
     const b = fingerprint64Seeded(2, "test data");
-    try std.testing.expect(a != b);
+    try testing.expect(a != b);
 }
 
 test "fingerprint128 low 64 matches fingerprint64" {
     const fp64 = fingerprint64("test");
     const fp128 = fingerprint128("test");
     const low: u64 = @truncate(fp128);
-    try std.testing.expectEqual(fp64, low);
+    try testing.expectEqual(fp64, low);
 }
 
 test "fingerprint128 high and low differ" {
     const fp128 = fingerprint128("test");
     const low: u64 = @truncate(fp128);
     const high: u64 = @truncate(fp128 >> 64);
-    try std.testing.expect(low != high);
+    try testing.expect(low != high);
 }
 
 test "fingerprint v1 is stable for same input stream" {
@@ -193,7 +195,7 @@ test "fingerprint v1 is stable for same input stream" {
     b.update("abc");
     b.addU64(42);
 
-    try std.testing.expectEqual(a.final(), b.final());
+    try testing.expectEqual(a.final(), b.final());
 }
 
 test "fingerprint v1 streaming invariant: split input equals concatenated input" {
@@ -204,7 +206,7 @@ test "fingerprint v1 streaming invariant: split input equals concatenated input"
     split.update("abc");
     split.update("def");
 
-    try std.testing.expectEqual(concat.final(), split.final());
+    try testing.expectEqual(concat.final(), split.final());
 }
 
 test "fingerprint v1 streaming invariant: single-byte splits" {
@@ -216,7 +218,7 @@ test "fingerprint v1 streaming invariant: single-byte splits" {
         bytewise.update(&.{b});
     }
 
-    try std.testing.expectEqual(whole.final(), bytewise.final());
+    try testing.expectEqual(whole.final(), bytewise.final());
 }
 
 test "fingerprint v1 different inputs produce different results" {
@@ -226,5 +228,5 @@ test "fingerprint v1 different inputs produce different results" {
     var b = Fingerprint64V1.init();
     b.update("world");
 
-    try std.testing.expect(a.final() != b.final());
+    try testing.expect(a.final() != b.final());
 }

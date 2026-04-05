@@ -1,6 +1,7 @@
 //! Shared bounded-document helpers for typed `ZON` artifacts.
 
 const std = @import("std");
+const testing = std.testing;
 
 pub const ArtifactDocumentError = error{
     InvalidInput,
@@ -116,7 +117,7 @@ test "ZON document roundtrip through bounded buffers" {
         .parse_buffer = &parse_buffer,
     });
 
-    try std.testing.expectEqual(@as(u16, 2), decoded.version);
-    try std.testing.expectEqualStrings("one", decoded.names[0]);
-    try std.testing.expectEqualStrings("two", decoded.names[1]);
+    try testing.expectEqual(@as(u16, 2), decoded.version);
+    try testing.expectEqualStrings("one", decoded.names[0]);
+    try testing.expectEqualStrings("two", decoded.names[1]);
 }

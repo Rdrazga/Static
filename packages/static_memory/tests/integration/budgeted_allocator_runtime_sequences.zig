@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_memory = @import("static_memory");
 const static_testing = @import("static_testing");
 
@@ -81,7 +83,7 @@ const Context = struct {
     saw_probe_accounting: bool = false,
 
     fn resetState(self: *@This(), case_index: usize) void {
-        std.debug.assert(case_index < @as(usize, ScenarioCount));
+        assert(case_index < @as(usize, ScenarioCount));
         self.fixed_buffer = std.heap.FixedBufferAllocator.init(&self.backing);
         self.budget_limit = switch (case_index) {
             0 => 7,
@@ -105,11 +107,11 @@ const Context = struct {
         self.saw_parent_oom_recovery = false;
         self.saw_probe_accounting = false;
 
-        std.debug.assert(self.budget.limit() == self.budget_limit);
-        std.debug.assert(self.budget.used() == 0);
-        std.debug.assert(self.budget.highWater() == 0);
-        std.debug.assert(self.budget.overflowCount() == 0);
-        std.debug.assert(self.budget.remaining() == self.budget_limit);
+        assert(self.budget.limit() == self.budget_limit);
+        assert(self.budget.used() == 0);
+        assert(self.budget.highWater() == 0);
+        assert(self.budget.overflowCount() == 0);
+        assert(self.budget.remaining() == self.budget_limit);
     }
 
     fn nextAction(
@@ -118,8 +120,8 @@ const Context = struct {
         action_index: u32,
         _: seed.Seed,
     ) error{}!model.RecordedAction {
-        std.debug.assert(run_identity.case_index < ScenarioCount);
-        std.debug.assert(action_index < ActionCount);
+        assert(run_identity.case_index < ScenarioCount);
+        assert(action_index < ActionCount);
         return action_table[run_identity.case_index][action_index];
     }
 
@@ -151,25 +153,25 @@ const Context = struct {
 
         switch (case_index) {
             0 => {
-                std.debug.assert(self.saw_budget_denial);
-                std.debug.assert(self.saw_denied_true);
-                std.debug.assert(self.saw_denied_false);
-                std.debug.assert(self.saw_free);
-                std.debug.assert(self.saw_probe_accounting);
+                assert(self.saw_budget_denial);
+                assert(self.saw_denied_true);
+                assert(self.saw_denied_false);
+                assert(self.saw_free);
+                assert(self.saw_probe_accounting);
             },
             1 => {
-                std.debug.assert(self.saw_growth);
-                std.debug.assert(self.saw_shrink);
-                std.debug.assert(self.saw_denied_false);
-                std.debug.assert(self.saw_free);
-                std.debug.assert(self.saw_probe_accounting);
+                assert(self.saw_growth);
+                assert(self.saw_shrink);
+                assert(self.saw_denied_false);
+                assert(self.saw_free);
+                assert(self.saw_probe_accounting);
             },
             2 => {
-                std.debug.assert(self.saw_parent_oom);
-                std.debug.assert(self.saw_parent_oom_recovery);
-                std.debug.assert(self.saw_denied_false);
-                std.debug.assert(self.saw_free);
-                std.debug.assert(self.saw_probe_accounting);
+                assert(self.saw_parent_oom);
+                assert(self.saw_parent_oom_recovery);
+                assert(self.saw_denied_false);
+                assert(self.saw_free);
+                assert(self.saw_probe_accounting);
             },
             else => unreachable,
         }
@@ -195,12 +197,12 @@ const Context = struct {
     }
 
     fn alloc4(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.live == null);
+        assert(self.live == null);
         const alloc_if = self.wrapper.allocator();
         const mem = alloc_if.alloc(u8, 4) catch {
             return checker.CheckResult.fail(&violation, null);
         };
-        std.debug.assert(mem.len == 4);
+        assert(mem.len == 4);
         self.live = mem;
         self.expected_used = 4;
         if (self.saw_parent_oom) {
@@ -263,7 +265,7 @@ const Context = struct {
     }
 
     fn parentOomAlloc9(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.live == null);
+        assert(self.live == null);
         const alloc_if = self.wrapper.allocator();
         _ = alloc_if.alloc(u8, 9) catch |err| switch (err) {
             error.OutOfMemory => {
@@ -282,24 +284,24 @@ const Context = struct {
 
     fn validateState(self: *const @This(), case_index: ?usize) checker.CheckResult {
         const report = self.budget.reportBytes();
-        std.debug.assert(self.budget.limit() == self.budget_limit);
-        std.debug.assert(self.budget.used() == self.expected_used);
-        std.debug.assert(self.budget.highWater() == self.expected_high_water);
-        std.debug.assert(self.budget.overflowCount() == self.expected_overflow);
-        std.debug.assert(self.budget.remaining() + self.budget.used() == self.budget.limit());
-        std.debug.assert(report.used == self.expected_used);
-        std.debug.assert(report.high_water == self.expected_high_water);
-        std.debug.assert(report.capacity == self.budget_limit);
-        std.debug.assert(report.overflow_count == self.expected_overflow);
+        assert(self.budget.limit() == self.budget_limit);
+        assert(self.budget.used() == self.expected_used);
+        assert(self.budget.highWater() == self.expected_high_water);
+        assert(self.budget.overflowCount() == self.expected_overflow);
+        assert(self.budget.remaining() + self.budget.used() == self.budget.limit());
+        assert(report.used == self.expected_used);
+        assert(report.high_water == self.expected_high_water);
+        assert(report.capacity == self.budget_limit);
+        assert(report.overflow_count == self.expected_overflow);
 
         if (self.live) |live| {
-            std.debug.assert(live.len == self.expected_used);
+            assert(live.len == self.expected_used);
         } else {
-            std.debug.assert(self.expected_used == 0);
+            assert(self.expected_used == 0);
         }
 
         if (case_index) |idx| {
-            std.debug.assert(idx < @as(usize, ScenarioCount));
+            assert(idx < @as(usize, ScenarioCount));
         }
         return checker.CheckResult.pass(null);
     }
@@ -308,7 +310,7 @@ const Context = struct {
         if (self.expected_used > self.expected_high_water) {
             self.expected_high_water = self.expected_used;
         }
-        std.debug.assert(self.expected_high_water >= self.expected_used);
+        assert(self.expected_high_water >= self.expected_used);
     }
 };
 
@@ -343,8 +345,8 @@ test "budgeted allocator runtime sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -353,8 +355,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 
@@ -386,7 +388,7 @@ fn finish(
     _: u32,
 ) error{}!checker.CheckResult {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     return context.finish(run_identity.case_index);
 }
 
@@ -412,6 +414,6 @@ fn reset(
     run_identity: identity.RunIdentity,
 ) error{}!void {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     context.resetState(run_identity.case_index);
 }

@@ -1,6 +1,7 @@
 //! `static_serial` mixed-endian message roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_serial = @import("static_serial");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -62,7 +63,7 @@ const MessageContext = struct {
                 decoded_sequence ^
                 delta_bits,
         );
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 

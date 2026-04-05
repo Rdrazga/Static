@@ -14,6 +14,7 @@
 //! Thread safety: `build` allocates; all query methods are read-only and safe for
 //! concurrent reads if no mutation is occurring.
 const std = @import("std");
+const assert = std.debug.assert;
 const primitives = @import("primitives.zig");
 const AABB3 = primitives.AABB3;
 const Ray3 = primitives.Ray3;
@@ -102,8 +103,8 @@ pub fn BVH(comptime T: type) type {
 
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
             // Precondition: a built BVH must have at least one node and one item.
-            std.debug.assert(self.nodes.len > 0);
-            std.debug.assert(self.items.len > 0);
+            assert(self.nodes.len > 0);
+            assert(self.items.len > 0);
             allocator.free(self.nodes);
             allocator.free(self.items);
             self.* = undefined;
@@ -123,7 +124,7 @@ pub fn BVH(comptime T: type) type {
             // Precondition: ray direction must be non-zero (unit-length is preferred;
             // Ray3.init already asserts unit length at construction sites).
             const dir_len_sq = ray.dir_x * ray.dir_x + ray.dir_y * ray.dir_y + ray.dir_z * ray.dir_z;
-            std.debug.assert(dir_len_sq > 0.0);
+            assert(dir_len_sq > 0.0);
             if (self.nodes.len == 0) return 0;
             const pre = Ray3Precomputed.fromRay(ray);
 
@@ -152,7 +153,7 @@ pub fn BVH(comptime T: type) type {
                         }
                     }
                 } else {
-                    std.debug.assert(sp + 2 <= stack.len);
+                    assert(sp + 2 <= stack.len);
                     stack[sp] = node_idx + 1;
                     sp += 1;
                     stack[sp] = node.first;
@@ -161,7 +162,7 @@ pub fn BVH(comptime T: type) type {
             }
 
             // Postcondition: traversal stack must be fully consumed on exit.
-            std.debug.assert(sp == 0);
+            assert(sp == 0);
             return count;
         }
 
@@ -177,9 +178,9 @@ pub fn BVH(comptime T: type) type {
             out: []T,
         ) u32 {
             // Precondition: query AABB must not be inverted.
-            std.debug.assert(aabb.min_x <= aabb.max_x);
-            std.debug.assert(aabb.min_y <= aabb.max_y);
-            std.debug.assert(aabb.min_z <= aabb.max_z);
+            assert(aabb.min_x <= aabb.max_x);
+            assert(aabb.min_y <= aabb.max_y);
+            assert(aabb.min_z <= aabb.max_z);
             if (self.nodes.len == 0) return 0;
 
             var count: u32 = 0;
@@ -211,7 +212,7 @@ pub fn BVH(comptime T: type) type {
                 } else {
                     // Internal node: left child is at node_idx + 1,
                     // right child index is stored in node.first.
-                    std.debug.assert(sp + 2 <= stack.len);
+                    assert(sp + 2 <= stack.len);
                     stack[sp] = node_idx + 1;
                     sp += 1;
                     stack[sp] = node.first;
@@ -220,7 +221,7 @@ pub fn BVH(comptime T: type) type {
             }
 
             // Postcondition: traversal stack must be fully consumed on exit.
-            std.debug.assert(sp == 0);
+            assert(sp == 0);
             return count;
         }
 
@@ -236,7 +237,7 @@ pub fn BVH(comptime T: type) type {
         ) u32 {
             // Precondition: ray direction must be non-zero (matches queryRay's pair assertion).
             const dir_len_sq_s = ray.dir_x * ray.dir_x + ray.dir_y * ray.dir_y + ray.dir_z * ray.dir_z;
-            std.debug.assert(dir_len_sq_s > 0.0);
+            assert(dir_len_sq_s > 0.0);
             if (self.nodes.len == 0) return 0;
             const pre = Ray3Precomputed.fromRay(ray);
 
@@ -268,7 +269,7 @@ pub fn BVH(comptime T: type) type {
                         }
                     }
                 } else {
-                    std.debug.assert(sp + 2 <= stack.len);
+                    assert(sp + 2 <= stack.len);
                     stack[sp] = node_idx + 1;
                     sp += 1;
                     stack[sp] = node.first;
@@ -277,7 +278,7 @@ pub fn BVH(comptime T: type) type {
             }
 
             // Postcondition: traversal stack must be fully consumed on exit.
-            std.debug.assert(sp == 0);
+            assert(sp == 0);
             const written = @min(count, @as(u32, @intCast(out.len)));
             std.sort.pdq(RayHit, out[0..written], {}, struct {
                 fn lessThan(_: void, a: RayHit, b: RayHit) bool {
@@ -303,7 +304,7 @@ pub fn BVH(comptime T: type) type {
                 const nlen_sq = plane.normal_x * plane.normal_x +
                     plane.normal_y * plane.normal_y +
                     plane.normal_z * plane.normal_z;
-                std.debug.assert(nlen_sq > 0.0);
+                assert(nlen_sq > 0.0);
             }
             if (self.nodes.len == 0) return 0;
 
@@ -346,7 +347,7 @@ pub fn BVH(comptime T: type) type {
                         }
                     }
                 } else {
-                    std.debug.assert(sp + 2 <= stack.len);
+                    assert(sp + 2 <= stack.len);
                     stack[sp] = node_idx + 1;
                     sp += 1;
                     stack[sp] = node.first;
@@ -355,7 +356,7 @@ pub fn BVH(comptime T: type) type {
             }
 
             // Postcondition: traversal stack must be fully consumed on exit.
-            std.debug.assert(sp == 0);
+            assert(sp == 0);
             return count;
         }
 
@@ -373,7 +374,7 @@ pub fn BVH(comptime T: type) type {
         };
 
         fn makeLeaf(bounds: AABB3, start: u32, count: u32) Node {
-            std.debug.assert(count > 0);
+            assert(count > 0);
             return .{ .bounds = bounds, .first = start, .count = count };
         }
 
@@ -390,9 +391,9 @@ pub fn BVH(comptime T: type) type {
             initial_end: u32,
             config: BVHConfig,
         ) void {
-            std.debug.assert(initial_start < initial_end);
+            assert(initial_start < initial_end);
             // Precondition: nodes buffer must be large enough for the worst case (2n - 1).
-            std.debug.assert(nodes.len >= (initial_end - initial_start) * 2);
+            assert(nodes.len >= (initial_end - initial_start) * 2);
             var stack: [max_depth]WorkItem = undefined;
             var sp: u32 = 0;
             stack[0] = .{
@@ -456,7 +457,7 @@ pub fn BVH(comptime T: type) type {
             end: u32,
             parent_idx: u32,
         ) void {
-            std.debug.assert(sp.* + 2 <= max_depth);
+            assert(sp.* + 2 <= max_depth);
             // Right first (processed second = depth-first left-first).
             stack[sp.*] = .{
                 .start = mid,
@@ -475,7 +476,7 @@ pub fn BVH(comptime T: type) type {
         }
 
         fn computeBounds(items: []const Item, start: u32, end: u32) AABB3 {
-            std.debug.assert(start < end);
+            assert(start < end);
             var bounds = items[start].bounds;
             for ((start + 1)..end) |i| {
                 bounds = AABB3.merge(bounds, items[i].bounds);
@@ -611,7 +612,7 @@ pub fn BVH(comptime T: type) type {
             bounds: AABB3,
             bin_count: u32,
         ) u32 {
-            std.debug.assert(start < end);
+            assert(start < end);
             const axis = longestAxis(bounds);
             const ae = axisExtent(bounds, axis);
             const extent = ae.max - ae.min;

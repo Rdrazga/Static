@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -37,15 +38,15 @@ pub fn main() !void {
     try link.send(.init(0), 1, 2, 30);
 
     const to_3 = try link.deliverDueToMailbox(.init(1), 3, &mailbox_3, null);
-    std.debug.assert(to_3.delivered_count == 0);
+    assert(to_3.delivered_count == 0);
 
     const to_1 = try link.deliverDueToMailbox(.init(1), 1, &mailbox_1, null);
-    std.debug.assert(to_1.delivered_count == 1);
-    std.debug.assert(try mailbox_1.recv() == 20);
+    assert(to_1.delivered_count == 1);
+    assert(try mailbox_1.recv() == 20);
 
     const to_2 = try link.deliverDueToMailbox(.init(1), 2, &mailbox_2, null);
-    std.debug.assert(to_2.delivered_count == 1);
-    std.debug.assert(try mailbox_2.recv() == 30);
+    assert(to_2.delivered_count == 1);
+    assert(try mailbox_2.recv() == 30);
 
     try link.setPartitionMode(.{
         .partition_groups = .{
@@ -56,7 +57,7 @@ pub fn main() !void {
     });
     try link.send(.init(1), 2, 4, 40);
     try link.send(.init(1), 4, 2, 50);
-    std.debug.assert(link.pendingItems().len == 0);
+    assert(link.pendingItems().len == 0);
 
     std.debug.print(
         "network link directed group partitions block left->right traffic, and bidirectional mode blocks both cross-group directions\n",

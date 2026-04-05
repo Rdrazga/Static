@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_net = @import("static_net");
 
 pub fn main() !void {
@@ -14,11 +15,11 @@ pub fn main() !void {
     var out: [128]u8 = [_]u8{0} ** 128;
 
     const first = decoder.decode(encoded[0..3], &out);
-    std.debug.assert(first.status == .need_more_input);
+    assert(first.status == .need_more_input);
 
     const second = decoder.decode(encoded[3..written], &out);
-    std.debug.assert(second.status == .frame);
-    std.debug.assert(second.status.frame.payload_len == payload.len);
+    assert(second.status == .frame);
+    assert(second.status.frame.payload_len == payload.len);
 
     std.debug.print("decoded: {s}\n", .{out[0..payload.len]});
 }

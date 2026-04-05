@@ -4,6 +4,8 @@
 //! Single-threaded mode: `wait` and `timedWait` are absent; `set`, `reset`, and
 //!   `tryWait` remain available for cooperative single-threaded use.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const backoff = @import("backoff.zig");
 const caps = @import("caps.zig");
@@ -17,7 +19,7 @@ pub const supports_blocking_wait = caps.Caps.threads_enabled;
 pub const supports_timed_wait = caps.Caps.threads_enabled;
 
 comptime {
-    std.debug.assert(!supports_parking_wait or supports_blocking_wait);
+    assert(!supports_parking_wait or supports_blocking_wait);
     core.errors.assertVocabularySubset(error{WouldBlock});
     core.errors.assertVocabularySubset(error{ Timeout, Unsupported });
 }
@@ -28,7 +30,7 @@ comptime {
 /// signaled-state check is defined once. Returns true when the event is signaled.
 fn evaluateTryWait(is_signaled: bool) bool {
     // Precondition and postcondition: the return value is the signal state itself.
-    std.debug.assert(is_signaled == true or is_signaled == false);
+    assert(is_signaled == true or is_signaled == false);
     return is_signaled;
 }
 
@@ -47,7 +49,7 @@ pub const Event = if (supports_blocking_wait) struct {
 
     pub fn set(self: *Event) void {
         self.signaled.store(true, .release);
-        std.debug.assert(self.signaled.load(.acquire));
+        assert(self.signaled.load(.acquire));
 
         if (supports_parking_wait) {
             self.wait_mutex.lock();
@@ -58,17 +60,17 @@ pub const Event = if (supports_blocking_wait) struct {
 
     pub fn reset(self: *Event) void {
         self.signaled.store(false, .release);
-        std.debug.assert(!self.signaled.load(.acquire));
+        assert(!self.signaled.load(.acquire));
     }
 
     pub fn tryWait(self: *Event) error{WouldBlock}!void {
         const is_signaled = self.signaled.load(.acquire);
         if (!evaluateTryWait(is_signaled)) return error.WouldBlock;
-        std.debug.assert(is_signaled);
+        assert(is_signaled);
     }
 
     pub fn wait(self: *Event) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
 
         if (supports_parking_wait) {
             if (self.signaled.load(.acquire)) return;
@@ -77,16 +79,16 @@ pub const Event = if (supports_blocking_wait) struct {
             defer self.wait_mutex.unlock();
 
             while (!self.signaled.load(.acquire)) {
-                std.debug.assert(self.waiting_waiters < std.math.maxInt(usize));
+                assert(self.waiting_waiters < std.math.maxInt(usize));
                 self.waiting_waiters += 1;
-                std.debug.assert(self.waiting_waiters > 0);
+                assert(self.waiting_waiters > 0);
                 defer {
-                    std.debug.assert(self.waiting_waiters > 0);
+                    assert(self.waiting_waiters > 0);
                     self.waiting_waiters -= 1;
                 }
                 self.wait_condvar.wait(&self.wait_mutex);
             }
-            std.debug.assert(self.signaled.load(.acquire));
+            assert(self.signaled.load(.acquire));
             return;
         }
 
@@ -94,14 +96,14 @@ pub const Event = if (supports_blocking_wait) struct {
         while (!self.signaled.load(.acquire)) {
             spin_backoff.step();
         }
-        std.debug.assert(self.signaled.load(.acquire));
+        assert(self.signaled.load(.acquire));
     }
 
     pub fn timedWait(self: *Event, timeout_ns: u64) error{ Timeout, Unsupported }!void {
-        std.debug.assert(supports_timed_wait);
+        assert(supports_timed_wait);
 
         if (self.signaled.load(.acquire)) {
-            std.debug.assert(self.signaled.load(.acquire));
+            assert(self.signaled.load(.acquire));
             return;
         }
         var timeout_budget = core.time_budget.TimeoutBudget.init(timeout_ns) catch |err| switch (err) {
@@ -117,12 +119,12 @@ pub const Event = if (supports_blocking_wait) struct {
                     error.Timeout => return error.Timeout,
                     error.Unsupported => return error.Unsupported,
                 };
-                std.debug.assert(remaining_ns > 0);
-                std.debug.assert(self.waiting_waiters < std.math.maxInt(usize));
+                assert(remaining_ns > 0);
+                assert(self.waiting_waiters < std.math.maxInt(usize));
                 self.waiting_waiters += 1;
-                std.debug.assert(self.waiting_waiters > 0);
+                assert(self.waiting_waiters > 0);
                 defer {
-                    std.debug.assert(self.waiting_waiters > 0);
+                    assert(self.waiting_waiters > 0);
                     self.waiting_waiters -= 1;
                 }
                 self.wait_condvar.timedWait(&self.wait_mutex, remaining_ns) catch |err| switch (err) {
@@ -135,7 +137,7 @@ pub const Event = if (supports_blocking_wait) struct {
                     },
                 };
             }
-            std.debug.assert(self.signaled.load(.acquire));
+            assert(self.signaled.load(.acquire));
             return;
         }
 
@@ -147,40 +149,40 @@ pub const Event = if (supports_blocking_wait) struct {
             };
             spin_backoff.step();
         }
-        std.debug.assert(self.signaled.load(.acquire));
+        assert(self.signaled.load(.acquire));
     }
 } else struct {
     signaled: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
     pub fn set(self: *Event) void {
         self.signaled.store(true, .release);
-        std.debug.assert(self.signaled.load(.acquire));
+        assert(self.signaled.load(.acquire));
     }
 
     pub fn reset(self: *Event) void {
         self.signaled.store(false, .release);
-        std.debug.assert(!self.signaled.load(.acquire));
+        assert(!self.signaled.load(.acquire));
     }
 
     pub fn tryWait(self: *Event) error{WouldBlock}!void {
         const is_signaled = self.signaled.load(.acquire);
         if (!evaluateTryWait(is_signaled)) return error.WouldBlock;
-        std.debug.assert(is_signaled);
+        assert(is_signaled);
     }
 };
 
 test "event blocking waits are gated by build mode" {
     // Goal: verify compile-time API shape tracks `single_threaded`.
     // Method: query declarations with `@hasDecl`.
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Event, "wait"));
-    try std.testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Event, "timedWait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Event, "wait"));
+    try testing.expectEqual(caps.Caps.threads_enabled, @hasDecl(Event, "timedWait"));
 }
 
 test "event tryWait reports WouldBlock until set" {
     // Goal: verify `tryWait` reflects the signaled bit.
     // Method: observe before and after a call to `set`.
     var ev = Event{};
-    try std.testing.expectError(error.WouldBlock, ev.tryWait());
+    try testing.expectError(error.WouldBlock, ev.tryWait());
     ev.set();
     try ev.tryWait();
 }
@@ -192,7 +194,7 @@ test "event reset clears signal" {
     ev.set();
     try ev.tryWait();
     ev.reset();
-    try std.testing.expectError(error.WouldBlock, ev.tryWait());
+    try testing.expectError(error.WouldBlock, ev.tryWait());
 }
 
 test "event set is idempotent" {
@@ -210,8 +212,8 @@ test "event timedWait reports Timeout when unset" {
     if (!supports_timed_wait) return error.SkipZigTest;
 
     var ev = Event{};
-    try std.testing.expectError(error.Timeout, ev.timedWait(0));
-    try std.testing.expectError(error.Timeout, ev.timedWait(std.time.ns_per_ms));
+    try testing.expectError(error.Timeout, ev.timedWait(0));
+    try testing.expectError(error.Timeout, ev.timedWait(std.time.ns_per_ms));
 }
 
 test "event timedWait succeeds immediately when already signaled" {
@@ -243,7 +245,7 @@ test "event wait unblocks after set from another thread" {
     var thread = try std.Thread.spawn(.{}, Context.run, .{&ctx});
 
     try waitForParkedWaiter(&ev, 100 * std.time.ns_per_ms);
-    std.debug.assert(!ev.signaled.load(.acquire));
+    assert(!ev.signaled.load(.acquire));
     ev.set();
     thread.join();
     try ev.tryWait();
@@ -286,11 +288,11 @@ test "event timedWait unblocks after set from another thread" {
     var thread = try std.Thread.spawn(.{}, Context.run, .{&ctx});
 
     try waitForParkedWaiter(&ev, 100 * std.time.ns_per_ms);
-    std.debug.assert(!ev.signaled.load(.acquire));
+    assert(!ev.signaled.load(.acquire));
     ev.set();
 
     thread.join();
-    try std.testing.expectEqual(@intFromEnum(Result.success), result.load(.acquire));
+    try testing.expectEqual(@intFromEnum(Result.success), result.load(.acquire));
     try ev.tryWait();
 }
 
@@ -304,7 +306,7 @@ fn waitForParkedWaiter(event: *Event, timeout_ns: u64) !void {
             const is_signaled = event.signaled.load(.acquire);
             event.wait_mutex.unlock();
             if (waiting_waiters > 0) {
-                std.debug.assert(!is_signaled);
+                assert(!is_signaled);
                 return;
             }
         }

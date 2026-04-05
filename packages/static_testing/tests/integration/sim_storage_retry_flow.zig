@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const network = static_testing.testing.sim.network_link;
@@ -9,7 +10,7 @@ const temporal = static_testing.testing.temporal;
 test "simulated network storage and retry flow composes deterministically" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 32) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -36,54 +37,54 @@ test "simulated network storage and retry flow composes deterministically" {
     });
 
     var request_mailbox = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 4 },
     );
     defer request_mailbox.deinit();
     var completion_mailbox = try static_testing.testing.sim.mailbox.Mailbox(
         storage_mod.OperationResult(u32),
-    ).init(std.testing.allocator, .{ .capacity = 4 });
+    ).init(testing.allocator, .{ .capacity = 4 });
     defer completion_mailbox.deinit();
     var retry_mailbox = try static_testing.testing.sim.mailbox.Mailbox(
         retry_mod.RetryEnvelope(u32),
-    ).init(std.testing.allocator, .{ .capacity = 4 });
+    ).init(testing.allocator, .{ .capacity = 4 });
     defer retry_mailbox.deinit();
 
     try link.send(sim_fixture.sim_clock.now(), 1, 11, 41);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 11, &request_mailbox, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 41), try request_mailbox.recv());
+    try testing.expectEqual(@as(u32, 41), try request_mailbox.recv());
 
     try storage_lane.submitFailure(sim_fixture.sim_clock.now(), 41, 500);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try storage_lane.deliverDueToMailbox(sim_fixture.sim_clock.now(), &completion_mailbox, sim_fixture.traceBufferPtr());
     const failure = try completion_mailbox.recv();
-    try std.testing.expectEqual(storage_mod.CompletionStatus.failed, failure.status);
+    try testing.expectEqual(storage_mod.CompletionStatus.failed, failure.status);
 
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         retry_mod.RetryDecision.queued,
         try retry_queue.scheduleNext(sim_fixture.sim_clock.now(), 0, failure.request_id, failure.request_id),
     );
     _ = try sim_fixture.sim_clock.advance(.init(1));
-    try std.testing.expectEqual(@as(u32, 1), try retry_queue.emitDueToMailbox(
+    try testing.expectEqual(@as(u32, 1), try retry_queue.emitDueToMailbox(
         sim_fixture.sim_clock.now(),
         &retry_mailbox,
         sim_fixture.traceBufferPtr(),
     ));
     const retry = try retry_mailbox.recv();
-    try std.testing.expectEqual(@as(u32, 1), retry.attempt);
+    try testing.expectEqual(@as(u32, 1), retry.attempt);
 
     try link.send(sim_fixture.sim_clock.now(), 1, 11, retry.payload);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 11, &request_mailbox, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 41), try request_mailbox.recv());
+    try testing.expectEqual(@as(u32, 41), try request_mailbox.recv());
 
     try storage_lane.submitSuccess(sim_fixture.sim_clock.now(), 41, 200);
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try storage_lane.deliverDueToMailbox(sim_fixture.sim_clock.now(), &completion_mailbox, sim_fixture.traceBufferPtr());
     const success = try completion_mailbox.recv();
-    try std.testing.expectEqual(storage_mod.CompletionStatus.success, success.status);
-    try std.testing.expectEqual(@as(u32, 200), success.value);
+    try testing.expectEqual(storage_mod.CompletionStatus.success, success.status);
+    try testing.expectEqual(@as(u32, 200), success.value);
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const retry_before_success = try temporal.checkHappensBefore(
@@ -91,5 +92,5 @@ test "simulated network storage and retry flow composes deterministically" {
         .{ .label = "retry_queue.emit", .surface_label = "retry_queue" },
         .{ .label = "storage_lane.success", .surface_label = "storage_lane" },
     );
-    try std.testing.expect(retry_before_success.check_result.passed);
+    try testing.expect(retry_before_success.check_result.passed);
 }

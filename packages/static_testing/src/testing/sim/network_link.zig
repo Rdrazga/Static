@@ -1,6 +1,8 @@
 //! Bounded deterministic message-delivery simulator over logical time.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const trace = @import("../trace.zig");
 const clock = @import("clock.zig");
 const mailbox = @import("mailbox.zig");
@@ -153,7 +155,7 @@ pub fn NetworkLink(comptime T: type) type {
                 .payload = payload,
             };
             self.pending_count += 1;
-            std.debug.assert(self.pending_count <= self.storage.len);
+            assert(self.pending_count <= self.storage.len);
         }
 
         pub fn deliverDueToMailbox(
@@ -204,7 +206,7 @@ pub fn NetworkLink(comptime T: type) type {
                 self.storage[index] = delivery;
             }
             self.pending_count = recorded.len;
-            std.debug.assert(self.pending_count <= self.storage.len);
+            assert(self.pending_count <= self.storage.len);
         }
 
         pub fn pendingItems(self: *const Self) []const PendingDelivery {
@@ -265,7 +267,7 @@ pub fn NetworkLink(comptime T: type) type {
                 return switch (policy.overflow) {
                     .drop_newest => .drop_newest,
                     .drop_oldest => blk: {
-                        std.debug.assert(saturation.oldest_index != null);
+                        assert(saturation.oldest_index != null);
                         removePendingAt(self.storage, &self.pending_count, saturation.oldest_index.?);
                         break :blk .enqueue;
                     },
@@ -350,8 +352,8 @@ fn partitionMatches(
     source_id: u32,
     destination_id: u32,
 ) bool {
-    std.debug.assert(partition.from_nodes.len > 0);
-    std.debug.assert(partition.to_nodes.len > 0);
+    assert(partition.from_nodes.len > 0);
+    assert(partition.to_nodes.len > 0);
 
     const forward_match = groupContains(partition.from_nodes, source_id) and
         groupContains(partition.to_nodes, destination_id);
@@ -363,7 +365,7 @@ fn partitionMatches(
 }
 
 fn groupContains(nodes: []const u32, candidate: u32) bool {
-    std.debug.assert(candidate != 0);
+    assert(candidate != 0);
 
     for (nodes) |node_id| {
         if (node_id == candidate) return true;
@@ -433,7 +435,7 @@ fn removePendingAt(
     pending_count: *usize,
     index: usize,
 ) void {
-    std.debug.assert(index < pending_count.*);
+    assert(index < pending_count.*);
     var cursor = index;
     while (cursor + 1 < pending_count.*) : (cursor += 1) {
         storage[cursor] = storage[cursor + 1];
@@ -446,20 +448,20 @@ test "network link delivers bounded messages after their due time" {
     var link = try NetworkLink(u32).init(&storage, .{
         .default_delay = .init(2),
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 4 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 4 });
     defer destination.deinit();
 
     try link.send(.init(1), 7, 11, 99);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const early = try link.deliverDueToMailbox(.init(2), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 0), early.delivered_count);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 0), early.delivered_count);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const delivered = try link.deliverDueToMailbox(.init(3), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 1), delivered.delivered_count);
-    try std.testing.expectEqual(@as(usize, 0), link.pendingItems().len);
-    try std.testing.expectEqual(@as(u32, 99), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), delivered.delivered_count);
+    try testing.expectEqual(@as(usize, 0), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 99), try destination.recv());
 }
 
 test "network link drops future sends while partitioned" {
@@ -470,11 +472,11 @@ test "network link drops future sends while partitioned" {
     });
 
     try link.send(.init(0), 1, 9, 55);
-    try std.testing.expectEqual(@as(usize, 0), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 0), link.pendingItems().len);
 
     try link.setPartitionMode(.connected);
     try link.send(.init(0), 1, 9, 56);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 }
 
 test "network link supports isolating one node from all traffic" {
@@ -483,28 +485,28 @@ test "network link supports isolating one node from all traffic" {
         .default_delay = .init(1),
         .partition_mode = .{ .isolate_node = 9 },
     });
-    var destination_9 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination_9 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination_9.deinit();
-    var destination_5 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination_5 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination_5.deinit();
 
     try link.send(.init(0), 1, 9, 11);
     try link.send(.init(0), 9, 5, 22);
     try link.send(.init(0), 5, 6, 33);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const to_9 = try link.deliverDueToMailbox(.init(1), 9, &destination_9, null);
-    try std.testing.expectEqual(@as(u32, 0), to_9.delivered_count);
+    try testing.expectEqual(@as(u32, 0), to_9.delivered_count);
 
     const to_5 = try link.deliverDueToMailbox(.init(1), 5, &destination_5, null);
-    try std.testing.expectEqual(@as(u32, 0), to_5.delivered_count);
+    try testing.expectEqual(@as(u32, 0), to_5.delivered_count);
 
     // The unaffected route remains deliverable.
-    var destination_6 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination_6 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination_6.deinit();
     const to_6 = try link.deliverDueToMailbox(.init(1), 6, &destination_6, null);
-    try std.testing.expectEqual(@as(u32, 1), to_6.delivered_count);
-    try std.testing.expectEqual(@as(u32, 33), try destination_6.recv());
+    try testing.expectEqual(@as(u32, 1), to_6.delivered_count);
+    try testing.expectEqual(@as(u32, 33), try destination_6.recv());
 }
 
 test "network link supports directed and bidirectional group partitions" {
@@ -521,36 +523,36 @@ test "network link supports directed and bidirectional group partitions" {
             },
         },
     });
-    var mailbox_1 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox_1 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox_1.deinit();
-    var mailbox_2 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox_2 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox_2.deinit();
-    var mailbox_3 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox_3 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox_3.deinit();
-    var mailbox_4 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox_4 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox_4.deinit();
 
     try link.send(.init(0), 1, 3, 11);
     try link.send(.init(0), 3, 1, 22);
     try link.send(.init(0), 1, 2, 33);
     try link.send(.init(0), 4, 3, 44);
-    try std.testing.expectEqual(@as(usize, 3), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 3), link.pendingItems().len);
 
     const to_3_directed = try link.deliverDueToMailbox(.init(1), 3, &mailbox_3, null);
-    try std.testing.expectEqual(@as(u32, 1), to_3_directed.delivered_count);
-    try std.testing.expectEqual(@as(u32, 44), try mailbox_3.recv());
+    try testing.expectEqual(@as(u32, 1), to_3_directed.delivered_count);
+    try testing.expectEqual(@as(u32, 44), try mailbox_3.recv());
 
     const to_2_directed = try link.deliverDueToMailbox(.init(1), 2, &mailbox_2, null);
-    try std.testing.expectEqual(@as(u32, 1), to_2_directed.delivered_count);
-    try std.testing.expectEqual(@as(u32, 33), try mailbox_2.recv());
+    try testing.expectEqual(@as(u32, 1), to_2_directed.delivered_count);
+    try testing.expectEqual(@as(u32, 33), try mailbox_2.recv());
 
     const to_1_directed = try link.deliverDueToMailbox(.init(1), 1, &mailbox_1, null);
-    try std.testing.expectEqual(@as(u32, 1), to_1_directed.delivered_count);
-    try std.testing.expectEqual(@as(u32, 22), try mailbox_1.recv());
+    try testing.expectEqual(@as(u32, 1), to_1_directed.delivered_count);
+    try testing.expectEqual(@as(u32, 22), try mailbox_1.recv());
 
     const to_4_directed = try link.deliverDueToMailbox(.init(1), 4, &mailbox_4, null);
-    try std.testing.expectEqual(@as(u32, 0), to_4_directed.delivered_count);
-    try std.testing.expectEqual(@as(usize, 0), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 0), to_4_directed.delivered_count);
+    try testing.expectEqual(@as(usize, 0), link.pendingItems().len);
 
     try link.setPartitionMode(.{
         .partition_groups = .{
@@ -562,7 +564,7 @@ test "network link supports directed and bidirectional group partitions" {
 
     try link.send(.init(1), 2, 4, 55);
     try link.send(.init(1), 4, 2, 66);
-    try std.testing.expectEqual(@as(usize, 0), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 0), link.pendingItems().len);
 }
 
 test "network link supports asymmetric route-specific drops" {
@@ -580,21 +582,21 @@ test "network link supports asymmetric route-specific drops" {
         .default_delay = .init(1),
         .fault_rules = &rules,
     });
-    var destination_11 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination_11 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination_11.deinit();
-    var destination_7 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination_7 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination_7.deinit();
 
     try link.send(.init(0), 7, 11, 99);
     try link.send(.init(0), 11, 7, 42);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const to_11 = try link.deliverDueToMailbox(.init(1), 11, &destination_11, null);
-    try std.testing.expectEqual(@as(u32, 0), to_11.delivered_count);
+    try testing.expectEqual(@as(u32, 0), to_11.delivered_count);
 
     const to_7 = try link.deliverDueToMailbox(.init(1), 7, &destination_7, null);
-    try std.testing.expectEqual(@as(u32, 1), to_7.delivered_count);
-    try std.testing.expectEqual(@as(u32, 42), try destination_7.recv());
+    try testing.expectEqual(@as(u32, 1), to_7.delivered_count);
+    try testing.expectEqual(@as(u32, 42), try destination_7.recv());
 }
 
 test "network link supports route-specific extra delay" {
@@ -611,18 +613,18 @@ test "network link supports route-specific extra delay" {
         .default_delay = .init(1),
         .fault_rules = &rules,
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
 
     try link.send(.init(0), 7, 11, 88);
 
     const early = try link.deliverDueToMailbox(.init(2), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 0), early.delivered_count);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 0), early.delivered_count);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const on_time = try link.deliverDueToMailbox(.init(3), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 1), on_time.delivered_count);
-    try std.testing.expectEqual(@as(u32, 88), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), on_time.delivered_count);
+    try testing.expectEqual(@as(u32, 88), try destination.recv());
 }
 
 test "network link supports route-specific congestion windows" {
@@ -640,18 +642,18 @@ test "network link supports route-specific congestion windows" {
         .default_delay = .init(1),
         .congestion_windows = &windows,
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
 
     try link.send(.init(0), 7, 11, 88);
 
     const early = try link.deliverDueToMailbox(.init(3), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 0), early.delivered_count);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 0), early.delivered_count);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const released = try link.deliverDueToMailbox(.init(4), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 1), released.delivered_count);
-    try std.testing.expectEqual(@as(u32, 88), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), released.delivered_count);
+    try testing.expectEqual(@as(u32, 88), try destination.recv());
 }
 
 test "network link backlog policy can drop the newest saturated send" {
@@ -667,16 +669,16 @@ test "network link backlog policy can drop the newest saturated send" {
         .default_delay = .init(1),
         .backlog_policies = &policies,
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
 
     try link.send(.init(0), 1, 11, 88);
     try link.send(.init(0), 2, 11, 99);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const delivered = try link.deliverDueToMailbox(.init(1), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 1), delivered.delivered_count);
-    try std.testing.expectEqual(@as(u32, 88), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), delivered.delivered_count);
+    try testing.expectEqual(@as(u32, 88), try destination.recv());
 }
 
 test "network link backlog policy can drop the oldest saturated send" {
@@ -692,17 +694,17 @@ test "network link backlog policy can drop the oldest saturated send" {
         .default_delay = .init(1),
         .backlog_policies = &policies,
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
 
     try link.send(.init(0), 1, 11, 88);
     try link.send(.init(0), 2, 11, 99);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
-    try std.testing.expectEqual(@as(u32, 2), link.pendingItems()[0].source_id);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 2), link.pendingItems()[0].source_id);
 
     const delivered = try link.deliverDueToMailbox(.init(1), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 1), delivered.delivered_count);
-    try std.testing.expectEqual(@as(u32, 99), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), delivered.delivered_count);
+    try testing.expectEqual(@as(u32, 99), try destination.recv());
 }
 
 test "network link backlog policy can reject saturated sends" {
@@ -718,16 +720,16 @@ test "network link backlog policy can reject saturated sends" {
         .default_delay = .init(1),
         .backlog_policies = &policies,
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
 
     try link.send(.init(0), 1, 11, 88);
-    try std.testing.expectError(error.NoSpaceLeft, link.send(.init(0), 2, 11, 99));
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectError(error.NoSpaceLeft, link.send(.init(0), 2, 11, 99));
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 
     const delivered = try link.deliverDueToMailbox(.init(1), 11, &destination, null);
-    try std.testing.expectEqual(@as(u32, 1), delivered.delivered_count);
-    try std.testing.expectEqual(@as(u32, 88), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), delivered.delivered_count);
+    try testing.expectEqual(@as(u32, 88), try destination.recv());
 }
 
 test "network link can record and replay pending deliveries after fault resolution" {
@@ -758,13 +760,13 @@ test "network link can record and replay pending deliveries after fault resoluti
     try source_link.send(.init(0), 1, 9, 99);
     try source_link.send(.init(0), 2, 11, 111);
     try source_link.send(.init(0), 5, 7, 77);
-    try std.testing.expectEqual(@as(usize, 2), source_link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 2), source_link.pendingItems().len);
 
     var recorded_storage: [4]Delivery(u32) = undefined;
     const recorded = try source_link.recordPending(&recorded_storage);
-    try std.testing.expectEqual(@as(usize, 2), recorded.len);
-    try std.testing.expectEqual(@as(u64, 3), recorded[0].due_time.tick);
-    try std.testing.expectEqual(@as(u64, 4), recorded[1].due_time.tick);
+    try testing.expectEqual(@as(usize, 2), recorded.len);
+    try testing.expectEqual(@as(u64, 3), recorded[0].due_time.tick);
+    try testing.expectEqual(@as(u64, 4), recorded[1].due_time.tick);
 
     var replay_storage: [4]Delivery(u32) = undefined;
     var replay_link = try NetworkLink(u32).init(&replay_storage, .{
@@ -773,22 +775,22 @@ test "network link can record and replay pending deliveries after fault resoluti
     });
     try replay_link.replayRecordedPending(recorded);
 
-    var mailbox_9 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox_9 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox_9.deinit();
-    var mailbox_11 = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var mailbox_11 = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer mailbox_11.deinit();
 
     const early_9 = try replay_link.deliverDueToMailbox(.init(2), 9, &mailbox_9, null);
-    try std.testing.expectEqual(@as(u32, 0), early_9.delivered_count);
+    try testing.expectEqual(@as(u32, 0), early_9.delivered_count);
     const on_time_9 = try replay_link.deliverDueToMailbox(.init(3), 9, &mailbox_9, null);
-    try std.testing.expectEqual(@as(u32, 1), on_time_9.delivered_count);
-    try std.testing.expectEqual(@as(u32, 99), try mailbox_9.recv());
+    try testing.expectEqual(@as(u32, 1), on_time_9.delivered_count);
+    try testing.expectEqual(@as(u32, 99), try mailbox_9.recv());
 
     const early_11 = try replay_link.deliverDueToMailbox(.init(3), 11, &mailbox_11, null);
-    try std.testing.expectEqual(@as(u32, 0), early_11.delivered_count);
+    try testing.expectEqual(@as(u32, 0), early_11.delivered_count);
     const on_time_11 = try replay_link.deliverDueToMailbox(.init(4), 11, &mailbox_11, null);
-    try std.testing.expectEqual(@as(u32, 1), on_time_11.delivered_count);
-    try std.testing.expectEqual(@as(u32, 111), try mailbox_11.recv());
+    try testing.expectEqual(@as(u32, 1), on_time_11.delivered_count);
+    try testing.expectEqual(@as(u32, 111), try mailbox_11.recv());
 }
 
 test "network link rejects fault rules without a route selector" {
@@ -800,7 +802,7 @@ test "network link rejects fault rules without a route selector" {
         },
     };
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .fault_rules = &rules,
     }));
@@ -816,7 +818,7 @@ test "network link rejects congestion windows without a route selector" {
         },
     };
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .congestion_windows = &windows,
     }));
@@ -832,7 +834,7 @@ test "network link rejects empty or backwards congestion windows" {
         },
     };
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .congestion_windows = &windows,
     }));
@@ -855,11 +857,11 @@ test "network link rejects invalid backlog policies" {
         },
     };
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .backlog_policies = &invalid_selector,
     }));
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .backlog_policies = &invalid_capacity,
     }));
@@ -868,7 +870,7 @@ test "network link rejects invalid backlog policies" {
 test "network link rejects isolate-node partitions with invalid node id" {
     var storage: [1]Delivery(u32) = undefined;
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .partition_mode = .{ .isolate_node = 0 },
     }));
@@ -879,7 +881,7 @@ test "network link rejects invalid group partitions" {
     const valid_nodes = [_]u32{1};
     const invalid_nodes = [_]u32{0};
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .partition_mode = .{
             .partition_groups = .{
@@ -889,7 +891,7 @@ test "network link rejects invalid group partitions" {
         },
     }));
 
-    try std.testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
+    try testing.expectError(error.InvalidConfig, NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
         .partition_mode = .{
             .partition_groups = .{
@@ -907,10 +909,10 @@ test "network link rejects invalid runtime partition updates" {
     });
     const valid_nodes = [_]u32{1};
 
-    try std.testing.expectError(error.InvalidConfig, link.setPartitionMode(.{
+    try testing.expectError(error.InvalidConfig, link.setPartitionMode(.{
         .isolate_node = 0,
     }));
-    try std.testing.expectError(error.InvalidConfig, link.setPartitionMode(.{
+    try testing.expectError(error.InvalidConfig, link.setPartitionMode(.{
         .partition_groups = .{
             .from_nodes = &.{},
             .to_nodes = &valid_nodes,
@@ -918,7 +920,7 @@ test "network link rejects invalid runtime partition updates" {
     }));
 
     try link.send(.init(0), 1, 9, 22);
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
 }
 
 test "network link replay rejects non-empty state or invalid deliveries" {
@@ -936,7 +938,7 @@ test "network link replay rejects non-empty state or invalid deliveries" {
             .payload = 22,
         },
     };
-    try std.testing.expectError(error.InvalidInput, link.replayRecordedPending(&recorded));
+    try testing.expectError(error.InvalidInput, link.replayRecordedPending(&recorded));
 
     var empty_storage: [1]Delivery(u32) = undefined;
     var empty_link = try NetworkLink(u32).init(&empty_storage, .{
@@ -950,10 +952,10 @@ test "network link replay rejects non-empty state or invalid deliveries" {
             .payload = 22,
         },
     };
-    try std.testing.expectError(error.InvalidInput, empty_link.replayRecordedPending(&invalid));
+    try testing.expectError(error.InvalidInput, empty_link.replayRecordedPending(&invalid));
 
     var small_record_buffer: [0]Delivery(u32) = .{};
-    try std.testing.expectError(error.NoSpaceLeft, link.recordPending(&small_record_buffer));
+    try testing.expectError(error.NoSpaceLeft, link.recordPending(&small_record_buffer));
 }
 
 test "network link can trace deliveries and preserve source metadata" {
@@ -961,7 +963,7 @@ test "network link can trace deliveries and preserve source metadata" {
     var link = try NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
     var trace_storage: [2]trace.TraceEvent = undefined;
     var trace_buffer = try trace.TraceBuffer.init(&trace_storage, .{ .max_events = 2 });
@@ -970,11 +972,11 @@ test "network link can trace deliveries and preserve source metadata" {
     _ = try link.deliverDueToMailbox(.init(1), 9, &destination, &trace_buffer);
 
     const snapshot = trace_buffer.snapshot();
-    try std.testing.expectEqual(@as(usize, 1), snapshot.items.len);
-    try std.testing.expectEqualStrings("network_link.deliver", snapshot.items[0].label);
-    try std.testing.expectEqual(@as(u64, 9), snapshot.items[0].value);
-    try std.testing.expectEqual(@as(?u64, 44), snapshot.items[0].lineage.correlation_id);
-    try std.testing.expectEqualStrings("network_link", snapshot.items[0].lineage.surface_label.?);
+    try testing.expectEqual(@as(usize, 1), snapshot.items.len);
+    try testing.expectEqualStrings("network_link.deliver", snapshot.items[0].label);
+    try testing.expectEqual(@as(u64, 9), snapshot.items[0].value);
+    try testing.expectEqual(@as(?u64, 44), snapshot.items[0].lineage.correlation_id);
+    try testing.expectEqualStrings("network_link", snapshot.items[0].lineage.surface_label.?);
 }
 
 test "network link leaves pending delivery untouched when trace capacity is exhausted" {
@@ -982,7 +984,7 @@ test "network link leaves pending delivery untouched when trace capacity is exha
     var link = try NetworkLink(u32).init(&storage, .{
         .default_delay = .init(1),
     });
-    var destination = try mailbox.Mailbox(u32).init(std.testing.allocator, .{ .capacity = 2 });
+    var destination = try mailbox.Mailbox(u32).init(testing.allocator, .{ .capacity = 2 });
     defer destination.deinit();
     var trace_storage: [1]trace.TraceEvent = undefined;
     var trace_buffer = try trace.TraceBuffer.init(&trace_storage, .{ .max_events = 1 });
@@ -994,16 +996,16 @@ test "network link leaves pending delivery untouched when trace capacity is exha
     });
 
     try link.send(.init(0), 44, 9, 77);
-    try std.testing.expectError(
+    try testing.expectError(
         error.NoSpaceLeft,
         link.deliverDueToMailbox(.init(1), 9, &destination, &trace_buffer),
     );
-    try std.testing.expectEqual(@as(usize, 1), link.pendingItems().len);
-    try std.testing.expectEqual(@as(usize, 0), destination.len());
+    try testing.expectEqual(@as(usize, 1), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 0), destination.len());
 
     trace_buffer.reset();
     const delivered = try link.deliverDueToMailbox(.init(1), 9, &destination, &trace_buffer);
-    try std.testing.expectEqual(@as(u32, 1), delivered.delivered_count);
-    try std.testing.expectEqual(@as(usize, 0), link.pendingItems().len);
-    try std.testing.expectEqual(@as(u32, 77), try destination.recv());
+    try testing.expectEqual(@as(u32, 1), delivered.delivered_count);
+    try testing.expectEqual(@as(usize, 0), link.pendingItems().len);
+    try testing.expectEqual(@as(u32, 77), try destination.recv());
 }

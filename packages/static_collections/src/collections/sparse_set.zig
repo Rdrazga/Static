@@ -8,6 +8,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const memory = @import("static_memory");
 const assert = std.debug.assert;
 
@@ -269,88 +270,88 @@ pub const SparseSet = struct {
 test "sparse set insert/remove maintains dense mapping" {
     // Goal: verify sparse/dense coherence through insert and remove.
     // Method: insert two values, remove one, then assert survivor remains.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 16, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 16, .budget = null });
     defer s.deinit();
     try s.insert(3);
     try s.insert(7);
-    try std.testing.expect(s.contains(3));
-    try std.testing.expect(s.contains(7));
+    try testing.expect(s.contains(3));
+    try testing.expect(s.contains(7));
     try s.remove(3);
-    try std.testing.expect(!s.contains(3));
-    try std.testing.expect(s.contains(7));
+    try testing.expect(!s.contains(3));
+    try testing.expect(s.contains(7));
 }
 
 test "sparse set rejects zero and out-of-range universe" {
     // Goal: reject invalid universe configuration at initialization.
     // Method: initialize with zero universe size and assert InvalidConfig.
-    try std.testing.expectError(error.InvalidConfig, SparseSet.init(std.testing.allocator, .{ .universe_size = 0, .budget = null }));
+    try testing.expectError(error.InvalidConfig, SparseSet.init(testing.allocator, .{ .universe_size = 0, .budget = null }));
 }
 
 test "sparse set insert idempotent" {
     // Goal: confirm duplicate insertions do not duplicate dense entries.
     // Method: insert same value twice and assert len remains one.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 8, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 8, .budget = null });
     defer s.deinit();
     try s.insert(4);
     try s.insert(4);
-    try std.testing.expectEqual(@as(usize, 1), s.len());
+    try testing.expectEqual(@as(usize, 1), s.len());
 }
 
 test "sparse set remove returns InvalidInput when absent" {
     // Goal: ensure negative-space behavior for removals is explicit.
     // Method: remove value never inserted and assert InvalidInput.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 8, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 8, .budget = null });
     defer s.deinit();
-    try std.testing.expectError(error.InvalidInput, s.remove(2));
+    try testing.expectError(error.InvalidInput, s.remove(2));
 }
 
 test "sparse set out-of-universe insert returns InvalidInput" {
     // Goal: reject inserts outside the configured universe.
     // Method: attempt to insert value >= universe_size and assert InvalidInput.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 4, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 4, .budget = null });
     defer s.deinit();
-    try std.testing.expectError(error.InvalidInput, s.insert(10));
+    try testing.expectError(error.InvalidInput, s.insert(10));
 }
 
 test "sparse set contains returns false for out-of-universe values" {
     // Goal: out-of-range lookups must fail safely without mutation.
     // Method: query a value outside the universe and assert false.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 4, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 4, .budget = null });
     defer s.deinit();
-    try std.testing.expect(!s.contains(9));
+    try testing.expect(!s.contains(9));
 }
 
 test "sparse set clear resets membership and allows reuse" {
     // Goal: confirm clear empties the set while preserving backing memory.
     // Method: insert values, clear, verify empty, then reinsert.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 8, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 8, .budget = null });
     defer s.deinit();
     try s.insert(3);
     try s.insert(5);
-    try std.testing.expectEqual(@as(usize, 2), s.len());
+    try testing.expectEqual(@as(usize, 2), s.len());
 
     s.clear();
-    try std.testing.expectEqual(@as(usize, 0), s.len());
-    try std.testing.expect(!s.contains(3));
-    try std.testing.expect(!s.contains(5));
+    try testing.expectEqual(@as(usize, 0), s.len());
+    try testing.expect(!s.contains(3));
+    try testing.expect(!s.contains(5));
 
     try s.insert(7);
-    try std.testing.expectEqual(@as(usize, 1), s.len());
-    try std.testing.expect(s.contains(7));
+    try testing.expectEqual(@as(usize, 1), s.len());
+    try testing.expect(s.contains(7));
 }
 
 test "sparse set ensureDenseCapacity pre-allocates for inserts" {
     // Goal: verify ensureDenseCapacity prevents allocation during inserts.
     // Method: pre-allocate, then insert up to that count without error.
-    var s = try SparseSet.init(std.testing.allocator, .{ .universe_size = 16, .budget = null });
+    var s = try SparseSet.init(testing.allocator, .{ .universe_size = 16, .budget = null });
     defer s.deinit();
 
     try s.ensureDenseCapacity(4);
-    try std.testing.expect(s.dense.capacity >= 4);
+    try testing.expect(s.dense.capacity >= 4);
 
     try s.insert(0);
     try s.insert(1);
     try s.insert(2);
     try s.insert(3);
-    try std.testing.expectEqual(@as(usize, 4), s.len());
+    try testing.expectEqual(@as(usize, 4), s.len());
 }

@@ -6,6 +6,8 @@
 //! Thread safety: not thread-safe — all functions are pure and stateless.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const Tag = enum {
     // Allocation / capacity
@@ -56,7 +58,7 @@ pub const Vocabulary = error{
 // Comptime invariant: Tag enum and Vocabulary error set must remain in sync.
 // Adding an error to one without the other is a programmer error caught at compile time.
 comptime {
-    std.debug.assert(std.meta.fields(Tag).len == @typeInfo(Vocabulary).error_set.?.len);
+    assert(std.meta.fields(Tag).len == @typeInfo(Vocabulary).error_set.?.len);
 }
 
 pub fn toError(tag: Tag) Vocabulary {
@@ -103,14 +105,14 @@ pub fn has(tag: Tag, err: Vocabulary) bool {
     const result = tagOf(err) == tag;
     // Postcondition: result is a valid bool (true when the tag matches, false otherwise).
     // This documents that the switch is exhaustive and always produces a defined value.
-    std.debug.assert(result == true or result == false);
+    assert(result == true or result == false);
     return result;
 }
 
 /// Compile-time assertion that every member of `ErrorSetType` exists in `Vocabulary`.
 pub fn assertVocabularySubset(comptime ErrorSetType: type) void {
     const info = @typeInfo(ErrorSetType);
-    comptime std.debug.assert(info == .error_set);
+    comptime assert(info == .error_set);
     const error_fields = info.error_set.?;
 
     inline for (error_fields) |error_field| {
@@ -122,9 +124,9 @@ pub fn assertVocabularySubset(comptime ErrorSetType: type) void {
 fn assertVocabularyMember(_: Vocabulary) void {}
 
 test "vocabulary includes queue and allocation semantics" {
-    try std.testing.expect(has(.WouldBlock, error.WouldBlock));
-    try std.testing.expect(has(.OutOfMemory, error.OutOfMemory));
-    try std.testing.expect(has(.Unsupported, error.Unsupported));
+    try testing.expect(has(.WouldBlock, error.WouldBlock));
+    try testing.expect(has(.OutOfMemory, error.OutOfMemory));
+    try testing.expect(has(.Unsupported, error.Unsupported));
 }
 
 test "errors.has covers all 15 tags" {
@@ -136,64 +138,64 @@ test "errors.has covers all 15 tags" {
     // then pick one arbitrary mismatched error and verify has(T, other) == false.
 
     // OutOfMemory
-    try std.testing.expect(has(.OutOfMemory, error.OutOfMemory));
-    try std.testing.expect(!has(.OutOfMemory, error.NoSpaceLeft));
+    try testing.expect(has(.OutOfMemory, error.OutOfMemory));
+    try testing.expect(!has(.OutOfMemory, error.NoSpaceLeft));
 
     // NoSpaceLeft
-    try std.testing.expect(has(.NoSpaceLeft, error.NoSpaceLeft));
-    try std.testing.expect(!has(.NoSpaceLeft, error.OutOfMemory));
+    try testing.expect(has(.NoSpaceLeft, error.NoSpaceLeft));
+    try testing.expect(!has(.NoSpaceLeft, error.OutOfMemory));
 
     // InvalidConfig
-    try std.testing.expect(has(.InvalidConfig, error.InvalidConfig));
-    try std.testing.expect(!has(.InvalidConfig, error.InvalidInput));
+    try testing.expect(has(.InvalidConfig, error.InvalidConfig));
+    try testing.expect(!has(.InvalidConfig, error.InvalidInput));
 
     // EndOfStream
-    try std.testing.expect(has(.EndOfStream, error.EndOfStream));
-    try std.testing.expect(!has(.EndOfStream, error.CorruptData));
+    try testing.expect(has(.EndOfStream, error.EndOfStream));
+    try testing.expect(!has(.EndOfStream, error.CorruptData));
 
     // InvalidInput
-    try std.testing.expect(has(.InvalidInput, error.InvalidInput));
-    try std.testing.expect(!has(.InvalidInput, error.InvalidConfig));
+    try testing.expect(has(.InvalidInput, error.InvalidInput));
+    try testing.expect(!has(.InvalidInput, error.InvalidConfig));
 
     // CorruptData
-    try std.testing.expect(has(.CorruptData, error.CorruptData));
-    try std.testing.expect(!has(.CorruptData, error.InvalidInput));
+    try testing.expect(has(.CorruptData, error.CorruptData));
+    try testing.expect(!has(.CorruptData, error.InvalidInput));
 
     // Unsupported
-    try std.testing.expect(has(.Unsupported, error.Unsupported));
-    try std.testing.expect(!has(.Unsupported, error.CorruptData));
+    try testing.expect(has(.Unsupported, error.Unsupported));
+    try testing.expect(!has(.Unsupported, error.CorruptData));
 
     // Overflow
-    try std.testing.expect(has(.Overflow, error.Overflow));
-    try std.testing.expect(!has(.Overflow, error.Underflow));
+    try testing.expect(has(.Overflow, error.Overflow));
+    try testing.expect(!has(.Overflow, error.Underflow));
 
     // Underflow
-    try std.testing.expect(has(.Underflow, error.Underflow));
-    try std.testing.expect(!has(.Underflow, error.Overflow));
+    try testing.expect(has(.Underflow, error.Underflow));
+    try testing.expect(!has(.Underflow, error.Overflow));
 
     // WouldBlock
-    try std.testing.expect(has(.WouldBlock, error.WouldBlock));
-    try std.testing.expect(!has(.WouldBlock, error.Timeout));
+    try testing.expect(has(.WouldBlock, error.WouldBlock));
+    try testing.expect(!has(.WouldBlock, error.Timeout));
 
     // Timeout
-    try std.testing.expect(has(.Timeout, error.Timeout));
-    try std.testing.expect(!has(.Timeout, error.Closed));
+    try testing.expect(has(.Timeout, error.Timeout));
+    try testing.expect(!has(.Timeout, error.Closed));
 
     // Closed
-    try std.testing.expect(has(.Closed, error.Closed));
-    try std.testing.expect(!has(.Closed, error.Cancelled));
+    try testing.expect(has(.Closed, error.Closed));
+    try testing.expect(!has(.Closed, error.Cancelled));
 
     // Cancelled
-    try std.testing.expect(has(.Cancelled, error.Cancelled));
-    try std.testing.expect(!has(.Cancelled, error.Closed));
+    try testing.expect(has(.Cancelled, error.Cancelled));
+    try testing.expect(!has(.Cancelled, error.Closed));
 
     // NotFound
-    try std.testing.expect(has(.NotFound, error.NotFound));
-    try std.testing.expect(!has(.NotFound, error.AlreadyExists));
+    try testing.expect(has(.NotFound, error.NotFound));
+    try testing.expect(!has(.NotFound, error.AlreadyExists));
 
     // AlreadyExists
-    try std.testing.expect(has(.AlreadyExists, error.AlreadyExists));
-    try std.testing.expect(!has(.AlreadyExists, error.NotFound));
+    try testing.expect(has(.AlreadyExists, error.AlreadyExists));
+    try testing.expect(!has(.AlreadyExists, error.NotFound));
 }
 
 test "errors.has tag count matches vocabulary size" {
@@ -201,9 +203,9 @@ test "errors.has tag count matches vocabulary size" {
     // code path (pair assertion). Also validates the expected count of 15.
     const tag_count = std.meta.fields(Tag).len;
     const vocab_count = @typeInfo(Vocabulary).error_set.?.len;
-    try std.testing.expectEqual(tag_count, vocab_count);
-    try std.testing.expectEqual(@as(usize, 15), tag_count);
-    try std.testing.expectEqual(@as(usize, 15), vocab_count);
+    try testing.expectEqual(tag_count, vocab_count);
+    try testing.expectEqual(@as(usize, 15), tag_count);
+    try testing.expectEqual(@as(usize, 15), vocab_count);
 }
 
 test "assertVocabularySubset accepts vocabulary-compatible sets" {
@@ -215,7 +217,7 @@ test "tag and vocabulary round-trip in both directions" {
     inline for (std.meta.fields(Tag)) |field| {
         const tag: Tag = @field(Tag, field.name);
         const vocabulary_error = toError(tag);
-        try std.testing.expectEqual(tag, tagOf(vocabulary_error));
-        try std.testing.expect(has(tag, vocabulary_error));
+        try testing.expectEqual(tag, tagOf(vocabulary_error));
+        try testing.expect(has(tag, vocabulary_error));
     }
 }

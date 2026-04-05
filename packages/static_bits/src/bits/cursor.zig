@@ -6,6 +6,8 @@
 //! Thread safety: not thread-safe — each cursor instance must be used from one thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const endian = @import("endian.zig");
 
@@ -105,7 +107,7 @@ fn valueFromRawBits(comptime T: type, raw: u128, bit_count: u8) T {
     comptime assertBitIntType(T, "readBits");
     const info = @typeInfo(T).int;
     const bits_u8: u8 = @intCast(info.bits);
-    std.debug.assert(bit_count <= bits_u8);
+    assert(bit_count <= bits_u8);
 
     const truncated_raw = raw & maskU128(bit_count);
     if (info.signedness == .unsigned) {
@@ -152,39 +154,39 @@ fn rawBitsFromValue(value: anytype, bit_count: u8) WriterError!u128 {
 }
 
 fn readerEnd(pos: usize, n: usize, len: usize) ReaderError!usize {
-    std.debug.assert(pos <= len);
+    assert(pos <= len);
     const end = std.math.add(usize, pos, n) catch return error.Overflow;
     if (end > len) return error.EndOfStream;
-    std.debug.assert(end >= pos);
+    assert(end >= pos);
     return end;
 }
 
 fn writerEnd(pos: usize, n: usize, len: usize) WriterError!usize {
-    std.debug.assert(pos <= len);
+    assert(pos <= len);
     const end = std.math.add(usize, pos, n) catch return error.Overflow;
     if (end > len) return error.NoSpaceLeft;
-    std.debug.assert(end >= pos);
+    assert(end >= pos);
     return end;
 }
 
 fn totalBits(len: usize) usize {
-    std.debug.assert(len <= std.math.maxInt(usize) / 8);
+    assert(len <= std.math.maxInt(usize) / 8);
     return len * 8;
 }
 
 fn readerBitEnd(bit_pos: usize, bit_count: usize, total_bits: usize) ReaderError!usize {
-    std.debug.assert(bit_pos <= total_bits);
+    assert(bit_pos <= total_bits);
     const end = std.math.add(usize, bit_pos, bit_count) catch return error.Overflow;
     if (end > total_bits) return error.EndOfStream;
-    std.debug.assert(end >= bit_pos);
+    assert(end >= bit_pos);
     return end;
 }
 
 fn writerBitEnd(bit_pos: usize, bit_count: usize, total_bits: usize) WriterError!usize {
-    std.debug.assert(bit_pos <= total_bits);
+    assert(bit_pos <= total_bits);
     const end = std.math.add(usize, bit_pos, bit_count) catch return error.Overflow;
     if (end > total_bits) return error.NoSpaceLeft;
-    std.debug.assert(end >= bit_pos);
+    assert(end >= bit_pos);
     return end;
 }
 
@@ -252,8 +254,8 @@ fn clearBitRange(buf: []u8, bit_start: usize, bit_count: usize) void {
     if (bit_count == 0) return;
 
     const bit_end = bit_start + bit_count;
-    std.debug.assert(bit_end >= bit_start);
-    std.debug.assert(bit_end <= buf.len * 8);
+    assert(bit_end >= bit_start);
+    assert(bit_end <= buf.len * 8);
 
     // Clear leading partial-byte bits one at a time (at most 7).
     var current = bit_start;
@@ -280,15 +282,15 @@ fn clearBitRange(buf: []u8, bit_start: usize, bit_count: usize) void {
         current += 1;
     }
 
-    std.debug.assert(current == bit_end);
+    assert(current == bit_end);
 }
 
 fn assertBytePositionInBounds(pos: usize, len: usize) void {
-    std.debug.assert(pos <= len);
+    assert(pos <= len);
 }
 
 fn assertBitPositionInBounds(pos: usize, total_bits: usize) void {
-    std.debug.assert(pos <= total_bits);
+    assert(pos <= total_bits);
 }
 
 fn validateByteReadPosition(pos: usize, len: usize) ReaderError!void {
@@ -385,7 +387,7 @@ pub const ByteReader = struct {
         const end = try readerEnd(self.pos, n, self.buf.len);
         const out = self.buf[self.pos..end];
         self.pos = end;
-        std.debug.assert(self.pos <= self.buf.len);
+        assert(self.pos <= self.buf.len);
         return out;
     }
 
@@ -545,7 +547,7 @@ pub const BitReader = struct {
     /// Returns a reader positioned at the first bit of `buf`.
     pub fn init(buf: []const u8) BitReader {
         // Ensure `buf.len * 8` fits in `usize` so bit-position arithmetic cannot overflow.
-        std.debug.assert(buf.len <= std.math.maxInt(usize) / 8);
+        assert(buf.len <= std.math.maxInt(usize) / 8);
         return .{ .buf = buf };
     }
 
@@ -642,7 +644,7 @@ pub const BitWriter = struct {
     /// Returns a writer positioned at the first bit of `buf`.
     pub fn init(buf: []u8) BitWriter {
         // Ensure `buf.len * 8` fits in `usize` so bit-position arithmetic cannot overflow.
-        std.debug.assert(buf.len <= std.math.maxInt(usize) / 8);
+        assert(buf.len <= std.math.maxInt(usize) / 8);
         return .{ .buf = buf };
     }
 
@@ -739,38 +741,38 @@ fn nextDeterministic(state: *u64) u64 {
 test "reader and writer preserve atomic cursor semantics on failure" {
     const data = [_]u8{ 0x01, 0x02, 0x03 };
     var r = ByteReader.init(&data);
-    try std.testing.expectEqual(@as(usize, 0), r.position());
-    try std.testing.expectError(error.EndOfStream, r.readInt(u32, .little));
-    try std.testing.expectEqual(@as(usize, 0), r.position());
-    try std.testing.expectEqual(@as(u16, 0x0201), try r.readInt(u16, .little));
-    try std.testing.expectEqual(@as(usize, 2), r.position());
+    try testing.expectEqual(@as(usize, 0), r.position());
+    try testing.expectError(error.EndOfStream, r.readInt(u32, .little));
+    try testing.expectEqual(@as(usize, 0), r.position());
+    try testing.expectEqual(@as(u16, 0x0201), try r.readInt(u16, .little));
+    try testing.expectEqual(@as(usize, 2), r.position());
 
     var out = [_]u8{0} ** 2;
     var w = ByteWriter.init(&out);
-    try std.testing.expectError(error.NoSpaceLeft, w.writeInt(@as(u32, 0xDEADBEEF), .little));
-    try std.testing.expectEqual(@as(usize, 0), w.position());
+    try testing.expectError(error.NoSpaceLeft, w.writeInt(@as(u32, 0xDEADBEEF), .little));
+    try testing.expectEqual(@as(usize, 0), w.position());
 }
 
 test "reader cursor bounds and position semantics are explicit" {
     const data = [_]u8{ 0x10, 0x20, 0x30 };
     var reader = ByteReader.init(&data);
 
-    try std.testing.expectEqual(@as(usize, 3), reader.remaining());
-    try std.testing.expectEqualSlices(u8, &.{ 0x10, 0x20 }, try reader.peek(2));
-    try std.testing.expectEqual(@as(usize, 0), reader.position());
-    try std.testing.expectError(error.EndOfStream, reader.setPosition(4));
+    try testing.expectEqual(@as(usize, 3), reader.remaining());
+    try testing.expectEqualSlices(u8, &.{ 0x10, 0x20 }, try reader.peek(2));
+    try testing.expectEqual(@as(usize, 0), reader.position());
+    try testing.expectError(error.EndOfStream, reader.setPosition(4));
 
     try reader.setPosition(3);
-    try std.testing.expectEqual(@as(usize, 3), reader.position());
-    try std.testing.expectError(error.EndOfStream, reader.readByte());
+    try testing.expectEqual(@as(usize, 3), reader.position());
+    try testing.expectError(error.EndOfStream, reader.readByte());
 }
 
 test "reader overflow does not advance position" {
     const data = [_]u8{ 0xAA, 0xBB };
     var reader = ByteReader.init(&data);
     try reader.setPosition(1);
-    try std.testing.expectError(error.Overflow, reader.read(std.math.maxInt(usize)));
-    try std.testing.expectEqual(@as(usize, 1), reader.position());
+    try testing.expectError(error.Overflow, reader.read(std.math.maxInt(usize)));
+    try testing.expectEqual(@as(usize, 1), reader.position());
 }
 
 test "writer cursor bounds and write helpers are explicit" {
@@ -781,9 +783,9 @@ test "writer cursor bounds and write helpers are explicit" {
     try writer.write(&.{ 0x22, 0x33 });
     try writer.writeU16Be(0x4455);
     try writer.writeU16Le(0x6677);
-    try std.testing.expectEqual(@as(usize, 7), writer.position());
-    try std.testing.expectEqualSlices(u8, &.{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x77, 0x66 }, out[0..7]);
-    try std.testing.expectError(error.NoSpaceLeft, writer.setPosition(8));
+    try testing.expectEqual(@as(usize, 7), writer.position());
+    try testing.expectEqualSlices(u8, &.{ 0x11, 0x22, 0x33, 0x44, 0x55, 0x77, 0x66 }, out[0..7]);
+    try testing.expectError(error.NoSpaceLeft, writer.setPosition(8));
 }
 
 test "byte cursor checkpoints support rewind" {
@@ -791,9 +793,9 @@ test "byte cursor checkpoints support rewind" {
     var reader = ByteReader.init(&data);
     _ = try reader.readByte();
     const read_mark = reader.mark();
-    try std.testing.expectEqual(@as(u8, 0xBB), try reader.readByte());
+    try testing.expectEqual(@as(u8, 0xBB), try reader.readByte());
     try reader.rewind(read_mark);
-    try std.testing.expectEqual(@as(u8, 0xBB), try reader.readByte());
+    try testing.expectEqual(@as(u8, 0xBB), try reader.readByte());
 
     var out = [_]u8{0} ** 4;
     var writer = ByteWriter.init(&out);
@@ -802,7 +804,7 @@ test "byte cursor checkpoints support rewind" {
     try writer.write(&.{ 0x30, 0x40 });
     try writer.rewind(write_mark);
     try writer.write(&.{ 0x55, 0x66 });
-    try std.testing.expectEqualSlices(u8, &.{ 0x10, 0x20, 0x55, 0x66 }, &out);
+    try testing.expectEqualSlices(u8, &.{ 0x10, 0x20, 0x55, 0x66 }, &out);
 }
 
 test "bit cursor supports non-byte-aligned round-trip" {
@@ -814,57 +816,57 @@ test "bit cursor supports non-byte-aligned round-trip" {
     try writer.rewind(checkpoint);
     try writer.writeBits(@as(u4, 0b0110), 4);
     try writer.writeBits(@as(u2, 0b11), 2);
-    try std.testing.expectEqual(@as(usize, 9), writer.positionBits());
+    try testing.expectEqual(@as(usize, 9), writer.positionBits());
 
     var reader = BitReader.init(&out);
-    try std.testing.expectEqual(@as(u3, 0b101), try reader.readBits(u3, 3));
-    try std.testing.expectEqual(@as(u4, 0b0110), try reader.readBits(u4, 4));
-    try std.testing.expectEqual(@as(u2, 0b11), try reader.readBits(u2, 2));
-    try std.testing.expectError(error.EndOfStream, reader.readBits(u16, 16));
+    try testing.expectEqual(@as(u3, 0b101), try reader.readBits(u3, 3));
+    try testing.expectEqual(@as(u4, 0b0110), try reader.readBits(u4, 4));
+    try testing.expectEqual(@as(u2, 0b11), try reader.readBits(u2, 2));
+    try testing.expectError(error.EndOfStream, reader.readBits(u16, 16));
 }
 
 test "bit cursor zero-width reads and writes are no-ops" {
     var out = [_]u8{0} ** 2;
     var writer = BitWriter.init(&out);
     try writer.writeBits(@as(u8, 0), 0);
-    try std.testing.expectEqual(@as(usize, 0), writer.positionBits());
-    try std.testing.expectError(error.Overflow, writer.writeBits(@as(u8, 1), 0));
-    try std.testing.expectEqual(@as(usize, 0), writer.positionBits());
-    try std.testing.expectEqualSlices(u8, &.{ 0x00, 0x00 }, &out);
+    try testing.expectEqual(@as(usize, 0), writer.positionBits());
+    try testing.expectError(error.Overflow, writer.writeBits(@as(u8, 1), 0));
+    try testing.expectEqual(@as(usize, 0), writer.positionBits());
+    try testing.expectEqualSlices(u8, &.{ 0x00, 0x00 }, &out);
 
     var reader = BitReader.init(&out);
-    try std.testing.expectEqual(@as(u16, 0), try reader.readBits(u16, 0));
-    try std.testing.expectEqual(@as(usize, 0), reader.positionBits());
+    try testing.expectEqual(@as(u16, 0), try reader.readBits(u16, 0));
+    try testing.expectEqual(@as(usize, 0), reader.positionBits());
 }
 
 test "bit cursor signed full-width reads preserve two's-complement payloads" {
     var out = [_]u8{0} ** 1;
     var writer = BitWriter.init(&out);
     try writer.writeBits(@as(i8, -1), 8);
-    try std.testing.expectEqual(@as(u8, 0xFF), out[0]);
+    try testing.expectEqual(@as(u8, 0xFF), out[0]);
 
     var reader = BitReader.init(&out);
-    try std.testing.expectEqual(@as(i8, -1), try reader.readBits(i8, 8));
+    try testing.expectEqual(@as(i8, -1), try reader.readBits(i8, 8));
 }
 
 test "bit writer preserves position on failure" {
     var out = [_]u8{0} ** 1;
     var writer = BitWriter.init(&out);
     try writer.writeBits(@as(u4, 0b1010), 4);
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
-    try std.testing.expectError(error.NoSpaceLeft, writer.writeBits(@as(u8, 0xFF), 8));
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
-    try std.testing.expectError(error.Overflow, writer.writeBits(@as(u8, 0x80), 7));
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectError(error.NoSpaceLeft, writer.writeBits(@as(u8, 0xFF), 8));
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectError(error.Overflow, writer.writeBits(@as(u8, 0x80), 7));
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
 }
 
 test "bit writer skipBits preserves atomic cursor semantics on failure" {
     var out = [_]u8{0} ** 1;
     var writer = BitWriter.init(&out);
     try writer.skipBits(4);
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
-    try std.testing.expectError(error.NoSpaceLeft, writer.skipBits(5));
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectError(error.NoSpaceLeft, writer.skipBits(5));
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
 }
 
 test "writer forward seeks zero skipped regions" {
@@ -872,13 +874,13 @@ test "writer forward seeks zero skipped regions" {
     var writer = ByteWriter.init(&bytes);
     try writer.writeByte(0x11);
     try writer.setPosition(3);
-    try std.testing.expectEqualSlices(u8, &.{ 0x11, 0x00, 0x00, 0xFF }, &bytes);
+    try testing.expectEqualSlices(u8, &.{ 0x11, 0x00, 0x00, 0xFF }, &bytes);
 
     var bits_buf = [_]u8{0xFF} ** 2;
     var bit_writer = BitWriter.init(&bits_buf);
     try bit_writer.writeBits(@as(u3, 0b101), 3);
     try bit_writer.setPositionBits(8);
-    try std.testing.expectEqual(@as(u8, 0b0000_0101), bits_buf[0]);
+    try testing.expectEqual(@as(u8, 0b0000_0101), bits_buf[0]);
 }
 
 test "bit writer skipBits zeroes skipped range" {
@@ -887,7 +889,7 @@ test "bit writer skipBits zeroes skipped range" {
     try writer.writeBits(@as(u2, 0b11), 2);
     try writer.skipBits(4);
     try writer.writeBits(@as(u2, 0b10), 2);
-    try std.testing.expectEqual(@as(u8, 0b1000_0011), bytes[0]);
+    try testing.expectEqual(@as(u8, 0b1000_0011), bytes[0]);
 }
 
 test "bit cursor comptime-width helpers mirror runtime helpers" {
@@ -898,26 +900,26 @@ test "bit cursor comptime-width helpers mirror runtime helpers" {
     try writer.writeBitsCt(@as(u2, 0b11), 2);
 
     var reader = BitReader.init(&out);
-    try std.testing.expectEqual(@as(u3, 0b101), try reader.readBitsCt(u3, 3));
-    try std.testing.expectEqual(@as(u5, 0b01110), try reader.readBitsCt(u5, 5));
-    try std.testing.expectEqual(@as(u2, 0b11), try reader.readBitsCt(u2, 2));
+    try testing.expectEqual(@as(u3, 0b101), try reader.readBitsCt(u3, 3));
+    try testing.expectEqual(@as(u5, 0b01110), try reader.readBitsCt(u5, 5));
+    try testing.expectEqual(@as(u2, 0b11), try reader.readBitsCt(u2, 2));
 }
 
 test "bit cursor comptime-width helpers preserve position on failure" {
     const data = [_]u8{0xAB};
     var reader = BitReader.init(&data);
     try reader.setPositionBits(4);
-    try std.testing.expectError(error.EndOfStream, reader.readBitsCt(u8, 5));
-    try std.testing.expectEqual(@as(usize, 4), reader.positionBits());
+    try testing.expectError(error.EndOfStream, reader.readBitsCt(u8, 5));
+    try testing.expectEqual(@as(usize, 4), reader.positionBits());
 
     var out = [_]u8{0} ** 1;
     var writer = BitWriter.init(&out);
     try writer.setPositionBits(4);
-    try std.testing.expectError(error.NoSpaceLeft, writer.writeBitsCt(@as(u5, 0b1_1111), 5));
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectError(error.NoSpaceLeft, writer.writeBitsCt(@as(u5, 0b1_1111), 5));
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
 
-    try std.testing.expectError(error.Overflow, writer.writeBitsCt(@as(u8, 0x80), 7));
-    try std.testing.expectEqual(@as(usize, 4), writer.positionBits());
+    try testing.expectError(error.Overflow, writer.writeBitsCt(@as(u8, 0x80), 7));
+    try testing.expectEqual(@as(usize, 4), writer.positionBits());
 }
 
 test "deterministic bit cursor model comparison" {
@@ -962,13 +964,13 @@ test "deterministic bit cursor model comparison" {
         const width = widths[read_op];
         const expected = values[read_op];
         const got = try reader.readBits(u16, width);
-        try std.testing.expectEqual(expected, got);
+        try testing.expectEqual(expected, got);
 
         var bit_index: u8 = 0;
         while (bit_index < width) : (bit_index += 1) {
             const shift: u4 = @intCast(bit_index);
             const got_bit: u1 = @intCast((got >> shift) & 0x01);
-            try std.testing.expectEqual(bit_model[model_bit_pos], got_bit);
+            try testing.expectEqual(bit_model[model_bit_pos], got_bit);
             model_bit_pos += 1;
         }
     }

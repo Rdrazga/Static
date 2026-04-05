@@ -1,6 +1,7 @@
 //! Deterministic fault schedule storage and due-fault lookup.
 
 const std = @import("std");
+const testing = std.testing;
 const clock = @import("clock.zig");
 
 /// Public fault script operating errors.
@@ -97,7 +98,7 @@ test "fault script rejects non-monotonic time ordering" {
         .{ .time = .init(2), .kind = .drop, .target_id = 1 },
         .{ .time = .init(1), .kind = .recover, .target_id = 1 },
     };
-    try std.testing.expectError(error.InvalidConfig, FaultScript.init(&events));
+    try testing.expectError(error.InvalidConfig, FaultScript.init(&events));
 }
 
 test "fault script returns all due events at and before the current time" {
@@ -109,10 +110,10 @@ test "fault script returns all due events at and before the current time" {
     var script = try FaultScript.init(&events);
 
     const due_tick_1 = script.nextFaultsAt(.init(1));
-    try std.testing.expectEqual(@as(usize, 2), due_tick_1.len);
-    try std.testing.expectEqual(FaultKind.drop, due_tick_1[0].kind);
+    try testing.expectEqual(@as(usize, 2), due_tick_1.len);
+    try testing.expectEqual(FaultKind.drop, due_tick_1[0].kind);
 
     const due_tick_3 = script.nextFaultsAt(.init(3));
-    try std.testing.expectEqual(@as(usize, 1), due_tick_3.len);
-    try std.testing.expectEqual(FaultKind.recover, due_tick_3[0].kind);
+    try testing.expectEqual(@as(usize, 1), due_tick_3.len);
+    try testing.expectEqual(FaultKind.recover, due_tick_3[0].kind);
 }

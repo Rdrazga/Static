@@ -6,6 +6,7 @@
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
+const testing = std.testing;
 const memory = @import("static_memory");
 const assert = std.debug.assert;
 
@@ -293,47 +294,47 @@ test "vec append and budget behavior" {
     // Goal: confirm appends succeed while budget permits growth.
     // Method: append two values and validate resulting length.
     var budget = try memory.budget.Budget.init(16);
-    var v = try Vec(u8).init(std.testing.allocator, .{ .budget = &budget });
+    var v = try Vec(u8).init(testing.allocator, .{ .budget = &budget });
     defer v.deinit();
 
     try v.append(1);
     try v.append(2);
-    try std.testing.expectEqual(@as(usize, 2), v.len());
+    try testing.expectEqual(@as(usize, 2), v.len());
 }
 
 test "vec pop returns last element or null when empty" {
     // Goal: validate LIFO pop semantics and empty-vector behavior.
     // Method: pop from empty, then append/pop two values back to empty.
-    var v = try Vec(u32).init(std.testing.allocator, .{ .budget = null });
+    var v = try Vec(u32).init(testing.allocator, .{ .budget = null });
     defer v.deinit();
 
-    try std.testing.expect(v.pop() == null);
+    try testing.expect(v.pop() == null);
     try v.append(10);
     try v.append(20);
-    try std.testing.expectEqual(@as(u32, 20), v.pop().?);
-    try std.testing.expectEqual(@as(u32, 10), v.pop().?);
-    try std.testing.expect(v.pop() == null);
-    try std.testing.expectEqual(@as(usize, 0), v.len());
+    try testing.expectEqual(@as(u32, 20), v.pop().?);
+    try testing.expectEqual(@as(u32, 10), v.pop().?);
+    try testing.expect(v.pop() == null);
+    try testing.expectEqual(@as(usize, 0), v.len());
 }
 
 test "vec ensureCapacity with initial_capacity" {
     // Goal: honor initial_capacity at construction time.
     // Method: create with initial capacity and assert len starts at zero.
-    var v = try Vec(u8).init(std.testing.allocator, .{ .initial_capacity = 8, .budget = null });
+    var v = try Vec(u8).init(testing.allocator, .{ .initial_capacity = 8, .budget = null });
     defer v.deinit();
-    try std.testing.expect(v.capacity() >= 8);
-    try std.testing.expectEqual(@as(usize, 0), v.len());
+    try testing.expect(v.capacity() >= 8);
+    try testing.expectEqual(@as(usize, 0), v.len());
 }
 
 test "vec budget exhaustion returns NoSpaceLeft" {
     // Goal: map budget exhaustion to NoSpaceLeft.
     // Method: constrain budget to one byte and append twice.
     var budget = try memory.budget.Budget.init(1);
-    var v = try Vec(u8).init(std.testing.allocator, .{ .budget = &budget });
+    var v = try Vec(u8).init(testing.allocator, .{ .budget = &budget });
     defer v.deinit();
     try v.append(1);
     // Second append requires more than 1 byte budget — should be NoSpaceLeft.
-    try std.testing.expectError(error.NoSpaceLeft, v.append(2));
+    try testing.expectError(error.NoSpaceLeft, v.append(2));
 }
 
 test "vec budget tracks logical reserved capacity" {
@@ -341,37 +342,37 @@ test "vec budget tracks logical reserved capacity" {
     // Method: append and assert budget usage equals `capacity * @sizeOf(T)`.
     var budget = try memory.budget.Budget.init(16);
     {
-        var v = try Vec(u8).init(std.testing.allocator, .{ .budget = &budget });
+        var v = try Vec(u8).init(testing.allocator, .{ .budget = &budget });
         defer v.deinit();
 
         try v.append(1);
-        try std.testing.expectEqual(v.capacity(), budget.used());
+        try testing.expectEqual(v.capacity(), budget.used());
         try v.append(2);
-        try std.testing.expectEqual(v.capacity(), budget.used());
+        try testing.expectEqual(v.capacity(), budget.used());
         try v.append(3);
-        try std.testing.expectEqual(v.capacity(), budget.used());
-        try std.testing.expect(v.capacity() >= 3);
+        try testing.expectEqual(v.capacity(), budget.used());
+        try testing.expect(v.capacity() >= 3);
     }
-    try std.testing.expectEqual(@as(usize, 0), budget.used());
+    try testing.expectEqual(@as(usize, 0), budget.used());
 }
 
 test "vec ensureCapacity is monotonic" {
     // Goal: ensure explicit capacity requests never shrink backing storage.
     // Method: grow then request smaller capacity and verify non-decreasing cap.
-    var v = try Vec(u8).init(std.testing.allocator, .{ .budget = null });
+    var v = try Vec(u8).init(testing.allocator, .{ .budget = null });
     defer v.deinit();
 
     try v.ensureCapacity(8);
     const grown = v.capacity();
     try v.ensureCapacity(4);
-    try std.testing.expect(v.capacity() >= grown);
+    try testing.expect(v.capacity() >= grown);
 }
 
 test "vec clear resets length but preserves capacity and budget" {
     // Goal: confirm clear resets logical length without releasing capacity or budget.
     // Method: append values, clear, then assert length is zero while capacity and budget are unchanged.
     var budget = try memory.budget.Budget.init(64);
-    var v = try Vec(u8).init(std.testing.allocator, .{ .budget = &budget });
+    var v = try Vec(u8).init(testing.allocator, .{ .budget = &budget });
     defer v.deinit();
 
     try v.append(1);
@@ -379,54 +380,54 @@ test "vec clear resets length but preserves capacity and budget" {
     try v.append(3);
     const cap_before = v.capacity();
     const budget_before = budget.used();
-    try std.testing.expect(cap_before > 0);
+    try testing.expect(cap_before > 0);
 
     v.clear();
-    try std.testing.expectEqual(@as(usize, 0), v.len());
-    try std.testing.expectEqual(cap_before, v.capacity());
-    try std.testing.expectEqual(budget_before, budget.used());
+    try testing.expectEqual(@as(usize, 0), v.len());
+    try testing.expectEqual(cap_before, v.capacity());
+    try testing.expectEqual(budget_before, budget.used());
 
     // Confirm the vec is reusable after clear.
     try v.append(4);
-    try std.testing.expectEqual(@as(usize, 1), v.len());
-    try std.testing.expectEqual(@as(u8, 4), v.items()[0]);
+    try testing.expectEqual(@as(usize, 1), v.len());
+    try testing.expectEqual(@as(u8, 4), v.items()[0]);
 }
 
 test "vec ensureCapacity detects element-size overflow" {
     // Goal: return Overflow rather than panicking or allocating on multiplication overflow.
     // Method: ask for a capacity which overflows `count * @sizeOf(T)` for `u16`.
-    var v = try Vec(u16).init(std.testing.allocator, .{ .budget = null });
+    var v = try Vec(u16).init(testing.allocator, .{ .budget = null });
     defer v.deinit();
 
     const max_count = std.math.maxInt(usize) / @sizeOf(u16);
-    try std.testing.expectError(error.Overflow, v.ensureCapacity(max_count + 1));
+    try testing.expectError(error.Overflow, v.ensureCapacity(max_count + 1));
 }
 
 test "vec clone produces independent copy" {
     // Goal: verify clone creates a separate copy; mutations are independent.
     // Method: clone, mutate clone, verify original unchanged.
-    var v = try Vec(u32).init(std.testing.allocator, .{ .budget = null });
+    var v = try Vec(u32).init(testing.allocator, .{ .budget = null });
     defer v.deinit();
     try v.append(10);
     try v.append(20);
 
     var c = try v.clone();
     defer c.deinit();
-    try std.testing.expectEqual(@as(usize, 2), c.len());
-    try std.testing.expectEqual(@as(u32, 10), c.items()[0]);
+    try testing.expectEqual(@as(usize, 2), c.len());
+    try testing.expectEqual(@as(u32, 10), c.items()[0]);
 
     try c.append(30);
-    try std.testing.expectEqual(@as(usize, 3), c.len());
-    try std.testing.expectEqual(@as(usize, 2), v.len());
+    try testing.expectEqual(@as(usize, 3), c.len());
+    try testing.expectEqual(@as(usize, 2), v.len());
 }
 
 test "vec const item access is read-only" {
-    var v = try Vec(u32).init(std.testing.allocator, .{ .budget = null });
+    var v = try Vec(u32).init(testing.allocator, .{ .budget = null });
     defer v.deinit();
     try v.append(10);
 
     const const_v: *const Vec(u32) = &v;
     const items = const_v.itemsConst();
-    try std.testing.expectEqual(@as(usize, 1), items.len);
-    try std.testing.expectEqual(@as(u32, 10), items[0]);
+    try testing.expectEqual(@as(usize, 1), items.len);
+    try testing.expectEqual(@as(u32, 10), items[0]);
 }

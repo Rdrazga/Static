@@ -1,6 +1,8 @@
 //! Human- and machine-readable export helpers for raw benchmark results.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const profile = @import("static_profile");
 const runner = @import("runner.zig");
 const stats = @import("stats.zig");
@@ -163,7 +165,7 @@ fn writeDerivedSummary(
     case_result: runner.BenchmarkCaseResult,
     derived: stats.BenchmarkStats,
 ) !void {
-    std.debug.assert(case_result.measure_iterations != 0);
+    assert(case_result.measure_iterations != 0);
 
     const iteration_count = case_result.measure_iterations;
     const mean_ns_per_op = nsPerOp(derived.mean_elapsed_ns, iteration_count);
@@ -185,7 +187,7 @@ fn writeDerivedSummary(
 }
 
 fn nsPerOp(elapsed_ns: u64, iteration_count: u32) f64 {
-    std.debug.assert(iteration_count != 0);
+    assert(iteration_count != 0);
     return @as(f64, @floatFromInt(elapsed_ns)) / @as(f64, @floatFromInt(iteration_count));
 }
 
@@ -216,12 +218,12 @@ test "text export prints samples and derived summary lines" {
         .case_results = &case_results,
     };
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeText(&aw.writer, result);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "mode: smoke\ncase alpha total_elapsed_ns=30 samples=2\n  sample 0 elapsed_ns=10 iteration_count=3\n  sample 1 elapsed_ns=20 iteration_count=3\n  derived mean_ns_per_op=5.000 median_ns_per_op=3.333 median_ops_per_s=300000000 p95_ns_per_op=6.667 p99_ns_per_op=6.667\n",
         out.items,
     );
@@ -246,12 +248,12 @@ test "text export config can suppress raw samples while keeping derived summary"
         .case_results = &case_results,
     };
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeTextWithConfig(&aw.writer, result, .{ .include_samples = false });
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "mode: full\ncase beta total_elapsed_ns=24 samples=2\n  derived mean_ns_per_op=6.000 median_ns_per_op=5.000 median_ops_per_s=200000000 p95_ns_per_op=7.000 p99_ns_per_op=7.000\n",
         out.items,
     );
@@ -277,12 +279,12 @@ test "json export uses stable field order" {
         .case_results = &case_results,
     };
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeJson(&aw.writer, result);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "{\"mode\":\"full\",\"cases\":[{\"name\":\"case\\\"one\",\"warmup_iterations\":0,\"measure_iterations\":2,\"total_elapsed_ns\":10,\"samples\":[{\"elapsed_ns\":10,\"iteration_count\":2}]}]}",
         out.items,
     );
@@ -295,18 +297,18 @@ test "csv and markdown export handle empty case lists" {
         .case_results = &empty_results,
     };
 
-    var csv_aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var csv_aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeCsv(&csv_aw.writer, result);
     var csv_out = csv_aw.toArrayList();
-    defer csv_out.deinit(std.testing.allocator);
+    defer csv_out.deinit(testing.allocator);
 
-    var md_aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var md_aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeMarkdown(&md_aw.writer, result);
     var md_out = md_aw.toArrayList();
-    defer md_out.deinit(std.testing.allocator);
+    defer md_out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings("case_name,sample_index,iteration_count,elapsed_ns\n", csv_out.items);
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings("case_name,sample_index,iteration_count,elapsed_ns\n", csv_out.items);
+    try testing.expectEqualStrings(
         "| case | sample | iteration_count | elapsed_ns |\n| --- | ---: | ---: | ---: |\n",
         md_out.items,
     );
@@ -330,12 +332,12 @@ test "csv export quotes case names with commas quotes and newlines" {
         .case_results = &case_results,
     };
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeCsv(&aw.writer, result);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "case_name,sample_index,iteration_count,elapsed_ns\n\"case,\"\"quoted\"\"\nnext\",0,1,10\n",
         out.items,
     );
@@ -359,12 +361,12 @@ test "markdown export escapes pipes and normalizes embedded newlines" {
         .case_results = &case_results,
     };
 
-    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    var aw: std.Io.Writer.Allocating = .init(testing.allocator);
     try writeMarkdown(&aw.writer, result);
     var out = aw.toArrayList();
-    defer out.deinit(std.testing.allocator);
+    defer out.deinit(testing.allocator);
 
-    try std.testing.expectEqualStrings(
+    try testing.expectEqualStrings(
         "| case | sample | iteration_count | elapsed_ns |\n| --- | ---: | ---: | ---: |\n| left\\|right<br>next\\\\tail | 0 | 2 | 12 |\n",
         out.items,
     );

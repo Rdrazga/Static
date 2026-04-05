@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_memory = @import("static_memory");
 const static_testing = @import("static_testing");
 
@@ -147,7 +149,7 @@ const Context = struct {
         if (self.slab_initialized) {
             self.slab.deinit();
         }
-        self.slab = Slab.init(std.testing.allocator, .{
+        self.slab = Slab.init(testing.allocator, .{
             .class_sizes = &[_]u32{ SmallClassSize, LargeClassSize },
             .class_counts = &[_]u32{ 1, 1 },
             .allow_large_fallback = false,
@@ -174,10 +176,10 @@ const Context = struct {
         self.expected_overflow_count = 0;
 
         const report = self.slab.report();
-        std.debug.assert(report.capacity == SlabCapacityBytes);
-        std.debug.assert(report.used == 0);
-        std.debug.assert(report.high_water == 0);
-        std.debug.assert(report.overflow_count == 0);
+        assert(report.capacity == SlabCapacityBytes);
+        assert(report.used == 0);
+        assert(report.high_water == 0);
+        assert(report.overflow_count == 0);
     }
 
     fn nextAction(
@@ -186,8 +188,8 @@ const Context = struct {
         action_index: u32,
         _: seed.Seed,
     ) error{}!model.RecordedAction {
-        std.debug.assert(run_identity.case_index < ScenarioCount);
-        std.debug.assert(action_index < ActionCount);
+        assert(run_identity.case_index < ScenarioCount);
+        assert(action_index < ActionCount);
         return action_table[run_identity.case_index][action_index];
     }
 
@@ -224,24 +226,24 @@ const Context = struct {
         const state_check = self.validate();
         if (!state_check.passed) return state_check;
         const report = self.slab.report();
-        std.debug.assert(self.small_block == null);
-        std.debug.assert(self.large_block == null);
-        std.debug.assert(self.small_stale_block == null);
-        std.debug.assert(self.large_stale_block == null);
-        std.debug.assert(self.saw_small_exhaustion);
-        std.debug.assert(self.saw_large_exhaustion);
-        std.debug.assert(self.saw_small_reuse);
-        std.debug.assert(self.saw_large_reuse);
-        std.debug.assert(self.saw_unsupported_mid);
-        std.debug.assert(self.saw_unsupported_large);
-        std.debug.assert(self.saw_small_invalid_align);
-        std.debug.assert(self.saw_large_invalid_align);
-        std.debug.assert(self.saw_small_double_free);
-        std.debug.assert(self.saw_large_double_free);
-        std.debug.assert(report.capacity == SlabCapacityBytes);
-        std.debug.assert(report.used == 0);
-        std.debug.assert(report.high_water == SlabCapacityBytes);
-        std.debug.assert(report.overflow_count == 2);
+        assert(self.small_block == null);
+        assert(self.large_block == null);
+        assert(self.small_stale_block == null);
+        assert(self.large_stale_block == null);
+        assert(self.saw_small_exhaustion);
+        assert(self.saw_large_exhaustion);
+        assert(self.saw_small_reuse);
+        assert(self.saw_large_reuse);
+        assert(self.saw_unsupported_mid);
+        assert(self.saw_unsupported_large);
+        assert(self.saw_small_invalid_align);
+        assert(self.saw_large_invalid_align);
+        assert(self.saw_small_double_free);
+        assert(self.saw_large_double_free);
+        assert(report.capacity == SlabCapacityBytes);
+        assert(report.used == 0);
+        assert(report.high_water == SlabCapacityBytes);
+        assert(report.overflow_count == 2);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(
             @as(u128, report.capacity) ^
                 (@as(u128, report.high_water) << 32) ^
@@ -274,16 +276,16 @@ const Context = struct {
     }
 
     fn allocSmall(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.small_block == null);
-        std.debug.assert(self.slab.report().capacity == SlabCapacityBytes);
+        assert(self.small_block == null);
+        assert(self.slab.report().capacity == SlabCapacityBytes);
         const block = self.slab.alloc(SmallAllocLen, SmallClassAlignment) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
-        std.debug.assert(block.len == SmallAllocLen);
+        assert(block.len == SmallAllocLen);
         self.small_block = block;
         if (self.small_initial_ptr == 0) {
             self.small_initial_ptr = @intFromPtr(block.ptr);
-            std.debug.assert(self.small_initial_ptr != 0);
+            assert(self.small_initial_ptr != 0);
         }
         self.expected_used_bytes += SmallClassSize;
         self.updateHighWater();
@@ -291,16 +293,16 @@ const Context = struct {
     }
 
     fn allocLarge(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.large_block == null);
-        std.debug.assert(self.slab.report().capacity == SlabCapacityBytes);
+        assert(self.large_block == null);
+        assert(self.slab.report().capacity == SlabCapacityBytes);
         const block = self.slab.alloc(LargeAllocLen, LargeClassAlignment) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
-        std.debug.assert(block.len == LargeAllocLen);
+        assert(block.len == LargeAllocLen);
         self.large_block = block;
         if (self.large_initial_ptr == 0) {
             self.large_initial_ptr = @intFromPtr(block.ptr);
-            std.debug.assert(self.large_initial_ptr != 0);
+            assert(self.large_initial_ptr != 0);
         }
         self.expected_used_bytes += LargeClassSize;
         self.updateHighWater();
@@ -308,7 +310,7 @@ const Context = struct {
     }
 
     fn exhaustSmall(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.small_block != null);
+        assert(self.small_block != null);
         tryExpectNoSpaceLeft(self.slab.alloc(SmallAllocLen, SmallClassAlignment), &self.saw_small_exhaustion) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
@@ -317,7 +319,7 @@ const Context = struct {
     }
 
     fn exhaustLarge(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.large_block != null);
+        assert(self.large_block != null);
         tryExpectNoSpaceLeft(self.slab.alloc(LargeAllocLen, LargeClassAlignment), &self.saw_large_exhaustion) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
@@ -377,7 +379,7 @@ const Context = struct {
 
     fn freeSmallForReuse(self: *@This()) checker.CheckResult {
         const live = self.small_block orelse return checker.CheckResult.fail(&slab_violation, null);
-        std.debug.assert(self.small_stale_block == null);
+        assert(self.small_stale_block == null);
         self.slab.free(live, SmallClassAlignment) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
@@ -401,13 +403,13 @@ const Context = struct {
     }
 
     fn reuseSmall(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.small_block == null);
+        assert(self.small_block == null);
         const block = self.slab.alloc(SmallAllocLen, SmallClassAlignment) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
-        std.debug.assert(block.len == SmallAllocLen);
-        std.debug.assert(self.small_initial_ptr != 0);
-        std.debug.assert(@intFromPtr(block.ptr) == self.small_initial_ptr);
+        assert(block.len == SmallAllocLen);
+        assert(self.small_initial_ptr != 0);
+        assert(@intFromPtr(block.ptr) == self.small_initial_ptr);
         self.small_block = block;
         self.saw_small_reuse = true;
         self.expected_used_bytes += SmallClassSize;
@@ -428,7 +430,7 @@ const Context = struct {
 
     fn freeLargeForReuse(self: *@This()) checker.CheckResult {
         const live = self.large_block orelse return checker.CheckResult.fail(&slab_violation, null);
-        std.debug.assert(self.large_stale_block == null);
+        assert(self.large_stale_block == null);
         self.slab.free(live, LargeClassAlignment) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
@@ -452,13 +454,13 @@ const Context = struct {
     }
 
     fn reuseLarge(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.large_block == null);
+        assert(self.large_block == null);
         const block = self.slab.alloc(LargeAllocLen, LargeClassAlignment) catch {
             return checker.CheckResult.fail(&slab_violation, null);
         };
-        std.debug.assert(block.len == LargeAllocLen);
-        std.debug.assert(self.large_initial_ptr != 0);
-        std.debug.assert(@intFromPtr(block.ptr) == self.large_initial_ptr);
+        assert(block.len == LargeAllocLen);
+        assert(self.large_initial_ptr != 0);
+        assert(@intFromPtr(block.ptr) == self.large_initial_ptr);
         self.large_block = block;
         self.saw_large_reuse = true;
         self.expected_used_bytes += LargeClassSize;
@@ -480,25 +482,25 @@ const Context = struct {
     fn validate(self: *const @This()) checker.CheckResult {
         const report = self.slab.report();
         const expected_used = self.expected_used_bytes;
-        std.debug.assert(expected_used <= SlabCapacityBytes);
-        std.debug.assert(report.capacity == SlabCapacityBytes);
-        std.debug.assert(report.used == expected_used);
-        std.debug.assert(report.high_water == self.expected_high_water_bytes);
-        std.debug.assert(report.overflow_count == self.expected_overflow_count);
+        assert(expected_used <= SlabCapacityBytes);
+        assert(report.capacity == SlabCapacityBytes);
+        assert(report.used == expected_used);
+        assert(report.high_water == self.expected_high_water_bytes);
+        assert(report.overflow_count == self.expected_overflow_count);
 
         if (self.small_block) |block| {
-            std.debug.assert(block.len == SmallAllocLen);
-            std.debug.assert(@intFromPtr(block.ptr) == self.small_initial_ptr);
+            assert(block.len == SmallAllocLen);
+            assert(@intFromPtr(block.ptr) == self.small_initial_ptr);
         }
         if (self.large_block) |block| {
-            std.debug.assert(block.len == LargeAllocLen);
-            std.debug.assert(@intFromPtr(block.ptr) == self.large_initial_ptr);
+            assert(block.len == LargeAllocLen);
+            assert(@intFromPtr(block.ptr) == self.large_initial_ptr);
         }
         if (self.small_stale_block) |block| {
-            std.debug.assert(block.len == SmallAllocLen);
+            assert(block.len == SmallAllocLen);
         }
         if (self.large_stale_block) |block| {
-            std.debug.assert(block.len == LargeAllocLen);
+            assert(block.len == LargeAllocLen);
         }
 
         return checker.CheckResult.pass(checker.CheckpointDigest.init(@as(u128, report.used) ^ (@as(u128, report.overflow_count) << 32) ^ (@as(u128, report.high_water) << 64)));
@@ -508,7 +510,7 @@ const Context = struct {
         if (self.expected_used_bytes > self.expected_high_water_bytes) {
             self.expected_high_water_bytes = self.expected_used_bytes;
         }
-        std.debug.assert(self.expected_high_water_bytes >= self.expected_used_bytes);
+        assert(self.expected_high_water_bytes >= self.expected_used_bytes);
     }
 };
 
@@ -558,8 +560,8 @@ test "slab model covers class routing reuse exhaustion and invalid frees" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -568,8 +570,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 

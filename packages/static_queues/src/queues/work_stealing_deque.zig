@@ -4,6 +4,8 @@
 //! Thread safety: owner uses pushBottom/popBottom (LIFO); thieves use stealTop (FIFO); all guarded by one mutex.
 //! Blocking behavior: non-blocking; returns `error.WouldBlock` when full or empty.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("ring_buffer.zig");
 const memory = @import("static_memory");
 const sync = @import("static_sync");
@@ -17,8 +19,8 @@ pub fn WorkStealingDeque(comptime T: type) type {
     // addressable slots; ZSTs have no storage and would make length arithmetic
     // meaningless.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -61,16 +63,16 @@ pub fn WorkStealingDeque(comptime T: type) type {
                 .buf = buf,
             };
             // Postcondition: deque starts empty with a valid buffer.
-            std.debug.assert(self.len_value == 0);
-            std.debug.assert(self.buf.len == cfg.capacity);
+            assert(self.len_value == 0);
+            assert(self.buf.len == cfg.capacity);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: buffer must still be valid (not already freed).
-            std.debug.assert(self.buf.len > 0);
+            assert(self.buf.len > 0);
             // Precondition: len_value is bounded before teardown.
-            std.debug.assert(self.len_value <= self.buf.len);
+            assert(self.len_value <= self.buf.len);
             if (self.budget) |budget| {
                 budget.release(qi.bytesForItems(self.buf.len, @sizeOf(T)));
             }
@@ -80,8 +82,8 @@ pub fn WorkStealingDeque(comptime T: type) type {
 
         pub fn capacity(self: *const Self) usize {
             // Invariant: a valid deque always has a non-zero capacity.
-            std.debug.assert(self.buf.len > 0);
-            std.debug.assert(@intFromPtr(self.buf.ptr) != 0);
+            assert(self.buf.len > 0);
+            assert(@intFromPtr(self.buf.ptr) != 0);
             return self.buf.len;
         }
 
@@ -89,14 +91,14 @@ pub fn WorkStealingDeque(comptime T: type) type {
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
             // Invariant: len_value is always bounded by the allocated buffer.
-            std.debug.assert(self.len_value <= self.buf.len);
+            assert(self.len_value <= self.buf.len);
             return self.len_value;
         }
 
         pub fn isFull(self: *const Self) bool {
             var guard = qi.lockConstMutex(&self.mutex);
             defer guard.unlock();
-            std.debug.assert(self.len_value <= self.buf.len);
+            assert(self.len_value <= self.buf.len);
             return self.len_value == self.buf.len;
         }
 
@@ -106,15 +108,15 @@ pub fn WorkStealingDeque(comptime T: type) type {
             defer self.mutex.unlock();
 
             // Precondition: len_value must not exceed capacity.
-            std.debug.assert(self.len_value <= self.buf.len);
+            assert(self.len_value <= self.buf.len);
             // Precondition: head is a valid ring index.
-            std.debug.assert(self.head < self.buf.len);
+            assert(self.head < self.buf.len);
             if (self.len_value == self.buf.len) return error.WouldBlock;
             const tail = (self.head + self.len_value) % self.buf.len;
             self.buf[tail] = value;
             self.len_value += 1;
             // Postcondition: the deque is non-empty after a successful push.
-            std.debug.assert(self.len_value > 0);
+            assert(self.len_value > 0);
         }
 
         /// Pops work from the owner side (bottom) using LIFO order.
@@ -123,14 +125,14 @@ pub fn WorkStealingDeque(comptime T: type) type {
             defer self.mutex.unlock();
 
             // Precondition: len_value must be bounded by capacity.
-            std.debug.assert(self.len_value <= self.buf.len);
+            assert(self.len_value <= self.buf.len);
             if (self.len_value == 0) return error.WouldBlock;
             const old_len = self.len_value;
             const tail = (self.head + self.len_value - 1) % self.buf.len;
             const value = self.buf[tail];
             self.len_value -= 1;
             // Postcondition: len decreased by exactly one.
-            std.debug.assert(self.len_value == old_len - 1);
+            assert(self.len_value == old_len - 1);
             return value;
         }
 
@@ -140,45 +142,45 @@ pub fn WorkStealingDeque(comptime T: type) type {
             defer self.mutex.unlock();
 
             // Precondition: head is a valid ring index.
-            std.debug.assert(self.head < self.buf.len);
+            assert(self.head < self.buf.len);
             // Precondition: len_value is bounded by capacity.
-            std.debug.assert(self.len_value <= self.buf.len);
+            assert(self.len_value <= self.buf.len);
             if (self.len_value == 0) return error.WouldBlock;
             const old_len = self.len_value;
             const value = self.buf[self.head];
             self.head = (self.head + 1) % self.buf.len;
             self.len_value -= 1;
             // Postcondition: len decreased by exactly one.
-            std.debug.assert(self.len_value == old_len - 1);
+            assert(self.len_value == old_len - 1);
             // Postcondition: head remains a valid ring index after advancing.
-            std.debug.assert(self.head < self.buf.len);
+            assert(self.head < self.buf.len);
             return value;
         }
     };
 }
 
 test "work_stealing deque owner pop is LIFO and steal is FIFO" {
-    var d = try WorkStealingDeque(u8).init(std.testing.allocator, .{ .capacity = 8 });
+    var d = try WorkStealingDeque(u8).init(testing.allocator, .{ .capacity = 8 });
     defer d.deinit();
 
     try d.pushBottom(1);
     try d.pushBottom(2);
     try d.pushBottom(3);
 
-    try std.testing.expectEqual(@as(u8, 3), try d.popBottom());
-    try std.testing.expectEqual(@as(u8, 1), try d.stealTop());
-    try std.testing.expectEqual(@as(u8, 2), try d.popBottom());
-    try std.testing.expectError(error.WouldBlock, d.popBottom());
+    try testing.expectEqual(@as(u8, 3), try d.popBottom());
+    try testing.expectEqual(@as(u8, 1), try d.stealTop());
+    try testing.expectEqual(@as(u8, 2), try d.popBottom());
+    try testing.expectError(error.WouldBlock, d.popBottom());
 }
 
 test "work_stealing deque returns WouldBlock when full" {
-    var d = try WorkStealingDeque(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var d = try WorkStealingDeque(u8).init(testing.allocator, .{ .capacity = 2 });
     defer d.deinit();
 
-    try std.testing.expect(!d.isFull());
+    try testing.expect(!d.isFull());
     try d.pushBottom(10);
-    try std.testing.expect(!d.isFull());
+    try testing.expect(!d.isFull());
     try d.pushBottom(11);
-    try std.testing.expect(d.isFull());
-    try std.testing.expectError(error.WouldBlock, d.pushBottom(12));
+    try testing.expect(d.isFull());
+    try testing.expectError(error.WouldBlock, d.pushBottom(12));
 }

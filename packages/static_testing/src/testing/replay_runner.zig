@@ -12,6 +12,8 @@
 //! it for classification in this phase.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const checker = @import("checker.zig");
 const identity = @import("identity.zig");
@@ -61,7 +63,7 @@ pub fn ReplayTarget(comptime ReplayError: type) type {
 
 comptime {
     core.errors.assertVocabularySubset(ReplayRunError);
-    std.debug.assert(std.meta.fields(ReplayOutcome).len == 3);
+    assert(std.meta.fields(ReplayOutcome).len == 3);
 }
 
 /// Decode and replay an artifact against a caller-provided target.
@@ -107,9 +109,9 @@ fn validateIdentityExpectation(
 
 fn assertCheckResult(result: checker.CheckResult) void {
     if (result.passed) {
-        std.debug.assert(result.violations.len == 0);
+        assert(result.violations.len == 0);
     } else {
-        std.debug.assert(result.violations.len > 0);
+        assert(result.violations.len > 0);
     }
 }
 
@@ -174,7 +176,7 @@ test "runReplay returns matched when replay reproduces the trace and passes" {
         .expected_identity_hash = identity.identityHash(artifact.identity),
     });
 
-    try std.testing.expectEqual(ReplayOutcome.matched, outcome);
+    try testing.expectEqual(ReplayOutcome.matched, outcome);
 }
 
 test "runReplay returns violation_reproduced when replayed trace matches and checker fails" {
@@ -210,7 +212,7 @@ test "runReplay returns violation_reproduced when replayed trace matches and che
         .run_fn = Context.run,
     }, .{});
 
-    try std.testing.expectEqual(ReplayOutcome.violation_reproduced, outcome);
+    try testing.expectEqual(ReplayOutcome.violation_reproduced, outcome);
 }
 
 test "runReplay rejects identity hash mismatches" {
@@ -238,7 +240,7 @@ test "runReplay rejects identity hash mismatches" {
         }
     };
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         runReplay(error{}, artifact_bytes, .{
             .context = undefined,
@@ -281,7 +283,7 @@ test "runReplay returns trace_mismatch when deterministic replay diverges" {
         .run_fn = Context.run,
     }, .{});
 
-    try std.testing.expectEqual(ReplayOutcome.trace_mismatch, outcome);
+    try testing.expectEqual(ReplayOutcome.trace_mismatch, outcome);
 }
 
 test "runReplay ignores checkpoint digest mismatches in the current artifact phase" {
@@ -314,5 +316,5 @@ test "runReplay ignores checkpoint digest mismatches in the current artifact pha
         .run_fn = Context.run,
     }, .{});
 
-    try std.testing.expectEqual(ReplayOutcome.matched, outcome);
+    try testing.expectEqual(ReplayOutcome.matched, outcome);
 }

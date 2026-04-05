@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const spatial = @import("static_spatial");
 
 const AABB3 = spatial.AABB3;
@@ -14,7 +15,7 @@ fn containsValue(values: []const u32, needle: u32) bool {
 
 fn expectSubset(values: []const u32, expected: []const u32) !void {
     for (values) |value| {
-        try std.testing.expect(containsValue(expected, value));
+        try testing.expect(containsValue(expected, value));
     }
 }
 
@@ -28,17 +29,17 @@ test "BVH queryRay reports total hits when output truncates" {
     };
     const ray = Ray3.init(-1.0, 0.5, 0.5, 1.0, 0.0, 0.0);
 
-    var bvh = try BVH.build(std.testing.allocator, &items, .{ .max_leaf_items = 2 });
-    defer bvh.deinit(std.testing.allocator);
+    var bvh = try BVH.build(testing.allocator, &items, .{ .max_leaf_items = 2 });
+    defer bvh.deinit(testing.allocator);
 
     var full_hits: [4]u32 = undefined;
     const full_count = bvh.queryRay(ray, &full_hits);
-    try std.testing.expectEqual(@as(u32, 4), full_count);
+    try testing.expectEqual(@as(u32, 4), full_count);
     try expectSubset(full_hits[0..full_count], &.{ 10, 20, 30, 40 });
 
     var truncated_hits: [2]u32 = undefined;
     const truncated_count = bvh.queryRay(ray, &truncated_hits);
-    try std.testing.expect(truncated_count > truncated_hits.len);
-    try std.testing.expectEqual(@as(u32, 4), truncated_count);
+    try testing.expect(truncated_count > truncated_hits.len);
+    try testing.expectEqual(@as(u32, 4), truncated_count);
     try expectSubset(truncated_hits[0..], full_hits[0..full_count]);
 }

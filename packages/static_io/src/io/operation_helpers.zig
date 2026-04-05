@@ -5,6 +5,8 @@
 //! Blocking behavior: non-blocking, aside from monotonic clock reads in `elapsedSince`.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const backend = @import("backend.zig");
 const types = @import("types.zig");
 
@@ -101,7 +103,7 @@ pub fn operationTargetHandles(operation: types.Operation) TargetHandles {
 }
 
 pub fn operationUsesHandle(operation: types.Operation, handle: types.Handle) bool {
-    std.debug.assert(handle.isValid());
+    assert(handle.isValid());
     const targets = operationTargetHandles(operation);
     return targets.a == handle or targets.b == handle;
 }
@@ -179,7 +181,7 @@ fn endpointPort(endpoint: types.Endpoint) u16 {
 test "validate operation rejects invalid connect endpoint and empty writes" {
     var bytes: [4]u8 = .{ 1, 2, 3, 4 };
     var write_buffer = types.Buffer{ .bytes = &bytes };
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         validateOperation(.{ .connect = .{
             .stream = .{ .handle = .{ .index = 1, .generation = 1 } },
@@ -187,7 +189,7 @@ test "validate operation rejects invalid connect endpoint and empty writes" {
             .timeout_ns = null,
         } }),
     );
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         validateOperation(.{ .stream_write = .{
             .stream = .{ .handle = .{ .index = 1, .generation = 1 } },
@@ -212,10 +214,10 @@ test "simple completion preserves target handle and endpoint metadata" {
     } };
 
     const completion = makeSimpleCompletion(11, operation, .timeout, .timeout);
-    try std.testing.expectEqual(@as(types.OperationId, 11), completion.operation_id);
-    try std.testing.expectEqual(types.OperationTag.connect, completion.tag);
-    try std.testing.expectEqual(@as(?types.Handle, .{ .index = 2, .generation = 7 }), completion.handle);
-    try std.testing.expectEqual(@as(?types.Endpoint, .{ .ipv4 = .{ .address = .init(127, 0, 0, 1), .port = 9000 } }), completion.endpoint);
+    try testing.expectEqual(@as(types.OperationId, 11), completion.operation_id);
+    try testing.expectEqual(types.OperationTag.connect, completion.tag);
+    try testing.expectEqual(@as(?types.Handle, .{ .index = 2, .generation = 7 }), completion.handle);
+    try testing.expectEqual(@as(?types.Endpoint, .{ .ipv4 = .{ .address = .init(127, 0, 0, 1), .port = 9000 } }), completion.endpoint);
 }
 
 test "operation target handles include both accept endpoints" {
@@ -226,8 +228,8 @@ test "operation target handles include both accept endpoints" {
     } };
 
     const targets = operationTargetHandles(operation);
-    try std.testing.expectEqual(@as(?types.Handle, .{ .index = 3, .generation = 4 }), targets.a);
-    try std.testing.expectEqual(@as(?types.Handle, .{ .index = 9, .generation = 5 }), targets.b);
-    try std.testing.expect(operationUsesHandle(operation, targets.a.?));
-    try std.testing.expect(operationUsesHandle(operation, targets.b.?));
+    try testing.expectEqual(@as(?types.Handle, .{ .index = 3, .generation = 4 }), targets.a);
+    try testing.expectEqual(@as(?types.Handle, .{ .index = 9, .generation = 5 }), targets.b);
+    try testing.expect(operationUsesHandle(operation, targets.a.?));
+    try testing.expect(operationUsesHandle(operation, targets.b.?));
 }

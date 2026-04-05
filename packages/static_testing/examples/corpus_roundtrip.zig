@@ -1,6 +1,7 @@
 //! Demonstrates deterministic corpus persistence and replay-artifact reload.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -56,10 +57,10 @@ pub fn main() !void {
         &read_buffer,
     );
 
-    std.debug.assert(written.identity_hash == read_entry.meta.identity_hash);
-    std.debug.assert(std.mem.eql(u8, read_entry.meta.entry_name, written.entry_name));
-    std.debug.assert(read_entry.artifact.trace_metadata.event_count == trace_metadata.event_count);
-    std.debug.assert(read_entry.artifact.trace_metadata.last_sequence_no == trace_metadata.last_sequence_no);
+    assert(written.identity_hash == read_entry.meta.identity_hash);
+    assert(std.mem.eql(u8, read_entry.meta.entry_name, written.entry_name));
+    assert(read_entry.artifact.trace_metadata.event_count == trace_metadata.event_count);
+    assert(read_entry.artifact.trace_metadata.last_sequence_no == trace_metadata.last_sequence_no);
     std.debug.print("corpus entry: {s}\n", .{written.entry_name});
 }
 

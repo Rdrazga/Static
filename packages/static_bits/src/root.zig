@@ -13,6 +13,7 @@
 //! - This package must not grow checksum, framing, zigzag-policy, or schema helpers.
 
 const std = @import("std");
+const testing = std.testing;
 pub const core = @import("static_core");
 
 pub const endian = @import("bits/endian.zig");
@@ -32,27 +33,27 @@ test {
 
 test "public API exports are wired consistently" {
     var bytes = [_]u8{ 0x34, 0x12 };
-    try std.testing.expectEqual(@as(u16, 0x1234), try endian.readInt(&bytes, 0, u16, .little));
-    try std.testing.expectEqual(@as(u16, 0x1234), endian.readIntAt(u16, &bytes, 0, .little));
-    try std.testing.expectEqual(@as(u8, 7), try cast.castInt(u8, @as(u16, 7)));
+    try testing.expectEqual(@as(u16, 0x1234), try endian.readInt(&bytes, 0, u16, .little));
+    try testing.expectEqual(@as(u16, 0x1234), endian.readIntAt(u16, &bytes, 0, .little));
+    try testing.expectEqual(@as(u8, 7), try cast.castInt(u8, @as(u16, 7)));
 
     var reader = cursor.ByteReader.init(&bytes);
-    try std.testing.expectEqual(@as(u8, 0x34), try reader.readByte());
+    try testing.expectEqual(@as(u8, 0x34), try reader.readByte());
 
     var writer = cursor.ByteWriter.init(&bytes);
     try varint.writeUleb128(&writer, 0x34);
-    try std.testing.expectEqualSlices(u8, bytes[0..writer.position()], writer.writtenSlice());
+    try testing.expectEqualSlices(u8, bytes[0..writer.position()], writer.writtenSlice());
     const extracted = try bitfield.extractBits(u8, bytes[0], 2, 3);
-    try std.testing.expectEqual(@as(u8, 0b101), extracted);
+    try testing.expectEqual(@as(u8, 0b101), extracted);
     const extracted_ct = bitfield.extractBitsCt(u8, bytes[0], 2, 3);
-    try std.testing.expectEqual(extracted, extracted_ct);
+    try testing.expectEqual(extracted, extracted_ct);
 
     var peek_bytes = [_]u8{ 0xAB, 0xCD };
     var peek_reader = cursor.ByteReader.init(&peek_bytes);
-    try std.testing.expectEqual(@as(u8, 0xAB), try peek_reader.peekByte());
-    try std.testing.expectEqual(@as(u16, 0xCDAB), try peek_reader.peekInt(u16, .little));
-    try std.testing.expectEqual(@as(usize, 0), peek_reader.position());
+    try testing.expectEqual(@as(u8, 0xAB), try peek_reader.peekByte());
+    try testing.expectEqual(@as(u16, 0xCDAB), try peek_reader.peekInt(u16, .little));
+    try testing.expectEqual(@as(usize, 0), peek_reader.position());
 
     try endian.storeInt(&peek_bytes, @as(u16, 0x1234), .big);
-    try std.testing.expectEqual(@as(u16, 0x1234), try endian.loadInt(u16, &peek_bytes, .big));
+    try testing.expectEqual(@as(u16, 0x1234), try endian.loadInt(u16, &peek_bytes, .big));
 }

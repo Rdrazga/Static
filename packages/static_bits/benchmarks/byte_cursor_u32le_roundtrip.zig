@@ -1,6 +1,7 @@
 //! `static_bits` byte-cursor little-endian roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_bits = @import("static_bits");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -30,8 +31,8 @@ const CursorContext = struct {
 
         context.value +%= 0x9E37_79B9;
         context.sink = bench.case.blackBox(decoded);
-        std.debug.assert(context.sink == decoded);
-        std.debug.assert(reader.position() == context.bytes.len);
+        assert(context.sink == decoded);
+        assert(reader.position() == context.bytes.len);
     }
 };
 
@@ -81,10 +82,10 @@ fn validateSemanticPreflight() void {
     var bytes = [_]u8{0} ** 4;
     var writer = static_bits.cursor.ByteWriter.init(&bytes);
     writer.writeU32Le(0x4433_2211) catch unreachable;
-    std.debug.assert(std.mem.eql(u8, &bytes, &[_]u8{ 0x11, 0x22, 0x33, 0x44 }));
+    assert(std.mem.eql(u8, &bytes, &[_]u8{ 0x11, 0x22, 0x33, 0x44 }));
 
     var reader = static_bits.cursor.ByteReader.init(&bytes);
     const decoded = reader.readU32Le() catch unreachable;
-    std.debug.assert(decoded == 0x4433_2211);
-    std.debug.assert(reader.position() == bytes.len);
+    assert(decoded == 0x4433_2211);
+    assert(reader.position() == bytes.len);
 }

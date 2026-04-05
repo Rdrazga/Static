@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const spatial = @import("static_spatial");
 
 pub fn main() !void {
@@ -23,16 +24,16 @@ pub fn main() !void {
     );
 
     const point_hits = grid.queryPoint(1.0, 1.0, 1.0);
-    std.debug.assert(point_hits.len == 2);
+    assert(point_hits.len == 2);
 
     var out: [16]u32 = undefined;
     const total = grid.queryAABB(
         spatial.AABB3.init(0.0, 0.0, 0.0, 8.0, 8.0, 8.0),
         out[0..],
     );
-    std.debug.assert(total == 9);
+    assert(total == 9);
 
     const removed = grid.remove(1.0, 1.0, 1.0, 10);
-    std.debug.assert(removed);
-    std.debug.assert(grid.queryPoint(1.0, 1.0, 1.0).len == 1);
+    assert(removed);
+    assert(grid.queryPoint(1.0, 1.0, 1.0).len == 1);
 }

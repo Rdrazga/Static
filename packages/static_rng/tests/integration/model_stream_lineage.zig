@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_rng = @import("static_rng");
 const static_testing = @import("static_testing");
 
@@ -37,13 +39,13 @@ const PcgSlot = struct {
     fn reset(self: *@This()) void {
         self.live = null;
         self.reference = null;
-        std.debug.assert(self.live == null);
-        std.debug.assert(self.reference == null);
+        assert(self.live == null);
+        assert(self.reference == null);
     }
 
     fn active(self: *const @This()) bool {
-        std.debug.assert((self.live == null) == (self.reference == null));
-        std.debug.assert(self.live != null or self.reference == null);
+        assert((self.live == null) == (self.reference == null));
+        assert(self.live != null or self.reference == null);
         return self.live != null;
     }
 };
@@ -55,13 +57,13 @@ const XorSlot = struct {
     fn reset(self: *@This()) void {
         self.live = null;
         self.reference = null;
-        std.debug.assert(self.live == null);
-        std.debug.assert(self.reference == null);
+        assert(self.live == null);
+        assert(self.reference == null);
     }
 
     fn active(self: *const @This()) bool {
-        std.debug.assert((self.live == null) == (self.reference == null));
-        std.debug.assert(self.live != null or self.reference == null);
+        assert((self.live == null) == (self.reference == null));
+        assert(self.live != null or self.reference == null);
         return self.live != null;
     }
 };
@@ -79,8 +81,8 @@ const Context = struct {
         self.xor_parent.reset();
         self.xor_child.reset();
         self.consumer_digest = 0;
-        std.debug.assert(!self.pcg_parent.active());
-        std.debug.assert(!self.xor_parent.active());
+        assert(!self.pcg_parent.active());
+        assert(!self.xor_parent.active());
     }
 
     fn validate(self: *@This()) checker.CheckResult {
@@ -107,8 +109,8 @@ const Context = struct {
             digest = support.foldDigest(digest, live.s1);
         }
 
-        std.debug.assert(digest != 0 or self.consumer_digest == 0);
-        std.debug.assert(self.consumer_digest == 0 or digest != 0);
+        assert(digest != 0 or self.consumer_digest == 0);
+        assert(self.consumer_digest == 0 or digest != 0);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(digest));
     }
 
@@ -135,8 +137,8 @@ const Context = struct {
         const sequence = support.sequenceFrom(action_value, 0x5050_4347_5f51_5545);
         self.pcg_parent.live = static_rng.Pcg32.init(seed, sequence);
         self.pcg_parent.reference = support.ReferencePcg32.init(seed, sequence);
-        std.debug.assert(self.pcg_parent.active());
-        std.debug.assert(self.pcg_parent.live.?.inc == self.pcg_parent.reference.?.inc);
+        assert(self.pcg_parent.active());
+        assert(self.pcg_parent.live.?.inc == self.pcg_parent.reference.?.inc);
         return self.validate();
     }
 
@@ -144,8 +146,8 @@ const Context = struct {
         const seed = support.seedFrom(action_value, 0x584f_524f_5f53_4545);
         self.xor_parent.live = static_rng.Xoroshiro128Plus.init(seed);
         self.xor_parent.reference = support.ReferenceXoroshiro128Plus.init(seed);
-        std.debug.assert(self.xor_parent.active());
-        std.debug.assert(self.xor_parent.live.?.s0 != 0 or self.xor_parent.live.?.s1 != 0);
+        assert(self.xor_parent.active());
+        assert(self.xor_parent.live.?.s0 != 0 or self.xor_parent.live.?.s1 != 0);
         return self.validate();
     }
 
@@ -173,8 +175,8 @@ const Context = struct {
         if (!self.pcg_parent.active()) return self.validate();
         self.pcg_child.live = self.pcg_parent.live.?.split();
         self.pcg_child.reference = self.pcg_parent.reference.?.split();
-        std.debug.assert(self.pcg_child.active());
-        std.debug.assert(self.pcg_parent.active());
+        assert(self.pcg_child.active());
+        assert(self.pcg_parent.active());
         return self.validate();
     }
 
@@ -199,8 +201,8 @@ const Context = struct {
         if (!self.xor_parent.active()) return self.validate();
         self.xor_child.live = self.xor_parent.live.?.split();
         self.xor_child.reference = self.xor_parent.reference.?.split();
-        std.debug.assert(self.xor_child.active());
-        std.debug.assert(self.xor_parent.active());
+        assert(self.xor_child.active());
+        assert(self.xor_parent.active());
         return self.validate();
     }
 
@@ -276,8 +278,8 @@ test "static_rng stream lineage stays aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 64), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(@as(u32, 64), summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(

@@ -11,6 +11,7 @@
 //! enforced via `std.debug.assert` — programmer errors per agents.md §3.10.1.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const scalar = @import("scalar.zig");
 
 pub const Vec2 = extern struct {
@@ -19,7 +20,7 @@ pub const Vec2 = extern struct {
 
     comptime {
         // Compile-time invariant: extern struct must be exactly 2 floats.
-        std.debug.assert(@sizeOf(Vec2) == 2 * @sizeOf(f32));
+        assert(@sizeOf(Vec2) == 2 * @sizeOf(f32));
     }
 
     // ── Constants ────────────────────────────────────────────────────
@@ -62,8 +63,8 @@ pub const Vec2 = extern struct {
     }
 
     pub inline fn div(a: Vec2, b: Vec2) Vec2 {
-        std.debug.assert(b.x != 0.0);
-        std.debug.assert(b.y != 0.0);
+        assert(b.x != 0.0);
+        assert(b.y != 0.0);
         return .{ .x = a.x / b.x, .y = a.y / b.y };
     }
 
@@ -153,7 +154,7 @@ pub const Vec2 = extern struct {
     // ── Comparison ───────────────────────────────────────────────────
 
     pub inline fn approxEqual(a: Vec2, b: Vec2, tolerance: f32) bool {
-        std.debug.assert(tolerance >= 0.0);
+        assert(tolerance >= 0.0);
         return @abs(a.x - b.x) <= tolerance and
             @abs(a.y - b.y) <= tolerance;
     }
@@ -180,8 +181,8 @@ pub const Vec2 = extern struct {
     pub inline fn angle(a: Vec2, b: Vec2) f32 {
         const len_a = length(a);
         const len_b = length(b);
-        std.debug.assert(len_a > 0.0);
-        std.debug.assert(len_b > 0.0);
+        assert(len_a > 0.0);
+        assert(len_b > 0.0);
         const d = dot(a, b) / (len_a * len_b);
         return std.math.acos(scalar.clamp(d, -1.0, 1.0));
     }

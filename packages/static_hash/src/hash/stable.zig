@@ -21,6 +21,8 @@
 //! - Use the `*Budgeted` APIs to enforce explicit work bounds on untrusted input.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const budget_mod = @import("budget.zig");
 const fnv1a_mod = @import("fnv1a.zig");
 
@@ -58,13 +60,13 @@ comptime {
     // All type tags must be unique to prevent cross-type collisions.
     for (tags, 0..) |a, i| {
         for (tags[0..i]) |b| {
-            std.debug.assert(a != b);
+            assert(a != b);
         }
     }
     // Tags are sequential from 0x00 to 0x0F (16 tags).
-    std.debug.assert(tags.len == 16);
-    std.debug.assert(tags[0] == 0x00);
-    std.debug.assert(tags[tags.len - 1] == 0x0F);
+    assert(tags.len == 16);
+    assert(tags[0] == 0x00);
+    assert(tags[tags.len - 1] == 0x0F);
 }
 
 // Internal canonical writer. Encodes values into the FNV-1a hasher with
@@ -81,14 +83,14 @@ const Writer = struct {
 
     fn writeTag(self: *Writer, tag: u8) void {
         // Tag must be in the defined range.
-        std.debug.assert(tag <= tag_tagged_union);
+        assert(tag <= tag_tagged_union);
         // Tag is a single byte - documents intent.
-        std.debug.assert(@sizeOf(@TypeOf(tag)) == 1);
+        assert(@sizeOf(@TypeOf(tag)) == 1);
         self.hasher.update(&[_]u8{tag});
     }
 
     fn writeBytes(self: *Writer, bytes: []const u8) void {
-        std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+        assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
         self.hasher.update(bytes);
     }
 
@@ -131,7 +133,7 @@ const Writer = struct {
 /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
 /// Postconditions: returns deterministic FNV-1a 64-bit hash of bytes.
 pub fn stableFingerprint64(bytes: []const u8) u64 {
-    std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+    assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
     var h = fnv1a_mod.Fnv1a64.init(0);
     h.update(bytes);
     return h.final();
@@ -144,7 +146,7 @@ pub fn stableFingerprint64(bytes: []const u8) u64 {
 /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
 /// Postconditions: returns deterministic seeded FNV-1a 64-bit hash of bytes.
 pub fn stableFingerprint64Seeded(seed: Seed, bytes: []const u8) u64 {
-    std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+    assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
     var h = fnv1a_mod.Fnv1a64.init(0);
     var seed_buf: [8]u8 = undefined;
     std.mem.writeInt(u64, &seed_buf, seed, .little);
@@ -165,7 +167,7 @@ pub fn stableFingerprint128(bytes: []const u8) u128 {
 /// Preconditions: seed_a != seed_b recommended for independence.
 /// Postconditions: low 64 bits use seed_a, high 64 bits use seed_b.
 pub fn stableFingerprint128Seeded(seed_a: Seed, seed_b: Seed, bytes: []const u8) u128 {
-    std.debug.assert(seed_a != seed_b);
+    assert(seed_a != seed_b);
     const low = stableFingerprint64Seeded(seed_a, bytes);
     const high = stableFingerprint64Seeded(seed_b, bytes);
     return (@as(u128, high) << 64) | low;
@@ -226,7 +228,7 @@ pub fn stableHashAnySeededBudgeted(seed: Seed, value: anytype, b: *HashBudget) H
 // and the compiler eliminates dead branches.
 fn MaybeError(comptime B: type, comptime T: type) type {
     comptime {
-        std.debug.assert(B == void or B == *HashBudget);
+        assert(B == void or B == *HashBudget);
     }
     return if (B == void) T else HashBudgetError!T;
 }
@@ -244,7 +246,7 @@ fn writeAnyBudgeted(w: *Writer, value: anytype, b: *HashBudget) HashBudgetError!
 }
 
 fn writeAnyImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
 
     if (comptime B != void) try b.enter();
     defer if (comptime B != void) b.leave();
@@ -366,8 +368,8 @@ fn isStableHashAnySupportedType(comptime T: type) bool {
 // =============================================================================
 
 fn writeByteSliceImpl(w: *Writer, bytes: []const u8, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
-    std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+    comptime assert(B == void or B == *HashBudget);
+    assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
     if (comptime B != void) try b.chargeBytes(bytes.len);
     w.writeTag(tag_bytes);
     w.writeLen(bytes.len);
@@ -378,7 +380,7 @@ fn writeBool(w: *Writer, value: bool) void {
     w.writeTag(tag_bool);
     const byte: u8 = if (value) 1 else 0;
     // Bool maps to exactly 0 or 1.
-    std.debug.assert(byte == 0 or byte == 1);
+    assert(byte == 0 or byte == 1);
     w.writeBytes(&[_]u8{byte});
 }
 
@@ -390,7 +392,7 @@ fn writeInt(w: *Writer, comptime info: std.builtin.Type.Int, value: anytype) voi
 }
 
 fn writeComptimeIntImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const s = std.fmt.comptimePrint("{}", .{value});
     if (comptime B != void) try b.chargeBytes(s.len);
     w.writeTag(tag_comptime_int);
@@ -413,7 +415,7 @@ fn writeComptimeFloat(w: *Writer, value: anytype) void {
 }
 
 fn writeEnumImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const name = @tagName(value);
     if (comptime B != void) try b.chargeBytes(name.len);
     w.writeTag(tag_enum);
@@ -422,7 +424,7 @@ fn writeEnumImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(
 }
 
 fn writeErrorImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const name = @errorName(value);
     if (comptime B != void) try b.chargeBytes(name.len);
     w.writeTag(tag_error);
@@ -431,7 +433,7 @@ fn writeErrorImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError
 }
 
 fn writeErrorUnionImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     w.writeTag(tag_error_union);
     if (value) |payload| {
         w.writeBytes(&[_]u8{1});
@@ -450,7 +452,7 @@ fn writeErrorUnionImpl(w: *Writer, value: anytype, comptime B: type, b: B) Maybe
 }
 
 fn writeOptionalImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     w.writeTag(tag_optional);
     if (value) |payload| {
         w.writeBytes(&[_]u8{1});
@@ -465,7 +467,7 @@ fn writeOptionalImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeEr
 }
 
 fn writePointerImpl(w: *Writer, comptime ptr: std.builtin.Type.Pointer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
 
     if (ptr.size == .slice) {
@@ -498,7 +500,7 @@ fn writePointerImpl(w: *Writer, comptime ptr: std.builtin.Type.Pointer, value: a
 }
 
 fn writeArrayImpl(w: *Writer, comptime arr: std.builtin.Type.Array, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     w.writeTag(tag_array);
     if (comptime B != void) try b.chargeElems(arr.len);
     w.writeLen(arr.len);
@@ -512,7 +514,7 @@ fn writeArrayImpl(w: *Writer, comptime arr: std.builtin.Type.Array, value: anyty
 }
 
 fn writeVectorImpl(w: *Writer, comptime vec: std.builtin.Type.Vector, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     w.writeTag(tag_vector);
     if (comptime B != void) try b.chargeElems(vec.len);
     w.writeLen(vec.len);
@@ -526,7 +528,7 @@ fn writeVectorImpl(w: *Writer, comptime vec: std.builtin.Type.Vector, value: any
 }
 
 fn writeStructImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
     w.writeTag(tag_struct);
     const fields = std.meta.fields(T);
@@ -542,7 +544,7 @@ fn writeStructImpl(w: *Writer, value: anytype, comptime B: type, b: B) MaybeErro
 }
 
 fn writeTaggedUnionImpl(w: *Writer, comptime u: std.builtin.Type.Union, value: anytype, comptime B: type, b: B) MaybeError(B, void) {
-    comptime std.debug.assert(B == void or B == *HashBudget);
+    comptime assert(B == void or B == *HashBudget);
     const T = @TypeOf(value);
     const Tag = u.tag_type orelse @compileError("stableHashAny cannot hash untagged union type: " ++ @typeName(T));
     w.writeTag(tag_tagged_union);
@@ -591,7 +593,7 @@ fn canonicalizeFloat(comptime F: type, value: F) F {
     if (std.math.isNan(canonical)) canonical = std.math.nan(F);
     if (canonical == 0) canonical = @as(F, 0);
     // Postcondition: no negative zero remains after canonicalization.
-    if (canonical == 0) std.debug.assert(!std.math.signbit(canonical));
+    if (canonical == 0) assert(!std.math.signbit(canonical));
     return canonical;
 }
 
@@ -612,16 +614,16 @@ fn writeFloatValue(w: *Writer, value: anytype) void {
 
 test "stableFingerprint64 matches FNV-1a over bytes" {
     const expected = std.hash.Fnv1a_64.hash("hello");
-    try std.testing.expectEqual(expected, stableFingerprint64("hello"));
+    try testing.expectEqual(expected, stableFingerprint64("hello"));
 }
 
 test "stableFingerprint64Seeded is deterministic and seed-separated" {
     const data = "hello";
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         stableFingerprint64Seeded(7, data),
         stableFingerprint64Seeded(7, data),
     );
-    try std.testing.expect(
+    try testing.expect(
         stableFingerprint64Seeded(7, data) != stableFingerprint64Seeded(8, data),
     );
 }
@@ -635,9 +637,9 @@ test "stableFingerprint128 halves map to seeded 64-bit fingerprints" {
     const low: u64 = @truncate(fp128);
     const high: u64 = @truncate(fp128 >> 64);
 
-    try std.testing.expectEqual(stableFingerprint64Seeded(seed_a, data), low);
-    try std.testing.expectEqual(stableFingerprint64Seeded(seed_b, data), high);
-    try std.testing.expect(low != high);
+    try testing.expectEqual(stableFingerprint64Seeded(seed_a, data), low);
+    try testing.expectEqual(stableFingerprint64Seeded(seed_b, data), high);
+    try testing.expect(low != high);
 }
 
 test "stableHashAny u32 uses little-endian encoding" {
@@ -659,7 +661,7 @@ test "stableHashAny u32 uses little-endian encoding" {
     i += 2;
     std.mem.writeInt(u32, buf[i..][0..4], v, .little);
 
-    try std.testing.expectEqual(stableFingerprint64(buf[0..]), h);
+    try testing.expectEqual(stableFingerprint64(buf[0..]), h);
 }
 
 test "stableHashAny golden vectors are stable" {
@@ -680,40 +682,40 @@ test "stableHashAny golden vectors are stable" {
     u32_buf[10] = 0; // unsigned
     std.mem.writeInt(u16, u32_buf[11..][0..2], 32, .little);
     std.mem.writeInt(u32, u32_buf[13..][0..4], 42, .little);
-    try std.testing.expectEqual(stableFingerprint64(u32_buf[0..]), u32_42_hash);
+    try testing.expectEqual(stableFingerprint64(u32_buf[0..]), u32_42_hash);
 
     // Cross-call stability: same value always produces same hash.
-    try std.testing.expectEqual(u32_42_hash, stableHashAny(@as(u32, 42)));
+    try testing.expectEqual(u32_42_hash, stableHashAny(@as(u32, 42)));
 
     // bool(true): seed_tag + seed + bool_tag(0x01) + 0x01
     const bool_hash = stableHashAny(true);
-    try std.testing.expectEqual(bool_hash, stableHashAny(true));
-    try std.testing.expect(bool_hash != stableHashAny(false));
+    try testing.expectEqual(bool_hash, stableHashAny(true));
+    try testing.expect(bool_hash != stableHashAny(false));
 
     // Seeded variant differs from unseeded.
-    try std.testing.expect(stableHashAnySeeded(1, @as(u32, 42)) != u32_42_hash);
+    try testing.expect(stableHashAnySeeded(1, @as(u32, 42)) != u32_42_hash);
 }
 
 test "stableHashAny canonicalizes +/-0.0 and NaN payloads" {
     const zp: f32 = 0.0;
     const zn: f32 = -0.0;
-    try std.testing.expectEqual(stableHashAny(zp), stableHashAny(zn));
+    try testing.expectEqual(stableHashAny(zp), stableHashAny(zn));
 
     const nan1: f32 = std.math.nan(f32);
     const nan2: f32 = @bitCast(@as(u32, 0x7fc00001));
-    try std.testing.expectEqual(stableHashAny(nan1), stableHashAny(nan2));
+    try testing.expectEqual(stableHashAny(nan1), stableHashAny(nan2));
 }
 
 test "stableHashAny hashes enums by tag name" {
     const E = enum { a, b };
-    try std.testing.expect(stableHashAny(E.a) != stableHashAny(E.b));
-    try std.testing.expectEqual(stableHashAny(E.a), stableHashAny(E.a));
+    try testing.expect(stableHashAny(E.a) != stableHashAny(E.b));
+    try testing.expectEqual(stableHashAny(E.a), stableHashAny(E.a));
 }
 
 test "stableHashAny hashes error sets by error name" {
     const E = error{ A, B };
-    try std.testing.expect(stableHashAny(E.A) != stableHashAny(E.B));
-    try std.testing.expectEqual(stableHashAny(E.A), stableHashAny(E.A));
+    try testing.expect(stableHashAny(E.A) != stableHashAny(E.B));
+    try testing.expectEqual(stableHashAny(E.A), stableHashAny(E.A));
 }
 
 test "stableHashAny struct ignores padding (structural encoding)" {
@@ -739,8 +741,8 @@ test "stableHashAny struct ignores padding (structural encoding)" {
         break :blk key;
     };
 
-    try std.testing.expect(std.meta.eql(k1, k2));
-    try std.testing.expectEqual(stableHashAny(k1), stableHashAny(k2));
+    try testing.expect(std.meta.eql(k1, k2));
+    try testing.expectEqual(stableHashAny(k1), stableHashAny(k2));
 }
 
 test "stableHashAnyBudgeted enforces max_bytes on byte slices" {
@@ -749,7 +751,7 @@ test "stableHashAnyBudgeted enforces max_bytes on byte slices" {
         .max_elems = std.math.maxInt(u64),
         .max_depth = std.math.maxInt(u16),
     });
-    try std.testing.expectError(error.ExceededBytes, stableHashAnySeededBudgeted(0, "abc", &b));
+    try testing.expectError(error.ExceededBytes, stableHashAnySeededBudgeted(0, "abc", &b));
 }
 
 test "stableHashAnyBudgeted enforces max_elems on structural slices" {
@@ -760,7 +762,7 @@ test "stableHashAnyBudgeted enforces max_elems on structural slices" {
         .max_elems = 2,
         .max_depth = std.math.maxInt(u16),
     });
-    try std.testing.expectError(error.ExceededElems, stableHashAnySeededBudgeted(0, xs_slice, &b));
+    try testing.expectError(error.ExceededElems, stableHashAnySeededBudgeted(0, xs_slice, &b));
 }
 
 test "stableHashAnyBudgeted enforces max_depth" {
@@ -770,15 +772,15 @@ test "stableHashAnyBudgeted enforces max_depth" {
         .max_elems = std.math.maxInt(u64),
         .max_depth = 1,
     });
-    try std.testing.expectError(error.ExceededDepth, stableHashAnySeededBudgeted(0, T{ .a = .{ .b = 1 } }, &b));
+    try testing.expectError(error.ExceededDepth, stableHashAnySeededBudgeted(0, T{ .a = .{ .b = 1 } }, &b));
 }
 
 test "stableHashAny optional" {
     const a: ?u32 = null;
     const b: ?u32 = 42;
-    try std.testing.expectEqual(stableHashAny(a), stableHashAny(a));
-    try std.testing.expectEqual(stableHashAny(b), stableHashAny(b));
-    try std.testing.expect(stableHashAny(a) != stableHashAny(b));
+    try testing.expectEqual(stableHashAny(a), stableHashAny(a));
+    try testing.expectEqual(stableHashAny(b), stableHashAny(b));
+    try testing.expect(stableHashAny(a) != stableHashAny(b));
 }
 
 test "stableHashAny tagged union" {
@@ -786,8 +788,8 @@ test "stableHashAny tagged union" {
     const a: U = .{ .x = 1 };
     const b: U = .{ .x = 1 };
     const c: U = .{ .x = 2 };
-    try std.testing.expectEqual(stableHashAny(a), stableHashAny(b));
-    try std.testing.expect(stableHashAny(a) != stableHashAny(c));
+    try testing.expectEqual(stableHashAny(a), stableHashAny(b));
+    try testing.expect(stableHashAny(a) != stableHashAny(c));
 }
 
 test "stableHashAnyBudgeted charges bytes for enum tag names" {
@@ -798,7 +800,7 @@ test "stableHashAnyBudgeted charges bytes for enum tag names" {
         .max_elems = std.math.maxInt(u64),
         .max_depth = std.math.maxInt(u16),
     });
-    try std.testing.expectError(error.ExceededBytes, stableHashAnySeededBudgeted(0, E.a, &b));
+    try testing.expectError(error.ExceededBytes, stableHashAnySeededBudgeted(0, E.a, &b));
 }
 
 test "stableHashAnyBudgeted charges bytes for error names" {
@@ -809,7 +811,7 @@ test "stableHashAnyBudgeted charges bytes for error names" {
         .max_elems = std.math.maxInt(u64),
         .max_depth = std.math.maxInt(u16),
     });
-    try std.testing.expectError(error.ExceededBytes, stableHashAnySeededBudgeted(0, E.SomeError, &b));
+    try testing.expectError(error.ExceededBytes, stableHashAnySeededBudgeted(0, E.SomeError, &b));
 }
 
 test "stableHashAny budgeted matches unbounded" {
@@ -817,21 +819,21 @@ test "stableHashAny budgeted matches unbounded" {
     // produce the same hash as the unbounded path.
     var b = HashBudget.unlimited();
 
-    try std.testing.expectEqual(stableHashAny(@as(u32, 42)), (try stableHashAnySeededBudgeted(0, @as(u32, 42), &b)));
+    try testing.expectEqual(stableHashAny(@as(u32, 42)), (try stableHashAnySeededBudgeted(0, @as(u32, 42), &b)));
 
     b = HashBudget.unlimited();
-    try std.testing.expectEqual(stableHashAny(true), (try stableHashAnySeededBudgeted(0, true, &b)));
+    try testing.expectEqual(stableHashAny(true), (try stableHashAnySeededBudgeted(0, true, &b)));
 
     b = HashBudget.unlimited();
-    try std.testing.expectEqual(stableHashAny(@as([]const u8, "hello")), (try stableHashAnySeededBudgeted(0, @as([]const u8, "hello"), &b)));
+    try testing.expectEqual(stableHashAny(@as([]const u8, "hello")), (try stableHashAnySeededBudgeted(0, @as([]const u8, "hello"), &b)));
 
     const E = enum { x, y };
     b = HashBudget.unlimited();
-    try std.testing.expectEqual(stableHashAny(E.x), (try stableHashAnySeededBudgeted(0, E.x, &b)));
+    try testing.expectEqual(stableHashAny(E.x), (try stableHashAnySeededBudgeted(0, E.x, &b)));
 
     b = HashBudget.unlimited();
     const opt: ?u32 = 42;
-    try std.testing.expectEqual(stableHashAny(opt), (try stableHashAnySeededBudgeted(0, opt, &b)));
+    try testing.expectEqual(stableHashAny(opt), (try stableHashAnySeededBudgeted(0, opt, &b)));
 }
 
 test "stableHashAny compile-time support predicate rejects non-stable surfaces" {
@@ -850,13 +852,13 @@ test "stableHashAny compile-time support predicate rejects non-stable surfaces" 
     };
 
     comptime {
-        std.debug.assert(isStableHashAnySupportedType(u32));
-        std.debug.assert(isStableHashAnySupportedType(SliceOnly));
-        std.debug.assert(isStableHashAnySupportedType(struct { maybe: ?u32, err: anyerror!u8 }));
-        std.debug.assert(!isStableHashAnySupportedType(*u32));
-        std.debug.assert(!isStableHashAnySupportedType(NestedPointer));
-        std.debug.assert(!isStableHashAnySupportedType(Untagged));
-        std.debug.assert(!isStableHashAnySupportedType(UnsupportedFn));
-        std.debug.assert(!isStableHashAnySupportedType(Hidden));
+        assert(isStableHashAnySupportedType(u32));
+        assert(isStableHashAnySupportedType(SliceOnly));
+        assert(isStableHashAnySupportedType(struct { maybe: ?u32, err: anyerror!u8 }));
+        assert(!isStableHashAnySupportedType(*u32));
+        assert(!isStableHashAnySupportedType(NestedPointer));
+        assert(!isStableHashAnySupportedType(Untagged));
+        assert(!isStableHashAnySupportedType(UnsupportedFn));
+        assert(!isStableHashAnySupportedType(Hidden));
     }
 }

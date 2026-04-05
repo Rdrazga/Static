@@ -1,6 +1,8 @@
 //! Raw benchmark execution and sample collection.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const config_mod = @import("config.zig");
 const timer_mod = @import("timer.zig");
 const case_mod = @import("case.zig");
@@ -112,11 +114,11 @@ fn validateCaseInputs(
         error.InvalidConfig => error.InvalidConfig,
         error.Overflow => error.Overflow,
     };
-    std.debug.assert(benchmark_case.name.len > 0);
-    std.debug.assert(config.measure_iterations > 0);
-    std.debug.assert(config.sample_count > 0);
+    assert(benchmark_case.name.len > 0);
+    assert(config.measure_iterations > 0);
+    assert(config.sample_count > 0);
     if (sample_storage.len < config.sample_count) return error.NoSpaceLeft;
-    std.debug.assert(sample_storage.len >= config.sample_count);
+    assert(sample_storage.len >= config.sample_count);
 }
 
 fn runWarmups(benchmark_case: case_mod.BenchmarkCase, warmup_iterations: u32) void {
@@ -127,7 +129,7 @@ fn runWarmups(benchmark_case: case_mod.BenchmarkCase, warmup_iterations: u32) vo
 }
 
 fn runIterations(benchmark_case: case_mod.BenchmarkCase, iteration_count: u32) void {
-    std.debug.assert(iteration_count > 0);
+    assert(iteration_count > 0);
     var iteration_index: u32 = 0;
     while (iteration_index < iteration_count) : (iteration_index += 1) {
         benchmark_case.run();
@@ -143,26 +145,26 @@ fn assertCaseResultShape(
     benchmark_case: *const case_mod.BenchmarkCase,
     config: config_mod.BenchmarkConfig,
 ) void {
-    std.debug.assert(result.name.len > 0);
-    std.debug.assert(std.mem.eql(u8, result.name, benchmark_case.name));
-    std.debug.assert(result.warmup_iterations == config.warmup_iterations);
-    std.debug.assert(result.measure_iterations == config.measure_iterations);
-    std.debug.assert(result.samples.len == config.sample_count);
+    assert(result.name.len > 0);
+    assert(std.mem.eql(u8, result.name, benchmark_case.name));
+    assert(result.warmup_iterations == config.warmup_iterations);
+    assert(result.measure_iterations == config.measure_iterations);
+    assert(result.samples.len == config.sample_count);
 
     var elapsed_sum_ns: u128 = 0;
     for (result.samples) |sample| {
-        std.debug.assert(sample.iteration_count == config.measure_iterations);
+        assert(sample.iteration_count == config.measure_iterations);
         elapsed_sum_ns += sample.elapsed_ns;
     }
-    std.debug.assert(elapsed_sum_ns <= std.math.maxInt(u64));
-    std.debug.assert(result.total_elapsed_ns == @as(u64, @intCast(elapsed_sum_ns)));
+    assert(elapsed_sum_ns <= std.math.maxInt(u64));
+    assert(result.total_elapsed_ns == @as(u64, @intCast(elapsed_sum_ns)));
 }
 
 fn assertRunResultShape(result: BenchmarkRunResult, group: *const group_mod.BenchmarkGroup) void {
     const cases = group.iter();
 
-    std.debug.assert(result.case_results.len == cases.len);
-    std.debug.assert(result.mode == group.config.mode);
+    assert(result.case_results.len == cases.len);
+    assert(result.mode == group.config.mode);
     for (result.case_results, cases) |case_result, benchmark_case| {
         assertCaseResultShape(case_result, &benchmark_case, group.config);
     }
@@ -194,8 +196,8 @@ test "runCase excludes warmups from sample count and preserves call totals" {
     const result = try runCase(&benchmark_case, config, &samples);
     const expected_calls = config.warmup_iterations + config.measure_iterations * config.sample_count;
 
-    try std.testing.expectEqual(@as(usize, 4), result.samples.len);
-    try std.testing.expectEqual(expected_calls, call_count);
+    try testing.expectEqual(@as(usize, 4), result.samples.len);
+    try testing.expectEqual(expected_calls, call_count);
 }
 
 test "runGroup preserves group order and sample allocation" {
@@ -236,10 +238,10 @@ test "runGroup preserves group order and sample allocation" {
     var case_results: [2]BenchmarkCaseResult = undefined;
     const run_result = try runGroup(&group, &samples, &case_results);
 
-    try std.testing.expectEqualStrings("first", run_result.case_results[0].name);
-    try std.testing.expectEqualStrings("second", run_result.case_results[1].name);
-    try std.testing.expectEqual(@as(u32, 5), first_count);
-    try std.testing.expectEqual(@as(u32, 5), second_count);
+    try testing.expectEqualStrings("first", run_result.case_results[0].name);
+    try testing.expectEqualStrings("second", run_result.case_results[1].name);
+    try testing.expectEqual(@as(u32, 5), first_count);
+    try testing.expectEqual(@as(u32, 5), second_count);
 }
 
 test "runCase rejects invalid config and undersized sample storage" {
@@ -259,7 +261,7 @@ test "runCase rejects invalid config and undersized sample storage" {
     });
     var samples: [1]BenchmarkSample = undefined;
 
-    try std.testing.expectError(error.InvalidConfig, runCase(
+    try testing.expectError(error.InvalidConfig, runCase(
         &benchmark_case,
         .{
             .mode = .smoke,
@@ -269,7 +271,7 @@ test "runCase rejects invalid config and undersized sample storage" {
         },
         &samples,
     ));
-    try std.testing.expectError(error.NoSpaceLeft, runCase(
+    try testing.expectError(error.NoSpaceLeft, runCase(
         &benchmark_case,
         .{
             .mode = .smoke,
@@ -319,6 +321,6 @@ test "runGroup rejects undersized result and sample storage" {
     var enough_samples: [4]BenchmarkSample = undefined;
     var enough_results: [2]BenchmarkCaseResult = undefined;
 
-    try std.testing.expectError(error.NoSpaceLeft, runGroup(&group, &small_samples, &enough_results));
-    try std.testing.expectError(error.NoSpaceLeft, runGroup(&group, &enough_samples, &small_results));
+    try testing.expectError(error.NoSpaceLeft, runGroup(&group, &small_samples, &enough_results));
+    try testing.expectError(error.NoSpaceLeft, runGroup(&group, &enough_samples, &small_results));
 }

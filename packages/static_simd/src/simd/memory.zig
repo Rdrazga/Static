@@ -5,6 +5,7 @@
 //! because out-of-bounds SIMD access is an operating error per agents.md §3.10.
 
 const std = @import("std");
+const testing = std.testing;
 const vec2f = @import("vec2f.zig");
 const vec4f = @import("vec4f.zig");
 const vec8f = @import("vec8f.zig");
@@ -144,119 +145,119 @@ test "load4f/store4f roundtrip" {
     var buf = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0 };
     const v = try load4f(&buf);
     const arr = v.toArray();
-    try std.testing.expectEqual(@as(f32, 1.0), arr[0]);
-    try std.testing.expectEqual(@as(f32, 4.0), arr[3]);
+    try testing.expectEqual(@as(f32, 1.0), arr[0]);
+    try testing.expectEqual(@as(f32, 4.0), arr[3]);
 
     var out = [_]f32{ 0.0, 0.0, 0.0, 0.0, 99.0 };
     try store4f(&out, v);
-    try std.testing.expectEqual(@as(f32, 1.0), out[0]);
-    try std.testing.expectEqual(@as(f32, 4.0), out[3]);
+    try testing.expectEqual(@as(f32, 1.0), out[0]);
+    try testing.expectEqual(@as(f32, 4.0), out[3]);
     // Verify store did not write beyond 4 elements.
-    try std.testing.expectEqual(@as(f32, 99.0), out[4]);
+    try testing.expectEqual(@as(f32, 99.0), out[4]);
 }
 
 test "load4f out of bounds returns error" {
     var buf = [_]f32{ 1.0, 2.0, 3.0 };
-    try std.testing.expectError(error.IndexOutOfBounds, load4f(&buf));
+    try testing.expectError(error.IndexOutOfBounds, load4f(&buf));
 }
 
 test "store4f out of bounds returns error, no partial write" {
     var buf = [_]f32{ 99.0, 99.0 };
     const v = vec4f.Vec4f.splat(1.0);
-    try std.testing.expectError(error.IndexOutOfBounds, store4f(&buf, v));
+    try testing.expectError(error.IndexOutOfBounds, store4f(&buf, v));
     // Verify no partial write occurred.
-    try std.testing.expectEqual(@as(f32, 99.0), buf[0]);
-    try std.testing.expectEqual(@as(f32, 99.0), buf[1]);
+    try testing.expectEqual(@as(f32, 99.0), buf[0]);
+    try testing.expectEqual(@as(f32, 99.0), buf[1]);
 }
 
 test "load4i/store4i roundtrip" {
     var buf = [_]i32{ 10, 20, 30, 40 };
     const v = try load4i(&buf);
-    try std.testing.expectEqual(@as(i32, 10), v.toArray()[0]);
+    try testing.expectEqual(@as(i32, 10), v.toArray()[0]);
 
     var out = [_]i32{ 0, 0, 0, 0 };
     try store4i(&out, v);
-    try std.testing.expectEqual(@as(i32, 40), out[3]);
+    try testing.expectEqual(@as(i32, 40), out[3]);
 }
 
 test "load4u/store4u roundtrip" {
     var buf = [_]u32{ 100, 200, 300, 400 };
     const v = try load4u(&buf);
-    try std.testing.expectEqual(@as(u32, 100), v.toArray()[0]);
+    try testing.expectEqual(@as(u32, 100), v.toArray()[0]);
 
     var out = [_]u32{ 0, 0, 0, 0 };
     try store4u(&out, v);
-    try std.testing.expectEqual(@as(u32, 400), out[3]);
+    try testing.expectEqual(@as(u32, 400), out[3]);
 }
 
 test "f32 load/store variants roundtrip and bounds checks" {
     const v2 = vec2f.Vec2f.init(.{ 3.0, 4.0 });
     var out2 = [_]f32{ 0.0, 0.0 };
     try store2f(&out2, v2);
-    try std.testing.expectEqualSlices(f32, &.{ 3.0, 4.0 }, out2[0..]);
+    try testing.expectEqualSlices(f32, &.{ 3.0, 4.0 }, out2[0..]);
     const rt2 = try load2f(&out2);
     const rt2_arr = rt2.toArray();
-    try std.testing.expectEqualSlices(f32, &.{ 3.0, 4.0 }, rt2_arr[0..]);
+    try testing.expectEqualSlices(f32, &.{ 3.0, 4.0 }, rt2_arr[0..]);
     var short2 = [_]f32{1.0};
-    try std.testing.expectError(error.IndexOutOfBounds, load2f(&short2));
-    try std.testing.expectError(error.IndexOutOfBounds, store2f(&short2, v2));
+    try testing.expectError(error.IndexOutOfBounds, load2f(&short2));
+    try testing.expectError(error.IndexOutOfBounds, store2f(&short2, v2));
 
     const v8 = vec8f.Vec8f.fromArray(.{ 0, 1, 2, 3, 4, 5, 6, 7 });
     var out8 = [_]f32{ 0, 0, 0, 0, 0, 0, 0, 0 };
     try store8f(&out8, v8);
-    try std.testing.expectEqual(@as(f32, 7.0), out8[7]);
+    try testing.expectEqual(@as(f32, 7.0), out8[7]);
     const rt8 = try load8f(&out8);
-    try std.testing.expectEqual(@as(f32, 0.0), rt8.toArray()[0]);
+    try testing.expectEqual(@as(f32, 0.0), rt8.toArray()[0]);
     var short8 = [_]f32{ 1, 2, 3, 4, 5, 6, 7 };
-    try std.testing.expectError(error.IndexOutOfBounds, load8f(&short8));
-    try std.testing.expectError(error.IndexOutOfBounds, store8f(&short8, v8));
+    try testing.expectError(error.IndexOutOfBounds, load8f(&short8));
+    try testing.expectError(error.IndexOutOfBounds, store8f(&short8, v8));
 
     const v16 = vec16f.Vec16f.fromArray(.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 });
     var out16 = [_]f32{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     try store16f(&out16, v16);
-    try std.testing.expectEqual(@as(f32, 15.0), out16[15]);
+    try testing.expectEqual(@as(f32, 15.0), out16[15]);
     const rt16 = try load16f(&out16);
-    try std.testing.expectEqual(@as(f32, 10.0), rt16.toArray()[10]);
+    try testing.expectEqual(@as(f32, 10.0), rt16.toArray()[10]);
     var short16 = [_]f32{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
-    try std.testing.expectError(error.IndexOutOfBounds, load16f(&short16));
-    try std.testing.expectError(error.IndexOutOfBounds, store16f(&short16, v16));
+    try testing.expectError(error.IndexOutOfBounds, load16f(&short16));
+    try testing.expectError(error.IndexOutOfBounds, store16f(&short16, v16));
 }
 
 test "f64 and i32 load/store variants roundtrip and bounds checks" {
     const v4d = vec4d.Vec4d.fromArray(.{ 1.0, 2.0, 3.0, 4.0 });
     var out4d = [_]f64{ 0.0, 0.0, 0.0, 0.0 };
     try store4d(&out4d, v4d);
-    try std.testing.expectEqual(@as(f64, 4.0), out4d[3]);
+    try testing.expectEqual(@as(f64, 4.0), out4d[3]);
     const rt4d = try load4d(&out4d);
-    try std.testing.expectEqual(@as(f64, 2.0), rt4d.toArray()[1]);
+    try testing.expectEqual(@as(f64, 2.0), rt4d.toArray()[1]);
     var short4d = [_]f64{ 1.0, 2.0, 3.0 };
-    try std.testing.expectError(error.IndexOutOfBounds, load4d(&short4d));
-    try std.testing.expectError(error.IndexOutOfBounds, store4d(&short4d, v4d));
+    try testing.expectError(error.IndexOutOfBounds, load4d(&short4d));
+    try testing.expectError(error.IndexOutOfBounds, store4d(&short4d, v4d));
 
     const v2i = vec2i.Vec2i.init(.{ -1, 2 });
     var out2i = [_]i32{ 0, 0 };
     try store2i(&out2i, v2i);
-    try std.testing.expectEqual(@as(i32, -1), out2i[0]);
+    try testing.expectEqual(@as(i32, -1), out2i[0]);
     const rt2i = try load2i(&out2i);
-    try std.testing.expectEqual(@as(i32, 2), rt2i.toArray()[1]);
+    try testing.expectEqual(@as(i32, 2), rt2i.toArray()[1]);
     var short2i = [_]i32{1};
-    try std.testing.expectError(error.IndexOutOfBounds, load2i(&short2i));
-    try std.testing.expectError(error.IndexOutOfBounds, store2i(&short2i, v2i));
+    try testing.expectError(error.IndexOutOfBounds, load2i(&short2i));
+    try testing.expectError(error.IndexOutOfBounds, store2i(&short2i, v2i));
 
     const v8i = vec8i.Vec8i.fromArray(.{ 0, 1, 2, 3, 4, 5, 6, 7 });
     var out8i = [_]i32{ 0, 0, 0, 0, 0, 0, 0, 0 };
     try store8i(&out8i, v8i);
-    try std.testing.expectEqual(@as(i32, 7), out8i[7]);
+    try testing.expectEqual(@as(i32, 7), out8i[7]);
     const rt8i = try load8i(&out8i);
-    try std.testing.expectEqual(@as(i32, 5), rt8i.toArray()[5]);
+    try testing.expectEqual(@as(i32, 5), rt8i.toArray()[5]);
     var short8i = [_]i32{ 0, 1, 2, 3, 4, 5, 6 };
-    try std.testing.expectError(error.IndexOutOfBounds, load8i(&short8i));
-    try std.testing.expectError(error.IndexOutOfBounds, store8i(&short8i, v8i));
+    try testing.expectError(error.IndexOutOfBounds, load8i(&short8i));
+    try testing.expectError(error.IndexOutOfBounds, store8i(&short8i, v8i));
 }
 
 test "store4u out of bounds returns error without mutation" {
     var short = [_]u32{ 9, 9, 9 };
     const before = short;
-    try std.testing.expectError(error.IndexOutOfBounds, store4u(&short, vec4u.Vec4u.splat(1)));
-    try std.testing.expectEqualSlices(u32, before[0..], short[0..]);
+    try testing.expectError(error.IndexOutOfBounds, store4u(&short, vec4u.Vec4u.splat(1)));
+    try testing.expectEqualSlices(u32, before[0..], short[0..]);
 }

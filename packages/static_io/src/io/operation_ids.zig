@@ -6,6 +6,8 @@
 //! - bits 0..15: external slot index
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const types = @import("types.zig");
 
 pub const internal_flag: types.OperationId = 0x8000_0000;
@@ -20,14 +22,14 @@ pub const DecodedOperationId = struct {
 };
 
 comptime {
-    std.debug.assert(index_mask == 0xFFFF);
-    std.debug.assert(generation_mask == 0x7FFF);
+    assert(index_mask == 0xFFFF);
+    assert(generation_mask == 0x7FFF);
 }
 
 pub fn encodeExternalOperationId(slot_index: u32, generation: u32) types.OperationId {
-    std.debug.assert(slot_index <= max_external_slots);
-    std.debug.assert(generation > 0);
-    std.debug.assert(generation <= generation_mask);
+    assert(slot_index <= max_external_slots);
+    assert(generation > 0);
+    assert(generation <= generation_mask);
     return (generation << index_bits) | slot_index;
 }
 
@@ -42,8 +44,8 @@ pub fn decodeExternalOperationId(operation_id: types.OperationId) ?DecodedOperat
 }
 
 pub fn encodeInternalOperationId(namespace_id: u32) types.OperationId {
-    std.debug.assert(namespace_id > 0);
-    std.debug.assert(namespace_id < internal_flag);
+    assert(namespace_id > 0);
+    assert(namespace_id < internal_flag);
     return internal_flag | namespace_id;
 }
 
@@ -55,7 +57,7 @@ pub fn decodeInternalOperationId(operation_id: types.OperationId) ?u32 {
 }
 
 pub fn nextGeneration(current: u32) u32 {
-    std.debug.assert(current <= generation_mask);
+    assert(current <= generation_mask);
     if (current >= generation_mask) return 1;
     return current + 1;
 }
@@ -63,16 +65,16 @@ pub fn nextGeneration(current: u32) u32 {
 test "external ids roundtrip and internal ids stay separate" {
     const external = encodeExternalOperationId(12, 7);
     const decoded = decodeExternalOperationId(external).?;
-    try std.testing.expectEqual(@as(u32, 12), decoded.index);
-    try std.testing.expectEqual(@as(u32, 7), decoded.generation);
-    try std.testing.expect(decodeInternalOperationId(external) == null);
+    try testing.expectEqual(@as(u32, 12), decoded.index);
+    try testing.expectEqual(@as(u32, 7), decoded.generation);
+    try testing.expect(decodeInternalOperationId(external) == null);
 
     const internal = encodeInternalOperationId(2);
-    try std.testing.expect(decodeExternalOperationId(internal) == null);
-    try std.testing.expectEqual(@as(?u32, 2), decodeInternalOperationId(internal));
+    try testing.expect(decodeExternalOperationId(internal) == null);
+    try testing.expectEqual(@as(?u32, 2), decodeInternalOperationId(internal));
 }
 
 test "next generation wraps to one" {
-    try std.testing.expectEqual(@as(u32, 2), nextGeneration(1));
-    try std.testing.expectEqual(@as(u32, 1), nextGeneration(generation_mask));
+    try testing.expectEqual(@as(u32, 2), nextGeneration(1));
+    try testing.expectEqual(@as(u32, 1), nextGeneration(generation_mask));
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -136,7 +137,7 @@ pub fn main() !void {
         },
     });
 
-    std.debug.assert(summary.compare_summary != null);
+    assert(summary.compare_summary != null);
     std.debug.print("{s}\n", .{baseline_zon});
     const latest_history = (try bench.history.readMostRecentCompatibleRecord(
         io,

@@ -2,6 +2,9 @@
 //! rejection and generation bumps. Confirms that released indices are recycled
 //! with incremented generations and that stale handles are correctly rejected.
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
+const testing = std.testing;
 const static_collections = @import("static_collections");
 const static_testing = @import("static_testing");
 
@@ -134,8 +137,8 @@ const Context = struct {
             self.pool.deinit();
         }
 
-        self.pool = IndexPool.init(std.testing.allocator, .{ .slots_max = Capacity, .budget = null }) catch
-            |err| std.debug.panic("resetState: IndexPool.init failed: {s}", .{@errorName(err)});
+        self.pool = IndexPool.init(testing.allocator, .{ .slots_max = Capacity, .budget = null }) catch
+            |err| panic("resetState: IndexPool.init failed: {s}", .{@errorName(err)});
         self.pool_initialized = true;
         self.first_handle = null;
         self.second_handle = null;
@@ -155,21 +158,21 @@ const Context = struct {
         self.saw_free_probe_second = false;
         self.saw_free_probe_reused = false;
 
-        std.debug.assert(self.pool.capacity() == Capacity);
-        std.debug.assert(self.pool.freeCount() == Capacity);
+        assert(self.pool.capacity() == Capacity);
+        assert(self.pool.freeCount() == Capacity);
     }
 
     fn validate(self: *const @This()) checker.CheckResult {
-        std.debug.assert(self.pool_initialized);
-        std.debug.assert(self.pool.capacity() == Capacity);
-        std.debug.assert(self.pool.freeCount() == self.expected_free_count);
-        std.debug.assert(self.live_count + self.expected_free_count == Capacity);
+        assert(self.pool_initialized);
+        assert(self.pool.capacity() == Capacity);
+        assert(self.pool.freeCount() == self.expected_free_count);
+        assert(self.live_count + self.expected_free_count == Capacity);
 
         var tracked_live: u32 = 0;
         tracked_live += @as(u32, @intFromBool(self.first_handle != null));
         tracked_live += @as(u32, @intFromBool(self.second_handle != null));
         tracked_live += @as(u32, @intFromBool(self.reused_handle != null));
-        std.debug.assert(tracked_live == self.live_count);
+        assert(tracked_live == self.live_count);
 
         if (self.first_handle) |handle| {
             if (!self.liveHandleMatches(handle)) return checker.CheckResult.fail(&violations, null);
@@ -194,7 +197,7 @@ const Context = struct {
 
     fn probeInvalidHandle(self: *@This()) checker.CheckResult {
         const invalid = Handle.invalid();
-        std.debug.assert(!invalid.isValid());
+        assert(!invalid.isValid());
         if (self.pool.contains(invalid)) return checker.CheckResult.fail(&violations, null);
         _ = self.pool.validate(invalid) catch |err| switch (err) {
             error.NotFound => {},
@@ -209,7 +212,7 @@ const Context = struct {
     }
 
     fn allocateFirst(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.first_handle == null);
+        assert(self.first_handle == null);
         const handle = self.pool.allocate() catch |err| switch (err) {
             error.NoSpaceLeft => return checker.CheckResult.fail(&violations, null),
             else => return checker.CheckResult.fail(&violations, null),
@@ -232,8 +235,8 @@ const Context = struct {
     }
 
     fn allocateSecond(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.first_handle != null);
-        std.debug.assert(self.second_handle == null);
+        assert(self.first_handle != null);
+        assert(self.second_handle == null);
         const handle = self.pool.allocate() catch |err| switch (err) {
             error.NoSpaceLeft => return checker.CheckResult.fail(&violations, null),
             else => return checker.CheckResult.fail(&violations, null),
@@ -356,24 +359,24 @@ const Context = struct {
     }
 
     fn finish(self: *const @This()) checker.CheckResult {
-        std.debug.assert(self.pool_initialized);
-        std.debug.assert(self.first_handle == null);
-        std.debug.assert(self.second_handle == null);
-        std.debug.assert(self.reused_handle == null);
-        std.debug.assert(self.live_count == 0);
-        std.debug.assert(self.expected_free_count == Capacity);
-        std.debug.assert(self.pool.freeCount() == Capacity);
+        assert(self.pool_initialized);
+        assert(self.first_handle == null);
+        assert(self.second_handle == null);
+        assert(self.reused_handle == null);
+        assert(self.live_count == 0);
+        assert(self.expected_free_count == Capacity);
+        assert(self.pool.freeCount() == Capacity);
         // Each behavioral coverage flag must have been triggered at least once.
         // Split into individual assertions to identify which flag was missed.
-        std.debug.assert(self.saw_invalid_rejection);
-        std.debug.assert(self.saw_live_probe);
-        std.debug.assert(self.saw_exhaustion);
-        std.debug.assert(self.saw_stale_rejection);
-        std.debug.assert(self.saw_generation_bump);
-        std.debug.assert(self.saw_reused_probe);
-        std.debug.assert(self.saw_free_probe_first);
-        std.debug.assert(self.saw_free_probe_second);
-        std.debug.assert(self.saw_free_probe_reused);
+        assert(self.saw_invalid_rejection);
+        assert(self.saw_live_probe);
+        assert(self.saw_exhaustion);
+        assert(self.saw_stale_rejection);
+        assert(self.saw_generation_bump);
+        assert(self.saw_reused_probe);
+        assert(self.saw_free_probe_first);
+        assert(self.saw_free_probe_second);
+        assert(self.saw_free_probe_reused);
         return checker.CheckResult.pass(null);
     }
 };
@@ -410,30 +413,30 @@ test "index pool model covers invalidation reuse and exhaustion" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 test "index pool reuses the most recently released slot first" {
-    var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2, .budget = null });
+    var pool = try IndexPool.init(testing.allocator, .{ .slots_max = 2, .budget = null });
     defer pool.deinit();
 
     const first = try pool.allocate();
     const second = try pool.allocate();
-    try std.testing.expectError(error.NoSpaceLeft, pool.allocate());
+    try testing.expectError(error.NoSpaceLeft, pool.allocate());
 
     try pool.release(second);
     try pool.release(first);
-    try std.testing.expectEqual(@as(u32, 2), pool.freeCount());
+    try testing.expectEqual(@as(u32, 2), pool.freeCount());
 
     const reuse_first = try pool.allocate();
-    try std.testing.expectEqual(first.index, reuse_first.index);
-    try std.testing.expect(reuse_first.generation != first.generation);
+    try testing.expectEqual(first.index, reuse_first.index);
+    try testing.expect(reuse_first.generation != first.generation);
 
     const reuse_second = try pool.allocate();
-    try std.testing.expectEqual(second.index, reuse_second.index);
-    try std.testing.expect(reuse_second.generation != second.generation);
-    try std.testing.expectEqual(@as(u32, 0), pool.freeCount());
+    try testing.expectEqual(second.index, reuse_second.index);
+    try testing.expect(reuse_second.generation != second.generation);
+    try testing.expectEqual(@as(u32, 0), pool.freeCount());
 }
 
 fn nextAction(
@@ -442,8 +445,8 @@ fn nextAction(
     action_index: u32,
     _: seed_mod.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 
@@ -454,7 +457,7 @@ fn step(
     action: model.RecordedAction,
 ) error{}!model.ModelStep {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     const tag: ActionTag = @enumFromInt(action.tag);
     const check_result = switch (tag) {
         .probe_invalid_handle => context.probeInvalidHandle(),
@@ -481,7 +484,7 @@ fn finish(
     _: u32,
 ) error{}!checker.CheckResult {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     return context.finish();
 }
 
@@ -512,6 +515,6 @@ fn reset(
     run_identity: identity.RunIdentity,
 ) error{}!void {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index < ScenarioCount);
+    assert(run_identity.case_index < ScenarioCount);
     context.resetState();
 }

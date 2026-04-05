@@ -1,5 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -44,10 +46,10 @@ const WindowsBackendRunner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("windows_backend"));
-        std.debug.assert(context.traceBufferPtr() != null);
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("windows_backend"));
+        assert(context.traceBufferPtr() != null);
 
         const listener = try self.runtime.listen(.{ .ipv4 = .{
             .address = .init(127, 0, 0, 1),
@@ -82,11 +84,11 @@ const WindowsBackendRunner = struct {
         const read_id = try self.runtime.submitStreamRead(pair.server, read_buffer, std.time.ns_per_s);
         const io_completions = try waitForIoPair(self.runtime, write_id, read_id);
 
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, io_completions.write.status);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.success, io_completions.read.status);
-        try std.testing.expectEqual(@as(u32, 5), io_completions.write.bytes_transferred);
-        try std.testing.expectEqual(@as(u32, 5), io_completions.read.bytes_transferred);
-        try std.testing.expectEqualStrings("hello", io_completions.read.buffer.usedSlice());
+        try testing.expectEqual(static_io.types.CompletionStatus.success, io_completions.write.status);
+        try testing.expectEqual(static_io.types.CompletionStatus.success, io_completions.read.status);
+        try testing.expectEqual(@as(u32, 5), io_completions.write.bytes_transferred);
+        try testing.expectEqual(@as(u32, 5), io_completions.read.bytes_transferred);
+        try testing.expectEqualStrings("hello", io_completions.read.buffer.usedSlice());
 
         const write_seq = try support.appendEvent(
             context,
@@ -113,9 +115,9 @@ const WindowsBackendRunner = struct {
         const timeout_buffer = try self.pool.acquire();
         const timeout_id = try self.runtime.submitStreamRead(pair.server, timeout_buffer, 0);
         const timeout_completion = try waitForCompletion(self.runtime, timeout_id, 8);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
-        try std.testing.expectEqual(@as(?static_io.types.CompletionErrorTag, .timeout), timeout_completion.err);
-        try std.testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
+        try testing.expectEqual(static_io.types.CompletionStatus.timeout, timeout_completion.status);
+        try testing.expectEqual(@as(?static_io.types.CompletionErrorTag, .timeout), timeout_completion.err);
+        try testing.expectEqual(@as(u32, 0), timeout_completion.bytes_transferred);
         _ = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -165,7 +167,7 @@ test "static_io testing.system covers Windows loopback backends" {
     inline for (backend_cases) |backend_case| {
         var fixture: Fixture = undefined;
         try fixture.init(.{
-            .allocator = std.testing.allocator,
+            .allocator = testing.allocator,
             .timer_queue_config = .{ .buckets = 8, .timers_max = 8 },
             .scheduler_seed = .init(901),
             .scheduler_config = .{ .strategy = .first },
@@ -174,7 +176,7 @@ test "static_io testing.system covers Windows loopback backends" {
         });
         defer fixture.deinit();
 
-        var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+        var pool = try static_io.BufferPool.init(testing.allocator, .{
             .buffer_size = 64,
             .capacity = 4,
         });
@@ -183,7 +185,7 @@ test "static_io testing.system covers Windows loopback backends" {
         var runtime_config = static_io.RuntimeConfig.initForTest(16);
         runtime_config.backend_kind = backend_case.kind;
         runtime_config.threaded_worker_count = 2;
-        var runtime = try static_io.Runtime.init(std.testing.allocator, runtime_config);
+        var runtime = try static_io.Runtime.init(testing.allocator, runtime_config);
         defer runtime.deinit();
 
         var runner = WindowsBackendRunner{
@@ -201,10 +203,10 @@ test "static_io testing.system covers Windows loopback backends" {
             .components = &components,
         }, &runner, WindowsBackendRunner.run);
 
-        try std.testing.expect(execution.check_result.passed);
-        try std.testing.expectEqual(@as(usize, components.len), execution.component_count);
-        try std.testing.expect(execution.trace_metadata.event_count >= 4);
-        try std.testing.expect(execution.retained_bundle == null);
+        try testing.expect(execution.check_result.passed);
+        try testing.expectEqual(@as(usize, components.len), execution.component_count);
+        try testing.expect(execution.trace_metadata.event_count >= 4);
+        try testing.expect(execution.retained_bundle == null);
     }
 }
 
@@ -221,13 +223,13 @@ fn waitForPair(
         while (runtime.poll()) |completion| {
             switch (completion.tag) {
                 .accept => {
-                    try std.testing.expectEqual(accept_id, completion.operation_id);
-                    try std.testing.expectEqual(static_io.types.CompletionStatus.success, completion.status);
+                    try testing.expectEqual(accept_id, completion.operation_id);
+                    try testing.expectEqual(static_io.types.CompletionStatus.success, completion.status);
                     server = .{ .handle = completion.handle.? };
                 },
                 .connect => {
-                    try std.testing.expectEqual(connect_id, completion.operation_id);
-                    try std.testing.expectEqual(static_io.types.CompletionStatus.success, completion.status);
+                    try testing.expectEqual(connect_id, completion.operation_id);
+                    try testing.expectEqual(static_io.types.CompletionStatus.success, completion.status);
                     client = .{ .handle = completion.handle.? };
                 },
                 else => {},

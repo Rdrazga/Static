@@ -8,6 +8,7 @@
 //!   hash-quality suite.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_hash = @import("static_hash");
 const bench = @import("static_testing").bench;
 const support = @import("support.zig");
@@ -249,7 +250,7 @@ pub fn main() !void {
         index += 1;
     }
 
-    std.debug.assert(index == contexts.len);
+    assert(index == contexts.len);
 
     var case_storage: [contexts.len]bench.case.BenchmarkCase = undefined;
     var group = try bench.group.BenchmarkGroup.init(&case_storage, .{
@@ -339,22 +340,22 @@ fn validateSemanticBaselines() void {
     fillIncrementing(incrementing_512[0..]);
     fillPseudoRandom(random_4096[0..], 0x17b4_2026_0000_1001);
 
-    std.debug.assert(static_hash.fnv1a.hash64(0, zero_64[0..]) == std.hash.Fnv1a_64.hash(zero_64[0..]));
-    std.debug.assert(static_hash.wyhash.hashSeeded(0x00c0_ffee, incrementing_512[0..]) == std.hash.Wyhash.hash(0x00c0_ffee, incrementing_512[0..]));
-    std.debug.assert(static_hash.xxhash3.hash64Seeded(0x1357_2468_abcdef01, random_4096[0..]) == std.hash.XxHash3.hash(0x1357_2468_abcdef01, random_4096[0..]));
+    assert(static_hash.fnv1a.hash64(0, zero_64[0..]) == std.hash.Fnv1a_64.hash(zero_64[0..]));
+    assert(static_hash.wyhash.hashSeeded(0x00c0_ffee, incrementing_512[0..]) == std.hash.Wyhash.hash(0x00c0_ffee, incrementing_512[0..]));
+    assert(static_hash.xxhash3.hash64Seeded(0x1357_2468_abcdef01, random_4096[0..]) == std.hash.XxHash3.hash(0x1357_2468_abcdef01, random_4096[0..]));
 
     const crc32_wrapper = static_hash.crc32.checksum(random_4096[0..]);
     var crc32_std = std.hash.Crc32.init();
     crc32_std.update(random_4096[0..]);
-    std.debug.assert(crc32_wrapper == crc32_std.final());
+    assert(crc32_wrapper == crc32_std.final());
 
     const crc32c_wrapper = static_hash.crc32.checksumCastagnoli(random_4096[0..]);
     var crc32c_std = std.hash.crc.Crc32Iscsi.init();
     crc32c_std.update(random_4096[0..]);
-    std.debug.assert(crc32c_wrapper == crc32c_std.final());
+    assert(crc32c_wrapper == crc32c_std.final());
 
     const key = static_hash.siphash.keyFromU64s(0x0123_4567_89ab_cdef, 0xfedc_ba98_7654_3210);
-    std.debug.assert(
+    assert(
         static_hash.siphash.hash64_24(&key, incrementing_512[0..]) ==
             directSipHash64_24(&key, incrementing_512[0..]),
     );

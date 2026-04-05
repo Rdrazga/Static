@@ -1,5 +1,7 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_net_native = @import("static_net_native");
 const static_testing = @import("static_testing");
 
@@ -39,10 +41,10 @@ const Runner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("listener"));
-        std.debug.assert(context.hasComponent("client"));
-        std.debug.assert(context.hasComponent("accepted"));
-        std.debug.assert(context.traceBufferPtr() != null);
+        assert(context.hasComponent("listener"));
+        assert(context.hasComponent("client"));
+        assert(context.hasComponent("accepted"));
+        assert(context.traceBufferPtr() != null);
 
         var listener = try std.Io.net.IpAddress.listen(.{ .ip4 = .loopback(0) }, self.io, .{
             .reuse_address = true,
@@ -63,8 +65,8 @@ const Runner = struct {
             null,
             support.digestEndpoint(listener_local),
         );
-        try std.testing.expect(std.meta.eql(expected_listener, listener_local));
-        try std.testing.expect(NativeModule.socketPeerEndpoint(listener.socket.handle) == null);
+        try testing.expect(std.meta.eql(expected_listener, listener_local));
+        try testing.expect(NativeModule.socketPeerEndpoint(listener.socket.handle) == null);
 
         _ = try context.fixture.sim_clock.advance(.init(1));
         var client = try std.Io.net.IpAddress.connect(listener.socket.address, self.io, .{
@@ -131,15 +133,15 @@ const Runner = struct {
         );
 
         if (builtin.os.tag == .windows) {
-            try std.testing.expectEqual(
+            try testing.expectEqual(
                 std.os.windows.ws2_32.AF.INET,
                 static_net_native.windows.socketFamily(listener.socket.handle).?,
             );
-            try std.testing.expectEqual(
+            try testing.expectEqual(
                 std.os.windows.ws2_32.AF.INET,
                 static_net_native.windows.socketFamily(client.socket.handle).?,
             );
-            try std.testing.expectEqual(
+            try testing.expectEqual(
                 std.os.windows.ws2_32.AF.INET,
                 static_net_native.windows.socketFamily(accepted.socket.handle).?,
             );
@@ -174,14 +176,14 @@ const Runner = struct {
 };
 
 test "static_net_native testing.system covers native loopback endpoint queries" {
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
 
     var fixture: Fixture = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 8, .timers_max = 8 },
         .scheduler_seed = .init(991),
         .scheduler_config = .{ .strategy = .first },
@@ -204,8 +206,8 @@ test "static_net_native testing.system covers native loopback endpoint queries" 
         .components = &components,
     }, &runner, Runner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(usize, components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 4);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(usize, components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 4);
+    try testing.expect(execution.retained_bundle == null);
 }

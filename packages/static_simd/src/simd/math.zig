@@ -12,6 +12,8 @@
 //! Thread safety: all operations are pure functions; no shared state.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const vec_type = @import("vec_type.zig");
 
 // ---------------------------------------------------------------------------
@@ -91,7 +93,7 @@ pub inline fn nmulAdd(a: anytype, b: @TypeOf(a), c: @TypeOf(a)) @TypeOf(a) {
 /// Lane-wise clamp to [min_val, max_val]. Asserts min_val <= max_val per lane.
 pub inline fn clamp(v: anytype, min_val: @TypeOf(v), max_val: @TypeOf(v)) @TypeOf(v) {
     comptime assertFloatVec(@TypeOf(v));
-    std.debug.assert(@reduce(.And, min_val.v <= max_val.v));
+    assert(@reduce(.And, min_val.v <= max_val.v));
     return .{ .v = @min(@max(v.v, min_val.v), max_val.v) };
 }
 
@@ -145,16 +147,16 @@ pub const lerp16f = lerp;
 test "sqrt of perfect squares — Vec4f, Vec8f, Vec16f" {
     const v4 = vec_type.Vec4f.init(.{ 1.0, 4.0, 9.0, 16.0 });
     const r4 = sqrt(v4).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), r4[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 2.0), r4[1], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 3.0), r4[2], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 4.0), r4[3], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), r4[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 2.0), r4[1], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 3.0), r4[2], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 4.0), r4[3], 1.0e-6);
 
     const squares8 = vec_type.Vec8f.fromArray(.{ 1.0, 4.0, 9.0, 16.0, 25.0, 36.0, 49.0, 64.0 });
     const roots8 = sqrt(squares8).toArray();
     inline for (0..8) |i| {
         const expected: f32 = @floatFromInt(i + 1);
-        try std.testing.expectApproxEqAbs(expected, roots8[i], 1.0e-6);
+        try testing.expectApproxEqAbs(expected, roots8[i], 1.0e-6);
     }
 }
 
@@ -164,7 +166,7 @@ test "rsqrt identity: rsqrt(x) * sqrt(x) ≈ 1 — Vec4f" {
     const s = sqrt(v);
     const prod = vec_type.Vec4f.mul(rs, s).toArray();
     for (prod) |p| {
-        try std.testing.expectApproxEqAbs(@as(f32, 1.0), p, 1.0e-5);
+        try testing.expectApproxEqAbs(@as(f32, 1.0), p, 1.0e-5);
     }
 }
 
@@ -174,10 +176,10 @@ test "mulAdd against manual a*b+c — Vec4f" {
     const c = vec_type.Vec4f.init(.{ 1.0, 2.0, 3.0, 4.0 });
 
     const result = mulAdd(a, b, c).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 21.0), result[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 32.0), result[1], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 43.0), result[2], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 54.0), result[3], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 21.0), result[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 32.0), result[1], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 43.0), result[2], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 54.0), result[3], 1.0e-6);
 }
 
 test "clamp boundary cases — Vec4f" {
@@ -186,10 +188,10 @@ test "clamp boundary cases — Vec4f" {
     const hi = vec_type.Vec4f.splat(1.0);
     const result = clamp(v, lo, hi).toArray();
 
-    try std.testing.expectEqual(@as(f32, 0.0), result[0]);
-    try std.testing.expectEqual(@as(f32, 0.5), result[1]);
-    try std.testing.expectEqual(@as(f32, 1.0), result[2]);
-    try std.testing.expectEqual(@as(f32, 0.0), result[3]);
+    try testing.expectEqual(@as(f32, 0.0), result[0]);
+    try testing.expectEqual(@as(f32, 0.5), result[1]);
+    try testing.expectEqual(@as(f32, 1.0), result[2]);
+    try testing.expectEqual(@as(f32, 0.0), result[3]);
 }
 
 test "lerp at t=0, 0.5, 1 — Vec4f" {
@@ -197,13 +199,13 @@ test "lerp at t=0, 0.5, 1 — Vec4f" {
     const b = vec_type.Vec4f.splat(10.0);
 
     const at_zero = lerp(a, b, vec_type.Vec4f.splat(0.0)).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 0.0), at_zero[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), at_zero[0], 1.0e-6);
 
     const at_half = lerp(a, b, vec_type.Vec4f.splat(0.5)).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 5.0), at_half[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 5.0), at_half[0], 1.0e-6);
 
     const at_one = lerp(a, b, vec_type.Vec4f.splat(1.0)).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 10.0), at_one[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 10.0), at_one[0], 1.0e-6);
 }
 
 test "mulSub and nmulAdd against manual formulas — Vec4f" {
@@ -212,33 +214,33 @@ test "mulSub and nmulAdd against manual formulas — Vec4f" {
     const c = vec_type.Vec4f.init(.{ 1.0, 2.0, 3.0, 4.0 });
 
     const sub = mulSub(a, b, c).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 19.0), sub[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 28.0), sub[1], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 37.0), sub[2], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 46.0), sub[3], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 19.0), sub[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 28.0), sub[1], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 37.0), sub[2], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 46.0), sub[3], 1.0e-6);
 
     const nma = nmulAdd(a, b, c).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, -19.0), nma[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, -28.0), nma[1], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, -37.0), nma[2], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, -46.0), nma[3], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, -19.0), nma[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, -28.0), nma[1], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, -37.0), nma[2], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, -46.0), nma[3], 1.0e-6);
 }
 
 test "reciprocal and rsqrt special values follow IEEE behaviour — Vec4f" {
     const recip = reciprocal(vec_type.Vec4f.init(.{ 1.0, -2.0, 0.0, -0.0 })).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), recip[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, -0.5), recip[1], 1.0e-6);
-    try std.testing.expect(std.math.isInf(recip[2]));
-    try std.testing.expect(!std.math.signbit(recip[2]));
-    try std.testing.expect(std.math.isInf(recip[3]));
-    try std.testing.expect(std.math.signbit(recip[3]));
+    try testing.expectApproxEqAbs(@as(f32, 1.0), recip[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, -0.5), recip[1], 1.0e-6);
+    try testing.expect(std.math.isInf(recip[2]));
+    try testing.expect(!std.math.signbit(recip[2]));
+    try testing.expect(std.math.isInf(recip[3]));
+    try testing.expect(std.math.signbit(recip[3]));
 
     const rs = rsqrt(vec_type.Vec4f.init(.{ 1.0, 4.0, 0.0, -1.0 })).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), rs[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 0.5), rs[1], 1.0e-6);
-    try std.testing.expect(std.math.isInf(rs[2]));
-    try std.testing.expect(!std.math.signbit(rs[2]));
-    try std.testing.expect(std.math.isNan(rs[3]));
+    try testing.expectApproxEqAbs(@as(f32, 1.0), rs[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 0.5), rs[1], 1.0e-6);
+    try testing.expect(std.math.isInf(rs[2]));
+    try testing.expect(!std.math.signbit(rs[2]));
+    try testing.expect(std.math.isNan(rs[3]));
 }
 
 test "8-lane math functions produce expected outputs" {
@@ -246,8 +248,8 @@ test "8-lane math functions produce expected outputs" {
     const b = vec_type.Vec8f.splat(10.0);
     const t = vec_type.Vec8f.splat(0.5);
     const lerped = lerp(a, b, t).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 5.0), lerped[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 8.5), lerped[7], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 5.0), lerped[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 8.5), lerped[7], 1.0e-6);
 }
 
 test "16-lane math functions produce expected outputs" {
@@ -258,7 +260,7 @@ test "16-lane math functions produce expected outputs" {
     const fma = mulAdd(a, two, one).toArray();
     inline for (0..16) |i| {
         const ai: f32 = @floatFromInt(i);
-        try std.testing.expectApproxEqAbs(2.0 * ai + 1.0, fma[i], 1.0e-6);
+        try testing.expectApproxEqAbs(2.0 * ai + 1.0, fma[i], 1.0e-6);
     }
 
     const clamped = clamp(
@@ -266,20 +268,20 @@ test "16-lane math functions produce expected outputs" {
         vec_type.Vec16f.splat(0.0),
         vec_type.Vec16f.splat(10.0),
     ).toArray();
-    try std.testing.expectEqual(@as(f32, 0.0), clamped[0]);
-    try std.testing.expectEqual(@as(f32, 10.0), clamped[15]);
+    try testing.expectEqual(@as(f32, 0.0), clamped[0]);
+    try testing.expectEqual(@as(f32, 10.0), clamped[15]);
 }
 
 // Backward-compat alias smoke test: ensure the old names still compile and produce correct results.
 test "backward-compat aliases sqrt4f/lerp8f still work" {
     const v4 = vec_type.Vec4f.init(.{ 1.0, 4.0, 9.0, 16.0 });
     const r4 = sqrt4f(v4).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 1.0), r4[0], 1.0e-6);
-    try std.testing.expectApproxEqAbs(@as(f32, 4.0), r4[3], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), r4[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 4.0), r4[3], 1.0e-6);
 
     const a8 = vec_type.Vec8f.splat(0.0);
     const b8 = vec_type.Vec8f.splat(10.0);
     const t8 = vec_type.Vec8f.splat(0.5);
     const l8 = lerp8f(a8, b8, t8).toArray();
-    try std.testing.expectApproxEqAbs(@as(f32, 5.0), l8[0], 1.0e-6);
+    try testing.expectApproxEqAbs(@as(f32, 5.0), l8[0], 1.0e-6);
 }

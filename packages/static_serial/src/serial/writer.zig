@@ -6,6 +6,8 @@
 //! Thread safety: not thread-safe — each `Writer` instance must be used from one thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const bits = @import("static_bits");
 const varint = @import("varint.zig");
 const zigzag = @import("zigzag.zig");
@@ -25,23 +27,23 @@ pub const Writer = struct {
     pub fn init(bytes: []u8) Writer {
         const w = Writer{ .cursor = bits.cursor.ByteWriter.init(bytes) };
         // Postcondition: writer always starts at position zero.
-        std.debug.assert(w.cursor.position() == 0);
+        assert(w.cursor.position() == 0);
         // Postcondition: the backing slice length matches the input length.
-        std.debug.assert(w.cursor.remaining() == bytes.len);
+        assert(w.cursor.remaining() == bytes.len);
         return w;
     }
 
     pub fn position(self: *const Writer) usize {
         const pos = self.cursor.position();
         // Postcondition: position is always <= total buffer size.
-        std.debug.assert(pos <= pos + self.cursor.remaining());
+        assert(pos <= pos + self.cursor.remaining());
         return pos;
     }
 
     pub fn remaining(self: *const Writer) usize {
         const rem = self.cursor.remaining();
         // Postcondition: remaining is consistent with position.
-        std.debug.assert(rem <= rem + self.cursor.position());
+        assert(rem <= rem + self.cursor.position());
         return rem;
     }
 
@@ -52,7 +54,7 @@ pub const Writer = struct {
             error.Overflow => error.Overflow,
         };
         // Postcondition: position advanced by exactly bytes.len.
-        std.debug.assert(self.cursor.position() == pos_before + bytes.len);
+        assert(self.cursor.position() == pos_before + bytes.len);
     }
 
     pub fn writeInt(self: *Writer, value: anytype, comptime order: Endian) Error!void {
@@ -63,12 +65,12 @@ pub const Writer = struct {
             error.Overflow => error.Overflow,
         };
         // Postcondition: position advanced by exactly @sizeOf(T) bytes.
-        std.debug.assert(self.cursor.position() == pos_before + @sizeOf(T));
+        assert(self.cursor.position() == pos_before + @sizeOf(T));
     }
 
     pub fn writeVarint(self: *Writer, value: anytype) Error!void {
         // Precondition: value type must be an integer.
-        comptime std.debug.assert(@typeInfo(@TypeOf(value)) == .int);
+        comptime assert(@typeInfo(@TypeOf(value)) == .int);
         const pos_before = self.cursor.position();
         varint.writeVarint(&self.cursor, value) catch |err| return switch (err) {
             error.NoSpaceLeft => error.NoSpaceLeft,
@@ -80,18 +82,18 @@ pub const Writer = struct {
             ),
         };
         // Postcondition: on success, position has advanced by at least 1 byte.
-        std.debug.assert(self.cursor.position() > pos_before);
+        assert(self.cursor.position() > pos_before);
     }
 
     pub fn writeZigZag(self: *Writer, value: anytype) Error!void {
         // Precondition: value type must be a signed integer.
-        comptime std.debug.assert(@typeInfo(@TypeOf(value)) == .int);
-        comptime std.debug.assert(@typeInfo(@TypeOf(value)).int.signedness == .signed);
+        comptime assert(@typeInfo(@TypeOf(value)) == .int);
+        comptime assert(@typeInfo(@TypeOf(value)).int.signedness == .signed);
         const pos_before = self.cursor.position();
         const encoded = zigzag.zigZagEncode(value);
         try self.writeVarint(encoded);
         // Postcondition: on success, position has advanced by at least 1 byte.
-        std.debug.assert(self.cursor.position() > pos_before);
+        assert(self.cursor.position() > pos_before);
     }
 };
 
@@ -99,7 +101,7 @@ test "writer writes canonical varints and bounded bytes" {
     var buf = [_]u8{0} ** 8;
     var w = Writer.init(&buf);
     try w.writeVarint(@as(u32, 300));
-    try std.testing.expect(w.position() > 0);
+    try testing.expect(w.position() > 0);
 }
 
 test "SE-T4: writeBytes past end returns NoSpaceLeft" {
@@ -107,9 +109,9 @@ test "SE-T4: writeBytes past end returns NoSpaceLeft" {
     // Method: attempt to write more bytes than the buffer can hold.
     var buf = [_]u8{0} ** 2;
     var w = Writer.init(&buf);
-    try std.testing.expectError(error.NoSpaceLeft, w.writeBytes(&.{ 0x01, 0x02, 0x03 }));
+    try testing.expectError(error.NoSpaceLeft, w.writeBytes(&.{ 0x01, 0x02, 0x03 }));
     // Position must not have advanced on failure.
-    try std.testing.expectEqual(@as(usize, 0), w.position());
+    try testing.expectEqual(@as(usize, 0), w.position());
 }
 
 test "SE-T4: writeBytes success advances position by bytes.len" {
@@ -118,6 +120,6 @@ test "SE-T4: writeBytes success advances position by bytes.len" {
     var buf = [_]u8{0} ** 4;
     var w = Writer.init(&buf);
     try w.writeBytes(&.{ 0xAA, 0xBB });
-    try std.testing.expectEqual(@as(usize, 2), w.position());
-    try std.testing.expectEqualSlices(u8, &.{ 0xAA, 0xBB }, buf[0..2]);
+    try testing.expectEqual(@as(usize, 2), w.position());
+    try testing.expectEqualSlices(u8, &.{ 0xAA, 0xBB }, buf[0..2]);
 }

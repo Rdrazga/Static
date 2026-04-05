@@ -8,6 +8,8 @@
 //! - the helper returns one bounded summary with stable text formatting.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const checker = @import("checker.zig");
 
@@ -191,9 +193,9 @@ fn validatePendingReason(pending_reason: ?PendingReasonDetail) RepairLivenessErr
 
 fn assertPhaseExecution(execution: PhaseExecution) void {
     if (execution.check_result.passed) {
-        std.debug.assert(execution.check_result.violations.len == 0);
+        assert(execution.check_result.violations.len == 0);
     } else {
-        std.debug.assert(execution.check_result.violations.len > 0);
+        assert(execution.check_result.violations.len > 0);
     }
 }
 
@@ -206,7 +208,7 @@ const SummaryWriter = struct {
     used: usize = 0,
 
     fn init(buffer: []u8) SummaryWriter {
-        std.debug.assert(buffer.len > 0);
+        assert(buffer.len > 0);
         return .{ .buffer = buffer };
     }
 
@@ -245,7 +247,7 @@ test "runRepairLiveness rejects zero phase budgets" {
     };
 
     var dummy: u8 = 0;
-    try std.testing.expectError(error.InvalidInput, runRepairLiveness(error{}, .{
+    try testing.expectError(error.InvalidInput, runRepairLiveness(error{}, .{
         .fault_phase_steps_max = 0,
         .repair_phase_steps_max = 1,
     }, Scenario{
@@ -255,7 +257,7 @@ test "runRepairLiveness rejects zero phase budgets" {
         .run_repair_phase_fn = Context.runRepair,
         .pending_reason_fn = Context.pending,
     }));
-    try std.testing.expectError(error.InvalidInput, runRepairLiveness(error{}, .{
+    try testing.expectError(error.InvalidInput, runRepairLiveness(error{}, .{
         .fault_phase_steps_max = 1,
         .repair_phase_steps_max = 0,
     }, Scenario{
@@ -275,7 +277,7 @@ test "runRepairLiveness converges after repair transition" {
 
         fn runFault(context_ptr: *anyopaque, steps_max: u32) error{}!PhaseExecution {
             const context: *@This() = @ptrCast(@alignCast(context_ptr));
-            std.debug.assert(!context.repaired);
+            assert(!context.repaired);
             return .{
                 .steps_executed = steps_max,
                 .check_result = checker.CheckResult.pass(null),
@@ -321,12 +323,12 @@ test "runRepairLiveness converges after repair transition" {
         .pending_reason_fn = Context.pending,
     });
 
-    try std.testing.expect(summary.fault_phase.check_result.passed);
-    try std.testing.expect(summary.repair_phase != null);
-    try std.testing.expect(summary.repair_phase.?.check_result.passed);
-    try std.testing.expect(summary.converged);
-    try std.testing.expect(summary.pending_reason == null);
-    try std.testing.expectEqual(@as(u32, 0), context.queue_depth);
+    try testing.expect(summary.fault_phase.check_result.passed);
+    try testing.expect(summary.repair_phase != null);
+    try testing.expect(summary.repair_phase.?.check_result.passed);
+    try testing.expect(summary.converged);
+    try testing.expect(summary.pending_reason == null);
+    try testing.expectEqual(@as(u32, 0), context.queue_depth);
 }
 
 test "runRepairLiveness reports pending reason when repair phase does not settle" {
@@ -382,14 +384,14 @@ test "runRepairLiveness reports pending reason when repair phase does not settle
         .pending_reason_fn = Context.pending,
     });
 
-    try std.testing.expect(!summary.converged);
-    try std.testing.expect(summary.pending_reason != null);
-    try std.testing.expectEqual(PendingReason.work_queue_not_empty, summary.pending_reason.?.reason);
-    try std.testing.expectEqual(@as(u32, 1), summary.pending_reason.?.count);
+    try testing.expect(!summary.converged);
+    try testing.expect(summary.pending_reason != null);
+    try testing.expectEqual(PendingReason.work_queue_not_empty, summary.pending_reason.?.reason);
+    try testing.expectEqual(@as(u32, 1), summary.pending_reason.?.count);
 
     var buffer: [256]u8 = undefined;
     const text = try formatSummary(&buffer, summary);
-    try std.testing.expect(std.mem.indexOf(u8, text, "pending_reason=work_queue_not_empty") != null);
+    try testing.expect(std.mem.indexOf(u8, text, "pending_reason=work_queue_not_empty") != null);
 }
 
 test "runRepairLiveness can stop before repair when safety fails" {
@@ -434,10 +436,10 @@ test "runRepairLiveness can stop before repair when safety fails" {
         .pending_reason_fn = Context.pending,
     });
 
-    try std.testing.expect(!summary.fault_phase.check_result.passed);
-    try std.testing.expect(summary.repair_phase == null);
-    try std.testing.expect(!summary.converged);
-    try std.testing.expectEqual(@as(u32, 0), context.repair_transition_count);
+    try testing.expect(!summary.fault_phase.check_result.passed);
+    try testing.expect(summary.repair_phase == null);
+    try testing.expect(!summary.converged);
+    try testing.expectEqual(@as(u32, 0), context.repair_transition_count);
 }
 
 test "runRepairLiveness keeps converged false when fault phase safety already failed" {
@@ -462,7 +464,7 @@ test "runRepairLiveness keeps converged false when fault phase safety already fa
 
         fn runRepair(context_ptr: *anyopaque, steps_max: u32) error{}!PhaseExecution {
             const context: *@This() = @ptrCast(@alignCast(context_ptr));
-            std.debug.assert(context.repaired);
+            assert(context.repaired);
             return .{
                 .steps_executed = steps_max,
                 .check_result = checker.CheckResult.pass(null),
@@ -487,8 +489,8 @@ test "runRepairLiveness keeps converged false when fault phase safety already fa
         .pending_reason_fn = Context.pending,
     });
 
-    try std.testing.expect(!summary.fault_phase.check_result.passed);
-    try std.testing.expect(summary.repair_phase != null);
-    try std.testing.expect(summary.repair_phase.?.check_result.passed);
-    try std.testing.expect(!summary.converged);
+    try testing.expect(!summary.fault_phase.check_result.passed);
+    try testing.expect(summary.repair_phase != null);
+    try testing.expect(summary.repair_phase.?.check_result.passed);
+    try testing.expect(!summary.converged);
 }

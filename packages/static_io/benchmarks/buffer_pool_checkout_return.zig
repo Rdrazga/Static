@@ -1,6 +1,7 @@
 //! `static_io` buffer-pool checkout/return baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -20,12 +21,12 @@ const BufferPoolContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *BufferPoolContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.pool.capacity() != 0);
+        assert(context.pool.capacity() != 0);
 
         const buffer = context.pool.acquire() catch unreachable;
         context.pool.release(buffer) catch unreachable;
         context.sink = bench.case.blackBox(buffer.bytes.len);
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 
@@ -86,8 +87,8 @@ fn validateSemanticPreflight() void {
 
     const first = pool.acquire() catch unreachable;
     const second = pool.acquire() catch unreachable;
-    std.debug.assert(pool.available() == 0);
+    assert(pool.available() == 0);
     pool.release(first) catch unreachable;
     pool.release(second) catch unreachable;
-    std.debug.assert(pool.available() == pool.capacity());
+    assert(pool.available() == pool.capacity());
 }

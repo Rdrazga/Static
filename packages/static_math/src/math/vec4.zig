@@ -9,6 +9,8 @@
 //! — programmer errors per agents.md §3.10.1.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const scalar = @import("scalar.zig");
 const vec2_mod = @import("vec2.zig");
 const vec3_mod = @import("vec3.zig");
@@ -21,7 +23,7 @@ pub const Vec4 = extern struct {
 
     comptime {
         // Compile-time invariant: extern struct must be exactly 4 floats.
-        std.debug.assert(@sizeOf(Vec4) == 4 * @sizeOf(f32));
+        assert(@sizeOf(Vec4) == 4 * @sizeOf(f32));
     }
 
     // ── Constants ────────────────────────────────────────────────────
@@ -81,10 +83,10 @@ pub const Vec4 = extern struct {
     }
 
     pub inline fn div(a: Vec4, b: Vec4) Vec4 {
-        std.debug.assert(b.x != 0.0);
-        std.debug.assert(b.y != 0.0);
-        std.debug.assert(b.z != 0.0);
-        std.debug.assert(b.w != 0.0);
+        assert(b.x != 0.0);
+        assert(b.y != 0.0);
+        assert(b.z != 0.0);
+        assert(b.w != 0.0);
         return .{
             .x = a.x / b.x,
             .y = a.y / b.y,
@@ -190,7 +192,7 @@ pub const Vec4 = extern struct {
     // ── Comparison ───────────────────────────────────────────────────
 
     pub inline fn approxEqual(a: Vec4, b: Vec4, tolerance: f32) bool {
-        std.debug.assert(tolerance >= 0.0);
+        assert(tolerance >= 0.0);
         return @abs(a.x - b.x) <= tolerance and
             @abs(a.y - b.y) <= tolerance and
             @abs(a.z - b.z) <= tolerance and
@@ -213,8 +215,8 @@ pub const Vec4 = extern struct {
 // ═══════════════════════════════════════════════════════════════════════
 
 const eps = scalar.epsilon;
-const expect = std.testing.expect;
-const expectApprox = std.testing.expectApproxEqAbs;
+const expect = testing.expect;
+const expectApprox = testing.expectApproxEqAbs;
 
 test "Vec4 basic arithmetic" {
     const a = Vec4.init(1.0, 2.0, 3.0, 4.0);

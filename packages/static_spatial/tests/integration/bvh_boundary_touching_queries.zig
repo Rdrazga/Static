@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const spatial = @import("static_spatial");
 
 const AABB3 = spatial.AABB3;
@@ -12,12 +13,12 @@ fn containsValue(values: []const u32, needle: u32) bool {
 }
 
 fn expectQueryValues(values: []const u32, expected: []const u32) !void {
-    try std.testing.expectEqual(expected.len, values.len);
+    try testing.expectEqual(expected.len, values.len);
     for (expected) |needle| {
-        try std.testing.expect(containsValue(values, needle));
+        try testing.expect(containsValue(values, needle));
     }
     for (values) |value| {
-        try std.testing.expect(containsValue(expected, value));
+        try testing.expect(containsValue(expected, value));
     }
 }
 
@@ -30,14 +31,14 @@ test "BVH includes face, edge, and corner touching AABB intersections" {
         .{ .bounds = AABB3.init(4, 4, 4, 5, 5, 5), .value = 50 },
     };
 
-    var bvh = try BVH.build(std.testing.allocator, &items, .{ .max_leaf_items = 2 });
-    defer bvh.deinit(std.testing.allocator);
+    var bvh = try BVH.build(testing.allocator, &items, .{ .max_leaf_items = 2 });
+    defer bvh.deinit(testing.allocator);
 
     var hits: [8]u32 = undefined;
     const touching_count = bvh.queryAABB(AABB3.init(0, 0, 0, 1, 1, 1), &hits);
-    try std.testing.expectEqual(@as(u32, 4), touching_count);
+    try testing.expectEqual(@as(u32, 4), touching_count);
     try expectQueryValues(hits[0..touching_count], &.{ 10, 20, 30, 40 });
 
     const miss_count = bvh.queryAABB(AABB3.init(2.1, 2.1, 2.1, 3.0, 3.0, 3.0), &hits);
-    try std.testing.expectEqual(@as(u32, 0), miss_count);
+    try testing.expectEqual(@as(u32, 0), miss_count);
 }

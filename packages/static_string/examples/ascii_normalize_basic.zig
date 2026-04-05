@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const strings = @import("static_string");
 
 pub fn main() !void {
@@ -9,15 +10,15 @@ pub fn main() !void {
     try buffer.append(strings.ascii.trimWhitespace(raw_header));
 
     const used_len = buffer.len();
-    std.debug.assert(used_len > 0);
-    std.debug.assert(strings.ascii.isAscii(buffer.bytes()));
+    assert(used_len > 0);
+    assert(strings.ascii.isAscii(buffer.bytes()));
 
     // ASCII helpers are byte-level normalization steps that feed the package's
     // bounded storage and deterministic interning story.
     strings.ascii.toLowerInPlace(buffer_storage[0..used_len]);
     const normalized = buffer.bytes();
-    std.debug.assert(strings.ascii.eqIgnoreCase(normalized, "CONTENT-TYPE"));
-    std.debug.assert(std.mem.eql(u8, normalized, "content-type"));
+    assert(strings.ascii.eqIgnoreCase(normalized, "CONTENT-TYPE"));
+    assert(std.mem.eql(u8, normalized, "content-type"));
 
     var entry_storage: [4]strings.Entry = undefined;
     var byte_storage: [32]u8 = undefined;
@@ -25,7 +26,7 @@ pub fn main() !void {
 
     const symbol = try pool.intern(normalized);
     const resolved = try pool.resolve(symbol);
-    std.debug.assert(std.mem.eql(u8, normalized, resolved));
+    assert(std.mem.eql(u8, normalized, resolved));
 
     std.debug.print("normalized ascii symbol={d} text={s}\n", .{ symbol, resolved });
 }

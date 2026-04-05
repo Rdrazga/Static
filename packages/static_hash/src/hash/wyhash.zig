@@ -15,6 +15,8 @@
 //! All operations: no allocation (stack/register only).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 /// Wyhash 64-bit streaming hasher.
 ///
@@ -33,7 +35,7 @@ pub const Wyhash64 = struct {
         const result: Wyhash64 = .{ .ctx = std.hash.Wyhash.init(seed) };
         // Postcondition: finalization guard is in the initial (not-finalized) state.
         if (comptime std.debug.runtime_safety) {
-            std.debug.assert(!result.finalized);
+            assert(!result.finalized);
         }
         return result;
     }
@@ -51,7 +53,7 @@ pub const Wyhash64 = struct {
     /// Postconditions: internal state updated with bytes.
     pub fn update(self: *Wyhash64, bytes: []const u8) void {
         // Precondition: non-empty slices must have a valid pointer.
-        std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+        assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
         self.ctx.update(bytes);
     }
 
@@ -65,7 +67,7 @@ pub const Wyhash64 = struct {
     pub fn final(self: *Wyhash64) u64 {
         // Precondition: final() must not be called twice.
         if (comptime std.debug.runtime_safety) {
-            std.debug.assert(!self.finalized);
+            assert(!self.finalized);
         }
         const result = self.ctx.final();
         if (comptime std.debug.runtime_safety) {
@@ -86,7 +88,7 @@ pub const Wyhash = std.hash.Wyhash;
 /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
 /// Postconditions: returns deterministic 64-bit hash of bytes.
 pub fn hash(bytes: []const u8) u64 {
-    std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+    assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
     return std.hash.Wyhash.hash(0, bytes);
 }
 
@@ -100,7 +102,7 @@ pub fn hash64(bytes: []const u8) u64 {
 /// Preconditions: if bytes.len > 0, bytes.ptr must be non-null.
 /// Postconditions: returns deterministic 64-bit hash of bytes for given seed.
 pub fn hashSeeded(seed: u64, bytes: []const u8) u64 {
-    std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+    assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
     return std.hash.Wyhash.hash(seed, bytes);
 }
 
@@ -116,38 +118,38 @@ pub fn hash64Seeded(seed: u64, bytes: []const u8) u64 {
 // Methodology: validate determinism, seed separation, streaming equivalence, and a small set of pinned vectors.
 
 test "wyhash is deterministic for a given seed" {
-    try std.testing.expectEqual(hash("abc"), hash("abc"));
-    try std.testing.expectEqual(hashSeeded(42, "abc"), hashSeeded(42, "abc"));
+    try testing.expectEqual(hash("abc"), hash("abc"));
+    try testing.expectEqual(hashSeeded(42, "abc"), hashSeeded(42, "abc"));
 }
 
 test "wyhash seed changes output" {
-    try std.testing.expect(hashSeeded(42, "abc") != hashSeeded(43, "abc"));
+    try testing.expect(hashSeeded(42, "abc") != hashSeeded(43, "abc"));
 }
 
 test "wyhash different inputs produce different hashes" {
-    try std.testing.expect(hash("hello") != hash("world"));
+    try testing.expect(hash("hello") != hash("world"));
 }
 
 test "wyhash empty input is stable" {
     const a = hash("");
     const b = hash("");
-    try std.testing.expectEqual(a, b);
+    try testing.expectEqual(a, b);
 }
 
 test "wyhash streaming matches one-shot" {
     var h = Wyhash64.initDefault();
     h.update("hel");
     h.update("lo");
-    try std.testing.expectEqual(hash("hello"), h.final());
+    try testing.expectEqual(hash("hello"), h.final());
 }
 
 test "wyhash aliases match direct entrypoints" {
-    try std.testing.expectEqual(hash("hello"), hash64("hello"));
-    try std.testing.expectEqual(hashSeeded(42, "hello"), hash64Seeded(42, "hello"));
+    try testing.expectEqual(hash("hello"), hash64("hello"));
+    try testing.expectEqual(hashSeeded(42, "hello"), hash64Seeded(42, "hello"));
 }
 
 test "wyhash golden vectors are stable" {
     // Pinned output values. These must never change.
-    try std.testing.expectEqual(@as(u64, 0x0409638ee2bde459), hash(""));
-    try std.testing.expectEqual(@as(u64, 0x0e24bbd9f93f532d), hash("hello"));
+    try testing.expectEqual(@as(u64, 0x0409638ee2bde459), hash(""));
+    try testing.expectEqual(@as(u64, 0x0e24bbd9f93f532d), hash("hello"));
 }

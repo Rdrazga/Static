@@ -2,6 +2,7 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 const example_options = @import("static_testing_example_options");
 
@@ -24,8 +25,8 @@ pub fn main() !void {
     var payload_buffer: [16]u8 = undefined;
     const response = try driver.recvResponse(&payload_buffer);
 
-    std.debug.assert(response.header.request_id == request_id);
-    std.debug.assert(response.header.kind == .ok);
-    std.debug.assert(std.mem.eql(u8, response.payload, "hello"));
+    assert(response.header.request_id == request_id);
+    assert(response.header.kind == .ok);
+    assert(std.mem.eql(u8, response.payload, "hello"));
     try driver.shutdown();
 }

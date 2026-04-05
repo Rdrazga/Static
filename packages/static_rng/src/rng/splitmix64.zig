@@ -12,6 +12,8 @@
 //! Thread safety: not thread-safe; use one instance per thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const SplitMix64 = struct {
     state: u64,
@@ -32,7 +34,7 @@ pub const SplitMix64 = struct {
         // Postcondition: the Weyl sequence increment (0x9e3779b97f4a7c15) is odd,
         // so state advances by that odd constant each call and wraps mod 2^64.
         // The state must have changed from before the call.
-        std.debug.assert(self.state != state_before);
+        assert(self.state != state_before);
         return result;
     }
 };
@@ -43,12 +45,12 @@ test "SplitMix64 is deterministic for same seed" {
 
     var index: usize = 0;
     while (index < 16) : (index += 1) {
-        try std.testing.expectEqual(a.next(), b.next());
+        try testing.expectEqual(a.next(), b.next());
     }
 }
 
 test "SplitMix64 diverges for different seeds" {
     var a = SplitMix64.init(1);
     var b = SplitMix64.init(2);
-    try std.testing.expect(a.next() != b.next());
+    try testing.expect(a.next() != b.next());
 }

@@ -13,6 +13,7 @@
 //! - avalanche averages near 32 changed bits.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_hash = @import("static_hash");
 const builtin = @import("builtin");
 
@@ -244,7 +245,7 @@ fn buildByteCase(seed_value: usize, storage: []u8) []const u8 {
 }
 
 fn perturbByteSlice(bytes: []u8, index: usize) void {
-    std.debug.assert(bytes.len != 0);
+    assert(bytes.len != 0);
     const byte_index = index % bytes.len;
     const mask: u8 = @as(u8, 1) << @as(u3, @truncate(index));
     bytes[byte_index] ^= mask;
@@ -262,7 +263,7 @@ fn buildValueTuple(seed_value: usize) [4]u64 {
 }
 
 fn foldOrdered(values: []const u64) u64 {
-    std.debug.assert(values.len != 0);
+    assert(values.len != 0);
     var acc = values[0];
     for (values[1..]) |value| {
         acc = static_hash.combineOrdered64(.{

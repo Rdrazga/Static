@@ -5,6 +5,8 @@
 //! hide large copies.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const scheduling = @import("static_scheduling");
 const clock = @import("clock.zig");
 
@@ -90,7 +92,7 @@ pub fn TimerQueue(comptime T: type) type {
             if (due_time.tick <= now_time.tick) return error.InvalidInput;
 
             const distance_ticks = due_time.tick - now_time.tick;
-            std.debug.assert(distance_ticks > 0);
+            assert(distance_ticks > 0);
             const wheel_delay_ticks = distance_ticks - 1;
             const timer_id = self.wheel.schedule(value, wheel_delay_ticks) catch |err| {
                 return mapWheelError(err);
@@ -148,12 +150,12 @@ pub fn TimerQueue(comptime T: type) type {
                 self.clearDueMeta(try self.absoluteWheelTime(), drained_count);
             }
 
-            std.debug.assert(out_len == due_total);
+            assert(out_len == due_total);
             return @as(u32, @intCast(out_len));
         }
 
         fn setMeta(self: *Self, timer_id: TimerId, due_time: clock.LogicalTime) void {
-            std.debug.assert(timer_id.index < self.meta.len);
+            assert(timer_id.index < self.meta.len);
             self.meta[timer_id.index] = .{
                 .active = true,
                 .generation = timer_id.generation,
@@ -162,7 +164,7 @@ pub fn TimerQueue(comptime T: type) type {
         }
 
         fn clearMetaById(self: *Self, timer_id: TimerId) void {
-            std.debug.assert(timer_id.index < self.meta.len);
+            assert(timer_id.index < self.meta.len);
             if (self.meta[timer_id.index].active and self.meta[timer_id.index].generation == timer_id.generation) {
                 self.meta[timer_id.index].active = false;
             }
@@ -177,7 +179,7 @@ pub fn TimerQueue(comptime T: type) type {
                 cleared_count += 1;
                 if (cleared_count == count) break;
             }
-            std.debug.assert(cleared_count == count);
+            assert(cleared_count == count);
         }
 
         fn countDueUpTo(self: *const Self, now_time: clock.LogicalTime) usize {
@@ -214,11 +216,11 @@ fn mapWheelError(err: scheduling.timer_wheel.TimerError) TimerQueueError {
 
 test "timer queue drains due timers in FIFO due order" {
     var sim_clock = clock.SimClock.init(.init(0));
-    var queue = try TimerQueue(u32).init(std.testing.allocator, &sim_clock, .{
+    var queue = try TimerQueue(u32).init(testing.allocator, &sim_clock, .{
         .buckets = 8,
         .timers_max = 8,
     });
-    defer queue.deinit(std.testing.allocator);
+    defer queue.deinit(testing.allocator);
 
     _ = try queue.scheduleAfter(10, .init(2));
     _ = try queue.scheduleAfter(20, .init(2));
@@ -226,49 +228,49 @@ test "timer queue drains due timers in FIFO due order" {
 
     var out: [4]u32 = [_]u32{0} ** 4;
     const count = try queue.drainDue(&out);
-    try std.testing.expectEqual(@as(u32, 2), count);
-    try std.testing.expectEqualSlices(u32, &.{ 10, 20 }, out[0..2]);
+    try testing.expectEqual(@as(u32, 2), count);
+    try testing.expectEqualSlices(u32, &.{ 10, 20 }, out[0..2]);
 }
 
 test "timer queue supports long delays across wheel rounds" {
     var sim_clock = clock.SimClock.init(.init(0));
-    var queue = try TimerQueue(u32).init(std.testing.allocator, &sim_clock, .{
+    var queue = try TimerQueue(u32).init(testing.allocator, &sim_clock, .{
         .buckets = 4,
         .timers_max = 4,
     });
-    defer queue.deinit(std.testing.allocator);
+    defer queue.deinit(testing.allocator);
 
     _ = try queue.scheduleAfter(55, .init(9));
     _ = try sim_clock.advance(.init(8));
 
     var out: [1]u32 = [_]u32{0};
-    try std.testing.expectEqual(@as(u32, 0), try queue.drainDue(&out));
+    try testing.expectEqual(@as(u32, 0), try queue.drainDue(&out));
 
     _ = try sim_clock.advance(.init(1));
-    try std.testing.expectEqual(@as(u32, 1), try queue.drainDue(&out));
-    try std.testing.expectEqual(@as(u32, 55), out[0]);
+    try testing.expectEqual(@as(u32, 1), try queue.drainDue(&out));
+    try testing.expectEqual(@as(u32, 55), out[0]);
 }
 
 test "timer queue cancel invalidates stale id and drain no-space does not advance wheel time" {
     var sim_clock = clock.SimClock.init(.init(0));
-    var queue = try TimerQueue(u32).init(std.testing.allocator, &sim_clock, .{
+    var queue = try TimerQueue(u32).init(testing.allocator, &sim_clock, .{
         .buckets = 8,
         .timers_max = 8,
     });
-    defer queue.deinit(std.testing.allocator);
+    defer queue.deinit(testing.allocator);
 
     const keep_id = try queue.scheduleAfter(1, .init(1));
     const cancel_id = try queue.scheduleAfter(2, .init(1));
-    try std.testing.expectEqual(@as(u32, 2), try queue.cancel(cancel_id));
-    try std.testing.expectError(error.NotFound, queue.cancel(cancel_id));
+    try testing.expectEqual(@as(u32, 2), try queue.cancel(cancel_id));
+    try testing.expectError(error.NotFound, queue.cancel(cancel_id));
 
     _ = try sim_clock.advance(.init(1));
     var tiny_out: [0]u32 = .{};
-    try std.testing.expectError(error.NoSpaceLeft, queue.drainDue(&tiny_out));
-    try std.testing.expectEqual(@as(u64, 0), queue.wheel.nowTick());
+    try testing.expectError(error.NoSpaceLeft, queue.drainDue(&tiny_out));
+    try testing.expectEqual(@as(u64, 0), queue.wheel.nowTick());
 
     var out: [1]u32 = [_]u32{0};
-    try std.testing.expectEqual(@as(u32, 1), try queue.drainDue(&out));
-    try std.testing.expectEqual(@as(u32, 1), out[0]);
+    try testing.expectEqual(@as(u32, 1), try queue.drainDue(&out));
+    try testing.expectEqual(@as(u32, 1), out[0]);
     _ = keep_id;
 }

@@ -1,6 +1,7 @@
 //! Tiny process-boundary helper used by `static_testing` integration tests.
 
 const std = @import("std");
+const panic = std.debug.panic;
 const testing = @import("static_testing");
 
 const mode_echo = "echo";
@@ -26,10 +27,10 @@ pub fn main(init: std.process.Init) !void {
     var stdout_writer = stdout_file.writer(init.io, &stdout_buffer);
     var stderr_writer = stderr_file.writer(init.io, &stderr_buffer);
     defer stdout_writer.interface.flush() catch |err| {
-        std.debug.panic("driver_echo stdout flush failed: {s}", .{@errorName(err)});
+        panic("driver_echo stdout flush failed: {s}", .{@errorName(err)});
     };
     defer stderr_writer.interface.flush() catch |err| {
-        std.debug.panic("driver_echo stderr flush failed: {s}", .{@errorName(err)});
+        panic("driver_echo stderr flush failed: {s}", .{@errorName(err)});
     };
 
     if (std.mem.eql(u8, mode, mode_malformed)) {

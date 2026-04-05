@@ -1,5 +1,7 @@
 //! Demonstrates a bounded wait-queue handoff for a single aligned value.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const sync = @import("static_sync");
 
 pub fn main() !void {
@@ -10,7 +12,7 @@ pub fn main() !void {
     const waiter_start_timeout_ns = 1 * std.time.ns_per_s;
 
     if (!sync.wait_queue.supports_wait_queue) {
-        try std.testing.expectError(
+        try testing.expectError(
             error.Unsupported,
             sync.wait_queue.waitValue(u32, &state, 0, .{}),
         );
@@ -23,10 +25,10 @@ pub fn main() !void {
         waiter_finished: *std.atomic.Value(bool),
 
         fn run(self: *@This()) void {
-            std.debug.assert(@atomicLoad(u32, self.state, .acquire) == 0);
+            assert(@atomicLoad(u32, self.state, .acquire) == 0);
             self.waiter_started.store(true, .release);
             sync.wait_queue.waitValue(u32, self.state, 0, .{}) catch unreachable;
-            std.debug.assert(@atomicLoad(u32, self.state, .acquire) == 1);
+            assert(@atomicLoad(u32, self.state, .acquire) == 1);
             self.waiter_finished.store(true, .release);
         }
     };
@@ -47,6 +49,6 @@ pub fn main() !void {
     sync.wait_queue.wakeValue(u32, &state, 1);
     thread.join();
 
-    std.debug.assert(waiter_finished.load(.acquire));
-    std.debug.assert(@atomicLoad(u32, &state, .acquire) == 1);
+    assert(waiter_finished.load(.acquire));
+    assert(@atomicLoad(u32, &state, .acquire) == 1);
 }

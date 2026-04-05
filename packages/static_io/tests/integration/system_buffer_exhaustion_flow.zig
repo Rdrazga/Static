@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -40,15 +42,15 @@ const ExhaustionRunner = struct {
         self: *@This(),
         context: *system.SystemContext(Fixture),
     ) anyerror!checker.CheckResult {
-        std.debug.assert(context.hasComponent("runtime"));
-        std.debug.assert(context.hasComponent("buffer_pool"));
-        std.debug.assert(context.hasComponent("resource_policy"));
-        std.debug.assert(context.traceBufferPtr() != null);
-        std.debug.assert(self.pool.capacity() == 2);
+        assert(context.hasComponent("runtime"));
+        assert(context.hasComponent("buffer_pool"));
+        assert(context.hasComponent("resource_policy"));
+        assert(context.traceBufferPtr() != null);
+        assert(self.pool.capacity() == 2);
 
         const stream = try support.connectStream(self.runtime, endpoint, context, &self.next_sequence_no);
         defer self.runtime.closeHandle(stream.handle) catch |err| {
-            std.debug.assert(err == error.Closed);
+            assert(err == error.Closed);
         };
 
         const held_buffer = try self.pool.acquire();
@@ -74,7 +76,7 @@ const ExhaustionRunner = struct {
             pending_id,
         );
 
-        try std.testing.expectError(error.NoSpaceLeft, self.pool.acquire());
+        try testing.expectError(error.NoSpaceLeft, self.pool.acquire());
         const exhausted_seq = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -88,9 +90,9 @@ const ExhaustionRunner = struct {
         try self.runtime.cancel(pending_id);
         _ = try self.runtime.pump(1);
         const cancelled_completion = self.runtime.poll() orelse return error.MissingCompletion;
-        try std.testing.expectEqual(pending_id, cancelled_completion.operation_id);
-        try std.testing.expectEqual(static_io.types.CompletionStatus.cancelled, cancelled_completion.status);
-        try std.testing.expectEqual(@as(?static_io.types.CompletionErrorTag, .cancelled), cancelled_completion.err);
+        try testing.expectEqual(pending_id, cancelled_completion.operation_id);
+        try testing.expectEqual(static_io.types.CompletionStatus.cancelled, cancelled_completion.status);
+        try testing.expectEqual(@as(?static_io.types.CompletionErrorTag, .cancelled), cancelled_completion.err);
         const cancelled_seq = try support.appendEvent(
             context,
             &self.next_sequence_no,
@@ -165,7 +167,7 @@ const ExhaustionRunner = struct {
 
 fn initFixture(fixture: *Fixture) !void {
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{ .buckets = 4, .timers_max = 4 },
         .scheduler_seed = .init(95),
         .event_loop_config = .{ .step_budget_max = 4 },
@@ -178,14 +180,14 @@ test "static_io buffer exhaustion and recovery run under testing.system" {
     try initFixture(&fixture);
     defer fixture.deinit();
 
-    var pool = try static_io.BufferPool.init(std.testing.allocator, .{
+    var pool = try static_io.BufferPool.init(testing.allocator, .{
         .buffer_size = 16,
         .capacity = 2,
     });
     defer pool.deinit();
 
     var runtime = try static_io.Runtime.init(
-        std.testing.allocator,
+        testing.allocator,
         static_io.RuntimeConfig.initForTest(4),
     );
     defer runtime.deinit();
@@ -205,8 +207,8 @@ test "static_io buffer exhaustion and recovery run under testing.system" {
         .components = &components,
     }, &runner, ExhaustionRunner.run);
 
-    try std.testing.expect(execution.check_result.passed);
-    try std.testing.expectEqual(@as(usize, components.len), execution.component_count);
-    try std.testing.expect(execution.trace_metadata.event_count >= 6);
-    try std.testing.expect(execution.retained_bundle == null);
+    try testing.expect(execution.check_result.passed);
+    try testing.expectEqual(@as(usize, components.len), execution.component_count);
+    try testing.expect(execution.trace_metadata.event_count >= 6);
+    try testing.expect(execution.retained_bundle == null);
 }

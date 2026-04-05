@@ -1,6 +1,8 @@
 //! Tiny `static_io`-backed process-boundary helper used by package integration tests.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const panic = std.debug.panic;
 const static_io = @import("static_io");
 const testing = @import("static_testing");
 
@@ -14,7 +16,7 @@ pub fn main(init: std.process.Init) !void {
 
     _ = args.skip();
     const mode = args.next() orelse return error.InvalidArgs;
-    std.debug.assert(mode.len != 0);
+    assert(mode.len != 0);
 
     const stdin_file = init.preopens.get("stdin").?.file;
     const stdout_file = init.preopens.get("stdout").?.file;
@@ -26,10 +28,10 @@ pub fn main(init: std.process.Init) !void {
     var stdout_writer = stdout_file.writer(init.io, &stdout_buffer);
     var stderr_writer = stderr_file.writer(init.io, &stderr_buffer);
     defer stdout_writer.interface.flush() catch |err| {
-        std.debug.panic("driver_runtime_echo stdout flush failed: {s}", .{@errorName(err)});
+        panic("driver_runtime_echo stdout flush failed: {s}", .{@errorName(err)});
     };
     defer stderr_writer.interface.flush() catch |err| {
-        std.debug.panic("driver_runtime_echo stderr flush failed: {s}", .{@errorName(err)});
+        panic("driver_runtime_echo stderr flush failed: {s}", .{@errorName(err)});
     };
 
     while (true) {
@@ -75,8 +77,8 @@ fn handleRuntimeRetryEcho(
     request_id: u32,
     payload: []const u8,
 ) !void {
-    std.debug.assert(request_id != 0);
-    std.debug.assert(payload.len <= payload_max);
+    assert(request_id != 0);
+    assert(payload.len <= payload_max);
 
     var pool = try static_io.BufferPool.init(allocator, .{
         .buffer_size = payload_max,
@@ -89,7 +91,7 @@ fn handleRuntimeRetryEcho(
 
     const stream = try connectRuntimeStream(&runtime);
     defer runtime.closeHandle(stream.handle) catch |err| {
-        std.debug.assert(err == error.Closed);
+        assert(err == error.Closed);
     };
 
     const timeout_buffer = try pool.acquire();
@@ -136,7 +138,7 @@ fn connectRuntimeStream(runtime: *static_io.Runtime) !static_io.types.Stream {
     const completion = runtime.poll() orelse return error.MissingCompletion;
     if (completion.operation_id != connect_id) return error.NonDeterministicOrdering;
     if (completion.status != .success) return error.UnexpectedCompletionStatus;
-    std.debug.assert(completion.handle != null);
+    assert(completion.handle != null);
     return .{ .handle = completion.handle.? };
 }
 
@@ -152,7 +154,7 @@ fn runRuntimePreflight(allocator: std.mem.Allocator) !void {
 
     const stream = try connectRuntimeStream(&runtime);
     defer runtime.closeHandle(stream.handle) catch |err| {
-        std.debug.assert(err == error.Closed);
+        assert(err == error.Closed);
     };
 
     const buffer = try pool.acquire();
@@ -162,7 +164,7 @@ fn runRuntimePreflight(allocator: std.mem.Allocator) !void {
     if (completion.operation_id != timeout_id) return error.NonDeterministicOrdering;
     if (completion.status != .timeout) return error.UnexpectedCompletionStatus;
     try pool.release(completion.buffer);
-    std.debug.assert(pool.available() == pool.capacity());
+    assert(pool.available() == pool.capacity());
 }
 
 fn readRequestHeader(reader: *std.Io.Reader) !testing.testing.driver_protocol.DriverRequestHeader {
@@ -176,8 +178,8 @@ fn emitResponse(
     header: testing.testing.driver_protocol.DriverResponseHeader,
     payload: []const u8,
 ) !void {
-    std.debug.assert(header.payload_len == payload.len);
-    std.debug.assert(payload.len <= payload_max);
+    assert(header.payload_len == payload.len);
+    assert(payload.len <= payload_max);
 
     var header_bytes: [testing.testing.driver_protocol.response_header_size_bytes]u8 = undefined;
     _ = try testing.testing.driver_protocol.encodeResponseHeader(&header_bytes, header);

@@ -8,6 +8,8 @@
 //! Thread safety: not thread-safe — a single instance must be owned by one thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_hash = @import("static_hash");
 
 pub const Symbol = u32;
@@ -50,7 +52,7 @@ pub const InternPool = struct {
     }
 
     pub fn len(self: *const InternPool) usize {
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
         return self.len_used;
     }
 
@@ -58,19 +60,19 @@ pub const InternPool = struct {
         const result = self.entries.len;
         // Postcondition: capacity must always be at least as large as the number
         // of currently interned entries. A capacity below len is a corrupt state.
-        std.debug.assert(result >= self.len_used);
+        assert(result >= self.len_used);
         return result;
     }
 
     pub fn bytesUsed(self: *const InternPool) usize {
-        std.debug.assert(self.bytes_used <= self.bytes.len);
+        assert(self.bytes_used <= self.bytes.len);
         return self.bytes_used;
     }
 
     pub fn bytesCapacity(self: *const InternPool) usize {
         const result = self.bytes.len;
         // Postcondition: byte capacity must always be at least the bytes consumed.
-        std.debug.assert(result >= self.bytes_used);
+        assert(result >= self.bytes_used);
         return result;
     }
 
@@ -78,8 +80,8 @@ pub const InternPool = struct {
         const max_symbol: usize = std.math.maxInt(Symbol);
         const max_offset: usize = std.math.maxInt(u32);
 
-        std.debug.assert(self.len_used <= self.entries.len);
-        std.debug.assert(self.bytes_used <= self.bytes.len);
+        assert(self.len_used <= self.entries.len);
+        assert(self.bytes_used <= self.bytes.len);
 
         const hash = static_hash.fingerprint64(value);
 
@@ -102,7 +104,7 @@ pub const InternPool = struct {
 
         const start = self.bytes_used;
         const end = start + value.len;
-        std.debug.assert(end <= self.bytes.len);
+        assert(end <= self.bytes.len);
         @memcpy(self.bytes[start..end], value);
         self.bytes_used = end;
 
@@ -114,13 +116,13 @@ pub const InternPool = struct {
 
         const symbol_index = self.len_used;
         self.len_used += 1;
-        std.debug.assert(self.len_used <= self.entries.len);
+        assert(self.len_used <= self.entries.len);
         return @intCast(symbol_index);
     }
 
     pub fn resolve(self: *const InternPool, symbol: Symbol) LookupError![]const u8 {
-        std.debug.assert(self.len_used <= self.entries.len);
-        std.debug.assert(self.bytes_used <= self.bytes.len);
+        assert(self.len_used <= self.entries.len);
+        assert(self.bytes_used <= self.bytes.len);
 
         const index: usize = symbol;
         if (index >= self.len_used) return error.NotFound;
@@ -128,8 +130,8 @@ pub const InternPool = struct {
     }
 
     pub fn contains(self: *const InternPool, value: []const u8) bool {
-        std.debug.assert(self.len_used <= self.entries.len);
-        std.debug.assert(self.bytes_used <= self.bytes.len);
+        assert(self.len_used <= self.entries.len);
+        assert(self.bytes_used <= self.bytes.len);
 
         const hash = static_hash.fingerprint64(value);
 
@@ -145,8 +147,8 @@ pub const InternPool = struct {
     fn sliceFromEntry(self: *const InternPool, entry: Entry) []const u8 {
         const start: usize = entry.offset;
         const end = start + entry.len;
-        std.debug.assert(start <= self.bytes_used);
-        std.debug.assert(end <= self.bytes_used);
+        assert(start <= self.bytes_used);
+        assert(end <= self.bytes_used);
         return self.bytes[start..end];
     }
 };
@@ -154,11 +156,11 @@ pub const InternPool = struct {
 test "InternPool init rejects zero capacities" {
     var no_entries: [0]Entry = .{};
     var bytes: [8]u8 = undefined;
-    try std.testing.expectError(error.InvalidConfig, InternPool.init(no_entries[0..], bytes[0..]));
+    try testing.expectError(error.InvalidConfig, InternPool.init(no_entries[0..], bytes[0..]));
 
     var entries: [1]Entry = undefined;
     var no_bytes: [0]u8 = .{};
-    try std.testing.expectError(error.InvalidConfig, InternPool.init(entries[0..], no_bytes[0..]));
+    try testing.expectError(error.InvalidConfig, InternPool.init(entries[0..], no_bytes[0..]));
 }
 
 test "InternPool duplicate strings return same symbol" {
@@ -168,8 +170,8 @@ test "InternPool duplicate strings return same symbol" {
 
     const first = try pool.intern("hello");
     const second = try pool.intern("hello");
-    try std.testing.expectEqual(first, second);
-    try std.testing.expectEqual(@as(usize, 1), pool.len());
+    try testing.expectEqual(first, second);
+    try testing.expectEqual(@as(usize, 1), pool.len());
 }
 
 test "InternPool resolves symbols and reports NotFound" {
@@ -179,9 +181,9 @@ test "InternPool resolves symbols and reports NotFound" {
 
     const symbol = try pool.intern("abc");
     const resolved = try pool.resolve(symbol);
-    try std.testing.expectEqualStrings("abc", resolved);
+    try testing.expectEqualStrings("abc", resolved);
 
-    try std.testing.expectError(error.NotFound, pool.resolve(99));
+    try testing.expectError(error.NotFound, pool.resolve(99));
 }
 
 test "InternPool returns NoSpaceLeft for entry limit" {
@@ -190,7 +192,7 @@ test "InternPool returns NoSpaceLeft for entry limit" {
     var pool = try InternPool.init(entries[0..], bytes[0..]);
 
     _ = try pool.intern("a");
-    try std.testing.expectError(error.NoSpaceLeft, pool.intern("b"));
+    try testing.expectError(error.NoSpaceLeft, pool.intern("b"));
 }
 
 test "InternPool returns NoSpaceLeft for byte capacity" {
@@ -199,7 +201,7 @@ test "InternPool returns NoSpaceLeft for byte capacity" {
     var pool = try InternPool.init(entries[0..], bytes[0..]);
 
     _ = try pool.intern("abc");
-    try std.testing.expectError(error.NoSpaceLeft, pool.intern("d"));
+    try testing.expectError(error.NoSpaceLeft, pool.intern("d"));
 }
 
 test "InternPool contains matches interned values" {
@@ -207,10 +209,10 @@ test "InternPool contains matches interned values" {
     var bytes: [16]u8 = undefined;
     var pool = try InternPool.init(entries[0..], bytes[0..]);
 
-    try std.testing.expect(!pool.contains("alpha"));
+    try testing.expect(!pool.contains("alpha"));
     _ = try pool.intern("alpha");
-    try std.testing.expect(pool.contains("alpha"));
-    try std.testing.expect(!pool.contains("beta"));
+    try testing.expect(pool.contains("alpha"));
+    try testing.expect(!pool.contains("beta"));
 }
 
 test "InternPool bytesUsed tracks unique interned lengths" {
@@ -218,12 +220,12 @@ test "InternPool bytesUsed tracks unique interned lengths" {
     var bytes: [16]u8 = undefined;
     var pool = try InternPool.init(entries[0..], bytes[0..]);
 
-    try std.testing.expectEqual(@as(usize, 0), pool.bytesUsed());
+    try testing.expectEqual(@as(usize, 0), pool.bytesUsed());
 
     _ = try pool.intern("a");
     _ = try pool.intern("bb");
-    try std.testing.expectEqual(@as(usize, 3), pool.bytesUsed());
+    try testing.expectEqual(@as(usize, 3), pool.bytesUsed());
 
     _ = try pool.intern("a");
-    try std.testing.expectEqual(@as(usize, 3), pool.bytesUsed());
+    try testing.expectEqual(@as(usize, 3), pool.bytesUsed());
 }

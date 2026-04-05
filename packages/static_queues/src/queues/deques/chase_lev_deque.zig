@@ -4,6 +4,8 @@
 //! Thread safety: one owner thread uses pushBottom/popBottom; thief threads use stealTop.
 //! Blocking behavior: non-blocking; operations return `error.WouldBlock` on full/empty/contention.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("../ring_buffer.zig");
 const memory = @import("static_memory");
 const sync = @import("static_sync");
@@ -14,8 +16,8 @@ pub const Error = ring.Error;
 
 pub fn ChaseLevDeque(comptime T: type) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -77,12 +79,12 @@ pub fn ChaseLevDeque(comptime T: type) type {
                 .cas_retries_max = cfg.cas_retries_max,
                 .backoff_exponent_max = cfg.backoff_exponent_max,
             };
-            std.debug.assert(self.buffer.len == cfg.capacity);
+            assert(self.buffer.len == cfg.capacity);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
-            std.debug.assert(self.buffer.len > 0);
+            assert(self.buffer.len > 0);
             if (self.budget) |budget| {
                 budget.release(qi.bytesForItems(self.buffer.len, @sizeOf(T)));
             }
@@ -91,7 +93,7 @@ pub fn ChaseLevDeque(comptime T: type) type {
         }
 
         pub fn capacity(self: *const Self) usize {
-            std.debug.assert(self.buffer.len > 0);
+            assert(self.buffer.len > 0);
             return self.buffer.len;
         }
 
@@ -173,21 +175,21 @@ pub fn ChaseLevDeque(comptime T: type) type {
 }
 
 test "chase-lev deque owner and thief semantics" {
-    var dq = try ChaseLevDeque(u8).init(std.testing.allocator, .{ .capacity = 4 });
+    var dq = try ChaseLevDeque(u8).init(testing.allocator, .{ .capacity = 4 });
     defer dq.deinit();
 
     try dq.pushBottom(1);
     try dq.pushBottom(2);
-    try std.testing.expectEqual(@as(u8, 1), try dq.stealTop());
-    try std.testing.expectEqual(@as(u8, 2), try dq.popBottom());
-    try std.testing.expectError(error.WouldBlock, dq.popBottom());
+    try testing.expectEqual(@as(u8, 1), try dq.stealTop());
+    try testing.expectEqual(@as(u8, 2), try dq.popBottom());
+    try testing.expectError(error.WouldBlock, dq.popBottom());
 }
 
 test "chase-lev deque applies bounded full behavior" {
-    var dq = try ChaseLevDeque(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var dq = try ChaseLevDeque(u8).init(testing.allocator, .{ .capacity = 2 });
     defer dq.deinit();
 
     try dq.pushBottom(7);
     try dq.pushBottom(8);
-    try std.testing.expectError(error.WouldBlock, dq.pushBottom(9));
+    try testing.expectError(error.WouldBlock, dq.pushBottom(9));
 }

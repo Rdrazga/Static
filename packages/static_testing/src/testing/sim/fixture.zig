@@ -1,6 +1,8 @@
 //! Shared deterministic simulation fixture for event-loop based tests.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const seed = @import("../seed.zig");
 const trace = @import("../trace.zig");
 const clock = @import("clock.zig");
@@ -34,9 +36,9 @@ pub fn Fixture(
     comptime trace_capacity: usize,
 ) type {
     comptime {
-        std.debug.assert(ready_capacity > 0);
-        std.debug.assert(decision_capacity > 0);
-        std.debug.assert(timer_buffer_capacity > 0);
+        assert(ready_capacity > 0);
+        assert(decision_capacity > 0);
+        assert(timer_buffer_capacity > 0);
     }
 
     return struct {
@@ -152,7 +154,7 @@ pub fn Fixture(
 test "fixture steps one deterministic timer-driven schedule" {
     var fixture: Fixture(4, 4, 4, 0) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -168,17 +170,17 @@ test "fixture steps one deterministic timer-driven schedule" {
 
     _ = try fixture.step();
     const first = try fixture.step();
-    try std.testing.expectEqual(@as(u32, 11), first.decision.?.chosen_id);
+    try testing.expectEqual(@as(u32, 11), first.decision.?.chosen_id);
 
     _ = try fixture.step();
     const second = try fixture.step();
-    try std.testing.expectEqual(@as(u32, 22), second.decision.?.chosen_id);
+    try testing.expectEqual(@as(u32, 22), second.decision.?.chosen_id);
 }
 
 test "fixture optionally records trace metadata" {
     var fixture: Fixture(4, 4, 4, 8) = undefined;
     try fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -194,5 +196,5 @@ test "fixture optionally records trace metadata" {
     _ = try fixture.runForSteps(2);
 
     const metadata = fixture.traceMetadata().?;
-    try std.testing.expect(metadata.event_count != 0);
+    try testing.expect(metadata.event_count != 0);
 }

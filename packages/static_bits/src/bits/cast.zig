@@ -7,6 +7,8 @@
 //! Thread safety: thread-safe. All functions are pure and stateless.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 
 /// Errors returned by `castInt`.
@@ -58,7 +60,7 @@ pub fn castInt(comptime Dst: type, value: anytype) Error!Dst {
 
     if (std.math.cast(Dst, value)) |casted| {
         if (src_info.signedness == .signed and dst_info.signedness == .unsigned) {
-            std.debug.assert(value >= 0);
+            assert(value >= 0);
         }
         return casted;
     }
@@ -67,27 +69,27 @@ pub fn castInt(comptime Dst: type, value: anytype) Error!Dst {
 }
 
 test "castInt maps underflow and overflow deterministically" {
-    try std.testing.expectEqual(@as(u8, 7), try castInt(u8, @as(u16, 7)));
-    try std.testing.expectEqual(@as(i8, -1), try castInt(i8, @as(i16, -1)));
-    try std.testing.expectError(error.Underflow, castInt(u8, @as(i16, -1)));
-    try std.testing.expectError(error.Overflow, castInt(u8, @as(u16, 300)));
-    try std.testing.expectError(error.Overflow, castInt(i8, @as(u8, 200)));
-    try std.testing.expectError(error.Overflow, castInt(i16, @as(u16, 0x8000)));
-    try std.testing.expectEqual(@as(i16, 0x7FFF), try castInt(i16, @as(u16, 0x7FFF)));
-    try std.testing.expectError(error.Underflow, castInt(i8, @as(i16, -129)));
-    try std.testing.expectError(error.Overflow, castInt(i8, @as(i16, 128)));
+    try testing.expectEqual(@as(u8, 7), try castInt(u8, @as(u16, 7)));
+    try testing.expectEqual(@as(i8, -1), try castInt(i8, @as(i16, -1)));
+    try testing.expectError(error.Underflow, castInt(u8, @as(i16, -1)));
+    try testing.expectError(error.Overflow, castInt(u8, @as(u16, 300)));
+    try testing.expectError(error.Overflow, castInt(i8, @as(u8, 200)));
+    try testing.expectError(error.Overflow, castInt(i16, @as(u16, 0x8000)));
+    try testing.expectEqual(@as(i16, 0x7FFF), try castInt(i16, @as(u16, 0x7FFF)));
+    try testing.expectError(error.Underflow, castInt(i8, @as(i16, -129)));
+    try testing.expectError(error.Overflow, castInt(i8, @as(i16, 128)));
 }
 
 test "castInt accepts destination bounds exactly" {
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         @as(u8, std.math.maxInt(u8)),
         try castInt(u8, @as(u8, std.math.maxInt(u8))),
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         @as(i16, std.math.minInt(i16)),
         try castInt(i16, @as(i16, std.math.minInt(i16))),
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         @as(i16, std.math.maxInt(i16)),
         try castInt(i16, @as(i16, std.math.maxInt(i16))),
     );

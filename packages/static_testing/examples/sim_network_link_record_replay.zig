@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const network = testing.testing.sim.network_link;
@@ -48,11 +49,11 @@ pub fn main() !void {
     );
     defer mailbox_19.deinit();
 
-    std.debug.assert((try replay_link.deliverDueToMailbox(.init(3), 13, &mailbox_13, null)).delivered_count == 1);
-    std.debug.assert(try mailbox_13.recv() == 130);
-    std.debug.assert((try replay_link.deliverDueToMailbox(.init(3), 19, &mailbox_19, null)).delivered_count == 0);
-    std.debug.assert((try replay_link.deliverDueToMailbox(.init(4), 19, &mailbox_19, null)).delivered_count == 1);
-    std.debug.assert(try mailbox_19.recv() == 190);
+    assert((try replay_link.deliverDueToMailbox(.init(3), 13, &mailbox_13, null)).delivered_count == 1);
+    assert(try mailbox_13.recv() == 130);
+    assert((try replay_link.deliverDueToMailbox(.init(3), 19, &mailbox_19, null)).delivered_count == 0);
+    assert((try replay_link.deliverDueToMailbox(.init(4), 19, &mailbox_19, null)).delivered_count == 1);
+    assert(try mailbox_19.recv() == 190);
 
     std.debug.print(
         "network link replay restored {d} retained deliveries with due ticks {d} and {d}\n",

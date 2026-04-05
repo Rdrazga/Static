@@ -9,6 +9,8 @@
 //! - `close` rejects future sends immediately.
 //! - Receives drain buffered items first, then return `error.Closed`.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const spsc = @import("../spsc.zig");
 const ring = @import("../ring_buffer.zig");
 const sync = @import("static_sync");
@@ -18,8 +20,8 @@ const contracts = @import("../../contracts.zig");
 
 pub fn SpscChannel(comptime T: type) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     const supports_blocking_wait_enabled = caps.blocking_wait_enabled;
@@ -73,7 +75,7 @@ pub fn SpscChannel(comptime T: type) type {
             const self: Self = .{
                 .queue = try spsc.SpscQueue(T).init(allocator, cfg),
             };
-            std.debug.assert(!self.closed);
+            assert(!self.closed);
             return self;
         }
 
@@ -118,7 +120,7 @@ pub fn SpscChannel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.queue.capacity() > 0);
+            assert(self.queue.capacity() > 0);
             if (self.closed) return error.Closed;
 
             const old_len = self.queue.len();
@@ -128,8 +130,8 @@ pub fn SpscChannel(comptime T: type) type {
                     error.WouldBlock => break,
                 };
             }
-            std.debug.assert(sent_count <= items_limit);
-            std.debug.assert(self.queue.len() == old_len + sent_count);
+            assert(sent_count <= items_limit);
+            assert(self.queue.len() == old_len + sent_count);
             if (sent_count > 0) {
                 self.wakeReceiversForBatchLocked(sent_count, options.wake_mode);
             }
@@ -154,7 +156,7 @@ pub fn SpscChannel(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.queue.capacity() > 0);
+            assert(self.queue.capacity() > 0);
             const old_len = self.queue.len();
             var recv_count: usize = 0;
             while (recv_count < items_limit) : (recv_count += 1) {
@@ -162,8 +164,8 @@ pub fn SpscChannel(comptime T: type) type {
                     error.WouldBlock => break,
                 };
             }
-            std.debug.assert(recv_count <= items_limit);
-            std.debug.assert(self.queue.len() + recv_count == old_len);
+            assert(recv_count <= items_limit);
+            assert(self.queue.len() + recv_count == old_len);
             if (recv_count > 0) {
                 self.wakeSendersForBatchLocked(recv_count, options.wake_mode);
                 return recv_count;
@@ -340,7 +342,7 @@ pub fn SpscChannel(comptime T: type) type {
             progress_count: usize,
             wake_mode: BatchWakeMode,
         ) void {
-            std.debug.assert(progress_count > 0);
+            assert(progress_count > 0);
             switch (wake_mode) {
                 .progress => self.wakeSenderCountLocked(clampBatchWakeCount(progress_count)),
                 .single => self.wakeSenderCountLocked(1),
@@ -353,7 +355,7 @@ pub fn SpscChannel(comptime T: type) type {
             progress_count: usize,
             wake_mode: BatchWakeMode,
         ) void {
-            std.debug.assert(progress_count > 0);
+            assert(progress_count > 0);
             switch (wake_mode) {
                 .progress => self.wakeReceiverCountLocked(clampBatchWakeCount(progress_count)),
                 .single => self.wakeReceiverCountLocked(1),
@@ -439,7 +441,7 @@ pub fn SpscChannel(comptime T: type) type {
             const self: Self = .{
                 .queue = try spsc.SpscQueue(T).init(allocator, cfg),
             };
-            std.debug.assert(!self.closed);
+            assert(!self.closed);
             return self;
         }
 
@@ -481,11 +483,11 @@ pub fn SpscChannel(comptime T: type) type {
             const items_limit = @min(values.len, options.items_max);
             if (items_limit == 0) return 0;
 
-            std.debug.assert(options.wake_mode == .progress);
+            assert(options.wake_mode == .progress);
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.queue.capacity() > 0);
+            assert(self.queue.capacity() > 0);
             if (self.closed) return error.Closed;
 
             const old_len = self.queue.len();
@@ -495,8 +497,8 @@ pub fn SpscChannel(comptime T: type) type {
                     error.WouldBlock => break,
                 };
             }
-            std.debug.assert(sent_count <= items_limit);
-            std.debug.assert(self.queue.len() == old_len + sent_count);
+            assert(sent_count <= items_limit);
+            assert(self.queue.len() == old_len + sent_count);
             return sent_count;
         }
 
@@ -515,11 +517,11 @@ pub fn SpscChannel(comptime T: type) type {
             const items_limit = @min(out.len, options.items_max);
             if (items_limit == 0) return 0;
 
-            std.debug.assert(options.wake_mode == .progress);
+            assert(options.wake_mode == .progress);
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            std.debug.assert(self.queue.capacity() > 0);
+            assert(self.queue.capacity() > 0);
             const old_len = self.queue.len();
             var recv_count: usize = 0;
             while (recv_count < items_limit) : (recv_count += 1) {
@@ -527,8 +529,8 @@ pub fn SpscChannel(comptime T: type) type {
                     error.WouldBlock => break,
                 };
             }
-            std.debug.assert(recv_count <= items_limit);
-            std.debug.assert(self.queue.len() + recv_count == old_len);
+            assert(recv_count <= items_limit);
+            assert(self.queue.len() + recv_count == old_len);
             if (recv_count > 0) return recv_count;
 
             if (self.closed) return error.Closed;
@@ -564,62 +566,62 @@ pub fn SpscChannel(comptime T: type) type {
 
 test "spsc channel blocking API shape is capability-gated" {
     const C = SpscChannel(u8);
-    try std.testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "send"));
-    try std.testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "recv"));
-    try std.testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "sendTimeout"));
-    try std.testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "recvTimeout"));
+    try testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "send"));
+    try testing.expectEqual(C.supports_blocking_wait, @hasDecl(C, "recv"));
+    try testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "sendTimeout"));
+    try testing.expectEqual(C.supports_timed_wait, @hasDecl(C, "recvTimeout"));
 }
 
 test "spsc channel close semantics for try APIs" {
-    var c = try SpscChannel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c = try SpscChannel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c.deinit();
 
     try c.trySend(1);
     c.close();
-    try std.testing.expectError(error.Closed, c.trySend(2));
-    try std.testing.expectEqual(@as(u8, 1), try c.tryRecv());
-    try std.testing.expectError(error.Closed, c.tryRecv());
+    try testing.expectError(error.Closed, c.trySend(2));
+    try testing.expectEqual(@as(u8, 1), try c.tryRecv());
+    try testing.expectError(error.Closed, c.tryRecv());
 }
 
 test "spsc channel introspection methods reflect queue state" {
-    var c = try SpscChannel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c = try SpscChannel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c.deinit();
 
-    try std.testing.expectEqual(@as(usize, 2), c.capacity());
-    try std.testing.expectEqual(@as(usize, 0), c.len());
-    try std.testing.expect(c.isEmpty());
-    try std.testing.expect(!c.isFull());
+    try testing.expectEqual(@as(usize, 2), c.capacity());
+    try testing.expectEqual(@as(usize, 0), c.len());
+    try testing.expect(c.isEmpty());
+    try testing.expect(!c.isFull());
 
     try c.trySend(1);
-    try std.testing.expectEqual(@as(usize, 1), c.len());
-    try std.testing.expect(!c.isEmpty());
-    try std.testing.expect(!c.isFull());
+    try testing.expectEqual(@as(usize, 1), c.len());
+    try testing.expect(!c.isEmpty());
+    try testing.expect(!c.isFull());
 
     try c.trySend(2);
-    try std.testing.expect(c.isFull());
+    try testing.expect(c.isFull());
 
     _ = try c.tryRecv();
-    try std.testing.expect(!c.isFull());
+    try testing.expect(!c.isFull());
 }
 
 test "spsc channel batch send and recv preserve prefix semantics" {
-    var c = try SpscChannel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c = try SpscChannel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c.deinit();
 
     const sent = try c.trySendBatch(&.{ 1, 2, 3 });
-    try std.testing.expectEqual(@as(usize, 2), sent);
-    try std.testing.expect(c.isFull());
+    try testing.expectEqual(@as(usize, 2), sent);
+    try testing.expect(c.isFull());
 
     var recv_small: [1]u8 = undefined;
     const recv_first = try c.tryRecvBatch(&recv_small);
-    try std.testing.expectEqual(@as(usize, 1), recv_first);
-    try std.testing.expectEqual(@as(u8, 1), recv_small[0]);
+    try testing.expectEqual(@as(usize, 1), recv_first);
+    try testing.expectEqual(@as(u8, 1), recv_small[0]);
 
     var recv_large: [3]u8 = undefined;
     const recv_second = try c.tryRecvBatch(&recv_large);
-    try std.testing.expectEqual(@as(usize, 1), recv_second);
-    try std.testing.expectEqual(@as(u8, 2), recv_large[0]);
-    try std.testing.expectEqual(@as(usize, 0), try c.tryRecvBatch(&recv_large));
+    try testing.expectEqual(@as(usize, 1), recv_second);
+    try testing.expectEqual(@as(u8, 2), recv_large[0]);
+    try testing.expectEqual(@as(usize, 0), try c.tryRecvBatch(&recv_large));
 }
 
 test "spsc channel batch options bound work and define close behavior" {
@@ -627,30 +629,30 @@ test "spsc channel batch options bound work and define close behavior" {
     const wake_mode_batch: C.BatchWakeMode = if (C.supports_blocking_wait) .single else .progress;
     const wake_mode_close: C.BatchWakeMode = if (C.supports_blocking_wait) .broadcast else .progress;
 
-    var c = try C.init(std.testing.allocator, .{ .capacity = 3 });
+    var c = try C.init(testing.allocator, .{ .capacity = 3 });
     defer c.deinit();
 
     const sent_zero = try c.trySendBatchWith(&.{ 1, 2 }, .{
         .items_max = 0,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 0), sent_zero);
-    try std.testing.expect(c.isEmpty());
+    try testing.expectEqual(@as(usize, 0), sent_zero);
+    try testing.expect(c.isEmpty());
 
     const sent_two = try c.trySendBatchWith(&.{ 1, 2, 3 }, .{
         .items_max = 2,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 2), sent_two);
-    try std.testing.expectEqual(@as(usize, 2), c.len());
+    try testing.expectEqual(@as(usize, 2), sent_two);
+    try testing.expectEqual(@as(usize, 2), c.len());
 
     var recv: [4]u8 = undefined;
     const recv_one = try c.tryRecvBatchWith(&recv, .{
         .items_max = 1,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 1), recv_one);
-    try std.testing.expectEqual(@as(u8, 1), recv[0]);
+    try testing.expectEqual(@as(usize, 1), recv_one);
+    try testing.expectEqual(@as(u8, 1), recv[0]);
 
     c.close();
 
@@ -658,15 +660,15 @@ test "spsc channel batch options bound work and define close behavior" {
         .items_max = 1,
         .wake_mode = wake_mode_close,
     });
-    try std.testing.expectEqual(@as(usize, 0), empty_send_after_close);
+    try testing.expectEqual(@as(usize, 0), empty_send_after_close);
 
     const empty_recv_after_close = try c.tryRecvBatchWith(recv[0..0], .{
         .items_max = 1,
         .wake_mode = wake_mode_close,
     });
-    try std.testing.expectEqual(@as(usize, 0), empty_recv_after_close);
+    try testing.expectEqual(@as(usize, 0), empty_recv_after_close);
 
-    try std.testing.expectError(error.Closed, c.trySendBatchWith(&.{9}, .{
+    try testing.expectError(error.Closed, c.trySendBatchWith(&.{9}, .{
         .items_max = 1,
         .wake_mode = wake_mode_batch,
     }));
@@ -675,10 +677,10 @@ test "spsc channel batch options bound work and define close behavior" {
         .items_max = 3,
         .wake_mode = wake_mode_batch,
     });
-    try std.testing.expectEqual(@as(usize, 1), recv_after_close);
-    try std.testing.expectEqual(@as(u8, 2), recv[0]);
+    try testing.expectEqual(@as(usize, 1), recv_after_close);
+    try testing.expectEqual(@as(u8, 2), recv[0]);
 
-    try std.testing.expectError(error.Closed, c.tryRecvBatchWith(&recv, .{
+    try testing.expectError(error.Closed, c.tryRecvBatchWith(&recv, .{
         .items_max = 3,
         .wake_mode = wake_mode_batch,
     }));
@@ -707,24 +709,24 @@ test "spsc channel batch wake modes unblock waiting receiver" {
     };
 
     inline for ([_]C.BatchWakeMode{ .progress, .single, .broadcast }) |wake_mode| {
-        var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+        var channel = try C.init(testing.allocator, .{ .capacity = 1 });
         defer channel.deinit();
 
         var waiter = Waiter{ .ch = &channel };
         var thread = try std.Thread.spawn(.{}, Waiter.run, .{&waiter});
-        try std.testing.expect(waitForFlagTrue(&waiter.started, 10_000));
+        try testing.expect(waitForFlagTrue(&waiter.started, 10_000));
 
         const sent = try channel.trySendBatchWith(&.{99}, .{
             .items_max = 1,
             .wake_mode = wake_mode,
         });
-        try std.testing.expectEqual(@as(usize, 1), sent);
+        try testing.expectEqual(@as(usize, 1), sent);
 
         const completed = waitForFlagTrue(&waiter.done, 10_000);
         if (!completed) channel.close();
         thread.join();
-        try std.testing.expect(completed);
-        try std.testing.expectEqual(@as(?anyerror, null), waiter.result);
+        try testing.expect(completed);
+        try testing.expectEqual(@as(?anyerror, null), waiter.result);
     }
 }
 
@@ -732,7 +734,7 @@ test "spsc channel blocked recv drains buffered item before close reports closed
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "recv")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
 
     const Waiter = struct {
@@ -769,7 +771,7 @@ test "spsc channel blocked recv drains buffered item before close reports closed
     var waiter = Waiter{ .ch = &channel };
     var thread = try std.Thread.spawn(.{}, Waiter.run, .{&waiter});
 
-    try std.testing.expect(waitForFlagTrue(&waiter.started, 10_000));
+    try testing.expect(waitForFlagTrue(&waiter.started, 10_000));
     try waitForBlockedReceiver(&channel, 100 * std.time.ns_per_ms);
 
     // Stage the buffered item while the mutex is held, then let a blocked call
@@ -778,23 +780,23 @@ test "spsc channel blocked recv drains buffered item before close reports closed
     try channel.queue.trySend(7);
     var closer = Closer{ .ch = &channel };
     var close_thread = try std.Thread.spawn(.{}, Closer.run, .{&closer});
-    try std.testing.expect(waitForFlagTrue(&closer.started, 10_000));
+    try testing.expect(waitForFlagTrue(&closer.started, 10_000));
     channel.mutex.unlock();
 
-    try std.testing.expect(waitForFlagTrue(&waiter.done, 10_000));
+    try testing.expect(waitForFlagTrue(&waiter.done, 10_000));
     thread.join();
     close_thread.join();
-    try std.testing.expect(closer.done.load(.acquire));
-    try std.testing.expectEqual(@as(?anyerror, null), waiter.result);
-    try std.testing.expectEqual(@as(?u8, 7), waiter.value);
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expect(closer.done.load(.acquire));
+    try testing.expectEqual(@as(?anyerror, null), waiter.result);
+    try testing.expectEqual(@as(?u8, 7), waiter.value);
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel blocked send wakes on close and preserves buffered item" {
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "send")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
     try channel.trySend(9);
 
@@ -831,28 +833,28 @@ test "spsc channel blocked send wakes on close and preserves buffered item" {
     var sender = Sender{ .ch = &channel };
     var sender_thread = try std.Thread.spawn(.{}, Sender.run, .{&sender});
 
-    try std.testing.expect(waitForFlagTrue(&sender.started, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.started, 10_000));
     try waitForBlockedSender(&channel, 100 * std.time.ns_per_ms);
 
     var closer = Closer{ .ch = &channel };
     var close_thread = try std.Thread.spawn(.{}, Closer.run, .{&closer});
 
-    try std.testing.expect(waitForFlagTrue(&closer.started, 10_000));
-    try std.testing.expect(waitForFlagTrue(&sender.done, 10_000));
+    try testing.expect(waitForFlagTrue(&closer.started, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.done, 10_000));
     sender_thread.join();
     close_thread.join();
 
-    try std.testing.expect(closer.done.load(.acquire));
-    try std.testing.expectEqual(@as(?anyerror, error.Closed), sender.result);
-    try std.testing.expectEqual(@as(u8, 9), try channel.tryRecv());
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expect(closer.done.load(.acquire));
+    try testing.expectEqual(@as(?anyerror, error.Closed), sender.result);
+    try testing.expectEqual(@as(u8, 9), try channel.tryRecv());
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel timed send wakes on close before timeout and preserves buffered item" {
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "sendTimeout")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
     try channel.trySend(9);
 
@@ -889,28 +891,28 @@ test "spsc channel timed send wakes on close before timeout and preserves buffer
     var sender = Sender{ .ch = &channel };
     var sender_thread = try std.Thread.spawn(.{}, Sender.run, .{&sender});
 
-    try std.testing.expect(waitForFlagTrue(&sender.started, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.started, 10_000));
     try waitForBlockedSender(&channel, 100 * std.time.ns_per_ms);
 
     var closer = Closer{ .ch = &channel };
     var close_thread = try std.Thread.spawn(.{}, Closer.run, .{&closer});
 
-    try std.testing.expect(waitForFlagTrue(&closer.started, 10_000));
-    try std.testing.expect(waitForFlagTrue(&sender.done, 10_000));
+    try testing.expect(waitForFlagTrue(&closer.started, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.done, 10_000));
     sender_thread.join();
     close_thread.join();
 
-    try std.testing.expect(closer.done.load(.acquire));
-    try std.testing.expectEqual(@as(?anyerror, error.Closed), sender.result);
-    try std.testing.expectEqual(@as(u8, 9), try channel.tryRecv());
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expect(closer.done.load(.acquire));
+    try testing.expectEqual(@as(?anyerror, error.Closed), sender.result);
+    try testing.expectEqual(@as(u8, 9), try channel.tryRecv());
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel timed recv wakes on close before timeout when empty" {
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "recvTimeout")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
 
     const Receiver = struct {
@@ -946,27 +948,27 @@ test "spsc channel timed recv wakes on close before timeout when empty" {
     var receiver = Receiver{ .ch = &channel };
     var recv_thread = try std.Thread.spawn(.{}, Receiver.run, .{&receiver});
 
-    try std.testing.expect(waitForFlagTrue(&receiver.started, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.started, 10_000));
     try waitForBlockedReceiver(&channel, 100 * std.time.ns_per_ms);
 
     var closer = Closer{ .ch = &channel };
     var close_thread = try std.Thread.spawn(.{}, Closer.run, .{&closer});
 
-    try std.testing.expect(waitForFlagTrue(&closer.started, 10_000));
-    try std.testing.expect(waitForFlagTrue(&receiver.done, 10_000));
+    try testing.expect(waitForFlagTrue(&closer.started, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.done, 10_000));
     recv_thread.join();
     close_thread.join();
 
-    try std.testing.expect(closer.done.load(.acquire));
-    try std.testing.expectEqual(@as(?anyerror, error.Closed), receiver.result);
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expect(closer.done.load(.acquire));
+    try testing.expectEqual(@as(?anyerror, error.Closed), receiver.result);
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel timed recv drains buffered item before later close reports closed" {
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "recvTimeout")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
 
     const Receiver = struct {
@@ -1003,31 +1005,31 @@ test "spsc channel timed recv drains buffered item before later close reports cl
     var receiver = Receiver{ .ch = &channel };
     var recv_thread = try std.Thread.spawn(.{}, Receiver.run, .{&receiver});
 
-    try std.testing.expect(waitForFlagTrue(&receiver.started, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.started, 10_000));
     try waitForBlockedReceiver(&channel, 100 * std.time.ns_per_ms);
 
     channel.mutex.lock();
     try channel.queue.trySend(7);
     var closer = Closer{ .ch = &channel };
     var close_thread = try std.Thread.spawn(.{}, Closer.run, .{&closer});
-    try std.testing.expect(waitForFlagTrue(&closer.started, 10_000));
+    try testing.expect(waitForFlagTrue(&closer.started, 10_000));
     channel.mutex.unlock();
 
-    try std.testing.expect(waitForFlagTrue(&receiver.done, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.done, 10_000));
     recv_thread.join();
     close_thread.join();
 
-    try std.testing.expect(closer.done.load(.acquire));
-    try std.testing.expectEqual(@as(?anyerror, null), receiver.result);
-    try std.testing.expectEqual(@as(?u8, 7), receiver.value);
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expect(closer.done.load(.acquire));
+    try testing.expectEqual(@as(?anyerror, null), receiver.result);
+    try testing.expectEqual(@as(?u8, 7), receiver.value);
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel timed recv succeeds after sender publish before later close" {
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "recvTimeout")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
 
     const Receiver = struct {
@@ -1070,31 +1072,31 @@ test "spsc channel timed recv succeeds after sender publish before later close" 
     var receiver = Receiver{ .ch = &channel };
     var recv_thread = try std.Thread.spawn(.{}, Receiver.run, .{&receiver});
 
-    try std.testing.expect(waitForFlagTrue(&receiver.started, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.started, 10_000));
     try waitForBlockedReceiver(&channel, 100 * std.time.ns_per_ms);
 
     var sender = Sender{ .ch = &channel };
     var sender_thread = try std.Thread.spawn(.{}, Sender.run, .{&sender});
 
-    try std.testing.expect(waitForFlagTrue(&sender.started, 10_000));
-    try std.testing.expect(waitForFlagTrue(&sender.done, 10_000));
-    try std.testing.expect(waitForFlagTrue(&receiver.done, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.started, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.done, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.done, 10_000));
     sender_thread.join();
     recv_thread.join();
 
-    try std.testing.expectEqual(@as(?anyerror, null), sender.result);
-    try std.testing.expectEqual(@as(?anyerror, null), receiver.result);
-    try std.testing.expectEqual(@as(?u8, 7), receiver.value);
+    try testing.expectEqual(@as(?anyerror, null), sender.result);
+    try testing.expectEqual(@as(?anyerror, null), receiver.result);
+    try testing.expectEqual(@as(?u8, 7), receiver.value);
 
     channel.close();
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel timed send succeeds after receiver drain before later close" {
     const C = SpscChannel(u8);
     if (!@hasDecl(C, "sendTimeout")) return error.SkipZigTest;
 
-    var channel = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var channel = try C.init(testing.allocator, .{ .capacity = 1 });
     defer channel.deinit();
     try channel.trySend(9);
 
@@ -1138,25 +1140,25 @@ test "spsc channel timed send succeeds after receiver drain before later close" 
     var sender = Sender{ .ch = &channel };
     var sender_thread = try std.Thread.spawn(.{}, Sender.run, .{&sender});
 
-    try std.testing.expect(waitForFlagTrue(&sender.started, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.started, 10_000));
     try waitForBlockedSender(&channel, 100 * std.time.ns_per_ms);
 
     var receiver = Receiver{ .ch = &channel };
     var recv_thread = try std.Thread.spawn(.{}, Receiver.run, .{&receiver});
 
-    try std.testing.expect(waitForFlagTrue(&receiver.started, 10_000));
-    try std.testing.expect(waitForFlagTrue(&receiver.done, 10_000));
-    try std.testing.expect(waitForFlagTrue(&sender.done, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.started, 10_000));
+    try testing.expect(waitForFlagTrue(&receiver.done, 10_000));
+    try testing.expect(waitForFlagTrue(&sender.done, 10_000));
     recv_thread.join();
     sender_thread.join();
 
-    try std.testing.expectEqual(@as(?anyerror, null), receiver.result);
-    try std.testing.expectEqual(@as(?u8, 9), receiver.value);
-    try std.testing.expectEqual(@as(?anyerror, null), sender.result);
+    try testing.expectEqual(@as(?anyerror, null), receiver.result);
+    try testing.expectEqual(@as(?u8, 9), receiver.value);
+    try testing.expectEqual(@as(?anyerror, null), sender.result);
 
     channel.close();
-    try std.testing.expectEqual(@as(u8, 7), try channel.tryRecv());
-    try std.testing.expectError(error.Closed, channel.tryRecv());
+    try testing.expectEqual(@as(u8, 7), try channel.tryRecv());
+    try testing.expectError(error.Closed, channel.tryRecv());
 }
 
 test "spsc channel timed waits observe cancellation after wait starts" {
@@ -1164,7 +1166,7 @@ test "spsc channel timed waits observe cancellation after wait starts" {
     if (!@hasDecl(C, "sendTimeout")) return error.SkipZigTest;
     if (!@hasDecl(C, "recvTimeout")) return error.SkipZigTest;
 
-    var c = try C.init(std.testing.allocator, .{ .capacity = 1 });
+    var c = try C.init(testing.allocator, .{ .capacity = 1 });
     defer c.deinit();
 
     try c.trySend(11);
@@ -1192,12 +1194,12 @@ test "spsc channel timed waits observe cancellation after wait starts" {
     };
     var send_thread = try std.Thread.spawn(.{}, SendWaiter.run, .{&send_waiter});
 
-    try std.testing.expect(waitForFlagTrue(&send_waiter.started, 10_000));
+    try testing.expect(waitForFlagTrue(&send_waiter.started, 10_000));
     send_cancel.cancel();
     send_thread.join();
-    try std.testing.expectEqual(@as(?anyerror, error.Cancelled), send_waiter.result);
+    try testing.expectEqual(@as(?anyerror, error.Cancelled), send_waiter.result);
 
-    try std.testing.expectEqual(@as(u8, 11), try c.tryRecv());
+    try testing.expectEqual(@as(u8, 11), try c.tryRecv());
 
     const RecvWaiter = struct {
         ch: *C,
@@ -1222,10 +1224,10 @@ test "spsc channel timed waits observe cancellation after wait starts" {
     };
     var recv_thread = try std.Thread.spawn(.{}, RecvWaiter.run, .{&recv_waiter});
 
-    try std.testing.expect(waitForFlagTrue(&recv_waiter.started, 10_000));
+    try testing.expect(waitForFlagTrue(&recv_waiter.started, 10_000));
     recv_cancel.cancel();
     recv_thread.join();
-    try std.testing.expectEqual(@as(?anyerror, error.Cancelled), recv_waiter.result);
+    try testing.expectEqual(@as(?anyerror, error.Cancelled), recv_waiter.result);
 }
 
 fn waitForFlagTrue(flag: *const std.atomic.Value(bool), iterations_max: u32) bool {

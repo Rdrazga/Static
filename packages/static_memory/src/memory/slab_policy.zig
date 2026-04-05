@@ -2,6 +2,7 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const SlabConfig = @import("slab.zig").SlabConfig;
 
 pub const SlabFallbackPolicy = enum {
@@ -17,19 +18,19 @@ pub fn allowLargeFallback(comptime policy: SlabFallbackPolicy) bool {
         .always => true,
     };
     // Pair assertion: `.strict` must always be false regardless of build mode.
-    if (policy == .strict) std.debug.assert(!result);
+    if (policy == .strict) assert(!result);
     // Pair assertion: `.always` must always be true regardless of build mode.
-    if (policy == .always) std.debug.assert(result);
+    if (policy == .always) assert(result);
     return result;
 }
 
 pub fn applyPolicy(cfg: SlabConfig, comptime policy: SlabFallbackPolicy) SlabConfig {
     // Precondition: configuration must have at least one class.
-    std.debug.assert(cfg.class_sizes.len != 0);
+    assert(cfg.class_sizes.len != 0);
     var out = cfg;
     out.allow_large_fallback = allowLargeFallback(policy);
     // Postcondition: all other config fields must be unchanged; only the fallback flag is overridden.
-    std.debug.assert(out.class_sizes.ptr == cfg.class_sizes.ptr);
+    assert(out.class_sizes.ptr == cfg.class_sizes.ptr);
     return out;
 }
 

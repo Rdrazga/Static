@@ -8,6 +8,8 @@
 //!
 //! Not part of the public API. Imported as `@import("queue_internal.zig")`.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const memory = @import("static_memory");
 
@@ -41,12 +43,12 @@ pub const TimeoutBudget = core.time_budget.TimeoutBudget;
 /// ensuring `item_size > 0` before calling this function.
 pub fn bytesForItems(item_count: usize, item_size: usize) usize {
     // Precondition: only call this with a non-zero item size; ZSTs must be rejected upstream.
-    std.debug.assert(item_size > 0);
+    assert(item_size > 0);
     // Precondition: multiplication must not overflow usize.
-    std.debug.assert(item_count <= std.math.maxInt(usize) / item_size);
+    assert(item_count <= std.math.maxInt(usize) / item_size);
     const result = item_count * item_size;
     // Postcondition: a non-zero count produces a positive byte count.
-    if (item_count > 0) std.debug.assert(result > 0);
+    if (item_count > 0) assert(result > 0);
     return result;
 }
 
@@ -55,10 +57,10 @@ pub fn bytesForItems(item_count: usize, item_size: usize) usize {
 /// Asserts that the addition does not overflow `usize`.
 pub fn addBytesExact(a: usize, b: usize) usize {
     // Precondition: addition must not overflow usize.
-    std.debug.assert(a <= std.math.maxInt(usize) - b);
+    assert(a <= std.math.maxInt(usize) - b);
     const result = a + b;
     // Postcondition: result is at least as large as either operand.
-    std.debug.assert(result >= a);
+    assert(result >= a);
     return result;
 }
 
@@ -69,7 +71,7 @@ pub fn addBytesExact(a: usize, b: usize) usize {
 pub fn tryReserveBudget(budget: ?*memory.budget.Budget, bytes: usize) error{ NoSpaceLeft, InvalidConfig, Overflow }!void {
     const b = budget orelse return;
     // Precondition: a zero-byte reservation indicates a logic error in the caller.
-    std.debug.assert(bytes > 0);
+    assert(bytes > 0);
     b.tryReserve(bytes) catch |err| switch (err) {
         error.NoSpaceLeft => return error.NoSpaceLeft,
         error.InvalidConfig => return error.InvalidConfig,
@@ -103,12 +105,12 @@ pub fn seqDistanceSigned(candidate_seq: u64, reference_seq: u64) i64 {
 }
 
 test "timeout budget returns Timeout for zero timeout" {
-    try std.testing.expectError(error.Timeout, TimeoutBudget.init(0));
+    try testing.expectError(error.Timeout, TimeoutBudget.init(0));
 }
 
 test "timeout budget returns bounded remaining for positive timeout" {
     const timeout_ns: u64 = std.time.ns_per_ms;
     var timeout_budget = try TimeoutBudget.init(timeout_ns);
     const remaining_ns = try timeout_budget.remainingOrTimeout();
-    try std.testing.expect(remaining_ns <= timeout_ns);
+    try testing.expect(remaining_ns <= timeout_ns);
 }

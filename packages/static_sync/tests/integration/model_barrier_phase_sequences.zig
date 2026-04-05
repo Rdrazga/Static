@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_sync = @import("static_sync");
 const static_testing = @import("static_testing");
 
@@ -98,8 +100,8 @@ const Context = struct {
         self.saw_reuse = false;
         self.saw_phase_close = false;
 
-        std.debug.assert(self.barrier.parties() == Parties);
-        std.debug.assert(self.barrier.generationNow() == 0);
+        assert(self.barrier.parties() == Parties);
+        assert(self.barrier.generationNow() == 0);
     }
 
     fn validate(self: *const @This()) checker.CheckResult {
@@ -161,16 +163,16 @@ const Context = struct {
     }
 
     fn finish(self: *const @This()) checker.CheckResult {
-        std.debug.assert(self.completed_phases == 2);
-        std.debug.assert(self.generation == 2);
-        std.debug.assert(self.arrivals_in_phase == 0);
-        std.debug.assert(self.saw_would_block);
-        std.debug.assert(self.saw_reuse);
-        std.debug.assert(self.saw_phase_close);
-        std.debug.assert(self.barrier.parties() == Parties);
-        std.debug.assert(self.barrier.generationNow() == 2);
+        assert(self.completed_phases == 2);
+        assert(self.generation == 2);
+        assert(self.arrivals_in_phase == 0);
+        assert(self.saw_would_block);
+        assert(self.saw_reuse);
+        assert(self.saw_phase_close);
+        assert(self.barrier.parties() == Parties);
+        assert(self.barrier.generationNow() == 2);
         self.barrier.tryWait(1) catch unreachable;
-        std.testing.expectError(error.WouldBlock, self.barrier.tryWait(2)) catch unreachable;
+        testing.expectError(error.WouldBlock, self.barrier.tryWait(2)) catch unreachable;
         return self.validate();
     }
 };
@@ -206,8 +208,8 @@ test "barrier phase sequences stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(ScenarioCount, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(ScenarioCount, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -216,8 +218,8 @@ fn nextAction(
     action_index: u32,
     _: seed.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index < ScenarioCount);
-    std.debug.assert(action_index < ActionCount);
+    assert(run_identity.case_index < ScenarioCount);
+    assert(action_index < ActionCount);
     return action_table[run_identity.case_index][action_index];
 }
 

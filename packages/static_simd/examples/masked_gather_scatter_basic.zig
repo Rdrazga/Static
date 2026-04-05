@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const simd = @import("static_simd");
 
 pub fn main() !void {
@@ -16,10 +18,10 @@ pub fn main() !void {
         passthrough,
     );
     const gathered_arr = gathered.toArray();
-    std.debug.assert(gathered_arr[0] == 50.0);
-    std.debug.assert(gathered_arr[1] == -1.0);
-    std.debug.assert(gathered_arr[2] == 30.0);
-    std.debug.assert(gathered_arr[3] == -1.0);
+    assert(gathered_arr[0] == 50.0);
+    assert(gathered_arr[1] == -1.0);
+    assert(gathered_arr[2] == 30.0);
+    assert(gathered_arr[3] == -1.0);
 
     var destination = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0 };
     const before = destination;
@@ -29,7 +31,7 @@ pub fn main() !void {
     // out-of-bounds active lane preserves the original slice.
     const failing_mask = simd.masked.Mask4.fromBits(0b1001);
     const failing_indices = simd.vec4i.Vec4i.init(.{ 0, 1, 2, 9 });
-    try std.testing.expectError(
+    try testing.expectError(
         error.IndexOutOfBounds,
         simd.gather_scatter.scatterMasked4f(
             destination[0..],
@@ -38,7 +40,7 @@ pub fn main() !void {
             failing_mask,
         ),
     );
-    std.debug.assert(std.mem.eql(f32, before[0..], destination[0..]));
+    assert(std.mem.eql(f32, before[0..], destination[0..]));
 
     try simd.gather_scatter.scatterMasked4f(
         destination[0..],
@@ -46,8 +48,8 @@ pub fn main() !void {
         values,
         mask,
     );
-    std.debug.assert(destination[4] == 500.0);
-    std.debug.assert(destination[2] == 700.0);
-    std.debug.assert(destination[1] == 2.0);
-    std.debug.assert(destination[3] == 4.0);
+    assert(destination[4] == 500.0);
+    assert(destination[2] == 700.0);
+    assert(destination[1] == 2.0);
+    assert(destination[3] == 4.0);
 }

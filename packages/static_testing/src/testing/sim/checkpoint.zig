@@ -1,6 +1,7 @@
 //! Stable digest helpers for deterministic state comparison.
 
 const std = @import("std");
+const testing = std.testing;
 const checker = @import("../checker.zig");
 
 /// Digest equality classification.
@@ -33,14 +34,14 @@ test "checkpoint digest is stable for identical state" {
     const digest_a = computeDigest("same-state");
     const digest_b = computeDigest("same-state");
 
-    try std.testing.expect(digest_a.eql(digest_b));
-    try std.testing.expectEqual(CheckpointResult.equal, compareCheckpoints(digest_a, digest_b));
+    try testing.expect(digest_a.eql(digest_b));
+    try testing.expectEqual(CheckpointResult.equal, compareCheckpoints(digest_a, digest_b));
 }
 
 test "checkpoint digest differs for different state" {
     const digest_a = computeDigest("a");
     const digest_b = computeDigest("b");
 
-    try std.testing.expect(!digest_a.eql(digest_b));
-    try std.testing.expectEqual(CheckpointResult.different, compareCheckpoints(digest_a, digest_b));
+    try testing.expect(!digest_a.eql(digest_b));
+    try testing.expectEqual(CheckpointResult.different, compareCheckpoints(digest_a, digest_b));
 }

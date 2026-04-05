@@ -1,6 +1,7 @@
 //! `static_io` runtime timeout+retry roundtrip baseline benchmark.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -29,8 +30,8 @@ const RuntimeContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *RuntimeContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.pool.capacity() >= 3);
-        std.debug.assert(context.runtime.cfg.max_in_flight >= 3);
+        assert(context.pool.capacity() >= 3);
+        assert(context.runtime.cfg.max_in_flight >= 3);
 
         const timeout_buffer = context.pool.acquire() catch unreachable;
         const timeout_id = context.runtime.submitStreamRead(context.stream, timeout_buffer, 0) catch unreachable;
@@ -67,8 +68,8 @@ const RuntimeContext = struct {
                 read_completion.operation_id ^
                 read_completion.bytes_transferred,
         );
-        std.debug.assert(context.sink != 0);
-        std.debug.assert(context.pool.available() == context.pool.capacity());
+        assert(context.sink != 0);
+        assert(context.pool.available() == context.pool.capacity());
     }
 };
 
@@ -154,8 +155,8 @@ fn validateSemanticPreflight() void {
     const connect_id = runtime.submitConnect(endpoint, null) catch unreachable;
     _ = runtime.pump(1) catch unreachable;
     const connect_completion = runtime.poll() orelse unreachable;
-    std.debug.assert(connect_completion.operation_id == connect_id);
-    std.debug.assert(connect_completion.status == .success);
+    assert(connect_completion.operation_id == connect_id);
+    assert(connect_completion.status == .success);
     const stream = static_io.types.Stream{ .handle = connect_completion.handle.? };
     defer runtime.closeHandle(stream.handle) catch unreachable;
 
@@ -163,8 +164,8 @@ fn validateSemanticPreflight() void {
     const timeout_id = runtime.submitStreamRead(stream, timeout_buffer, 0) catch unreachable;
     _ = runtime.pump(1) catch unreachable;
     const timeout_completion = runtime.poll() orelse unreachable;
-    std.debug.assert(timeout_completion.operation_id == timeout_id);
-    std.debug.assert(timeout_completion.status == .timeout);
+    assert(timeout_completion.operation_id == timeout_id);
+    assert(timeout_completion.status == .timeout);
     pool.release(timeout_completion.buffer) catch unreachable;
 
     var write_buffer = pool.acquire() catch unreachable;
@@ -173,17 +174,17 @@ fn validateSemanticPreflight() void {
     const write_id = runtime.submitStreamWrite(stream, write_buffer, null) catch unreachable;
     _ = runtime.pump(1) catch unreachable;
     const write_completion = runtime.poll() orelse unreachable;
-    std.debug.assert(write_completion.operation_id == write_id);
-    std.debug.assert(write_completion.status == .success);
+    assert(write_completion.operation_id == write_id);
+    assert(write_completion.status == .success);
     pool.release(write_completion.buffer) catch unreachable;
 
     const read_buffer = pool.acquire() catch unreachable;
     const read_id = runtime.submitStreamRead(stream, read_buffer, null) catch unreachable;
     _ = runtime.pump(1) catch unreachable;
     const read_completion = runtime.poll() orelse unreachable;
-    std.debug.assert(read_completion.operation_id == read_id);
-    std.debug.assert(read_completion.status == .success);
-    std.debug.assert(std.mem.eql(u8, read_completion.buffer.usedSlice(), "ok"));
+    assert(read_completion.operation_id == read_id);
+    assert(read_completion.status == .success);
+    assert(std.mem.eql(u8, read_completion.buffer.usedSlice(), "ok"));
     pool.release(read_completion.buffer) catch unreachable;
-    std.debug.assert(pool.available() == pool.capacity());
+    assert(pool.available() == pool.capacity());
 }

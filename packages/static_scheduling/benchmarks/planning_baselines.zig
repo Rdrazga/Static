@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const static_scheduling = @import("static_scheduling");
 const static_testing = @import("static_testing");
 
@@ -241,8 +242,8 @@ fn validateSemanticPreflight() void {
     }
     var plan = graph.planDeterministic(std.heap.page_allocator) catch unreachable;
     defer plan.deinit();
-    std.debug.assert(plan.order.len == 6);
-    std.debug.assert(plan.order[0] == 0);
+    assert(plan.order.len == 6);
+    assert(plan.order[0] == 0);
 
     var wheel = Wheel.init(std.heap.page_allocator, .{
         .buckets = 8,
@@ -250,12 +251,12 @@ fn validateSemanticPreflight() void {
     }) catch unreachable;
     defer wheel.deinit();
     const id = wheel.schedule(11, 0) catch unreachable;
-    std.debug.assert((wheel.cancel(id) catch unreachable) == 11);
+    assert((wheel.cancel(id) catch unreachable) == 11);
     _ = wheel.schedule(21, 0) catch unreachable;
     _ = wheel.schedule(22, 0) catch unreachable;
     var drained: [8]u32 = undefined;
     const count = wheel.tick(&drained) catch unreachable;
-    std.debug.assert(count == 2);
-    std.debug.assert(drained[0] == 21);
-    std.debug.assert(drained[1] == 22);
+    assert(count == 2);
+    assert(drained[0] == 21);
+    assert(drained[1] == 22);
 }

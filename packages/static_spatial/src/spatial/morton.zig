@@ -11,6 +11,7 @@
 //!
 //! Thread safety: all functions are pure; no shared state.
 const std = @import("std");
+const testing = std.testing;
 
 pub const MortonError = error{CoordTooLarge};
 
@@ -142,16 +143,16 @@ test "encode2d/decode2d roundtrip" {
     {
         const code = encode2d(0, 0);
         const dec = decode2d(code);
-        try std.testing.expectEqual(@as(u16, 0), dec.x);
-        try std.testing.expectEqual(@as(u16, 0), dec.y);
+        try testing.expectEqual(@as(u16, 0), dec.x);
+        try testing.expectEqual(@as(u16, 0), dec.y);
     }
 
     // Max u16
     {
         const code = encode2d(std.math.maxInt(u16), std.math.maxInt(u16));
         const dec = decode2d(code);
-        try std.testing.expectEqual(std.math.maxInt(u16), dec.x);
-        try std.testing.expectEqual(std.math.maxInt(u16), dec.y);
+        try testing.expectEqual(std.math.maxInt(u16), dec.x);
+        try testing.expectEqual(std.math.maxInt(u16), dec.y);
     }
 
     // Powers of 2
@@ -159,8 +160,8 @@ test "encode2d/decode2d roundtrip" {
         inline for ([_]u16{ 1, 2, 4, 8, 16, 256, 1024, 32768 }) |v| {
             const code = encode2d(v, v);
             const dec = decode2d(code);
-            try std.testing.expectEqual(v, dec.x);
-            try std.testing.expectEqual(v, dec.y);
+            try testing.expectEqual(v, dec.x);
+            try testing.expectEqual(v, dec.y);
         }
     }
 
@@ -176,8 +177,8 @@ test "encode2d/decode2d roundtrip" {
         for (pairs) |p| {
             const code = encode2d(p[0], p[1]);
             const dec = decode2d(code);
-            try std.testing.expectEqual(p[0], dec.x);
-            try std.testing.expectEqual(p[1], dec.y);
+            try testing.expectEqual(p[0], dec.x);
+            try testing.expectEqual(p[1], dec.y);
         }
     }
 }
@@ -187,18 +188,18 @@ test "encode3d/decode3d roundtrip" {
     {
         const code = encode3d(0, 0, 0);
         const dec = decode3d(code);
-        try std.testing.expectEqual(@as(u10, 0), dec.x);
-        try std.testing.expectEqual(@as(u10, 0), dec.y);
-        try std.testing.expectEqual(@as(u10, 0), dec.z);
+        try testing.expectEqual(@as(u10, 0), dec.x);
+        try testing.expectEqual(@as(u10, 0), dec.y);
+        try testing.expectEqual(@as(u10, 0), dec.z);
     }
 
     // Max u10 (1023)
     {
         const code = encode3d(1023, 1023, 1023);
         const dec = decode3d(code);
-        try std.testing.expectEqual(@as(u10, 1023), dec.x);
-        try std.testing.expectEqual(@as(u10, 1023), dec.y);
-        try std.testing.expectEqual(@as(u10, 1023), dec.z);
+        try testing.expectEqual(@as(u10, 1023), dec.x);
+        try testing.expectEqual(@as(u10, 1023), dec.y);
+        try testing.expectEqual(@as(u10, 1023), dec.z);
     }
 
     // Representative values
@@ -215,35 +216,35 @@ test "encode3d/decode3d roundtrip" {
         for (triples) |t| {
             const code = encode3d(t[0], t[1], t[2]);
             const dec = decode3d(code);
-            try std.testing.expectEqual(t[0], dec.x);
-            try std.testing.expectEqual(t[1], dec.y);
-            try std.testing.expectEqual(t[2], dec.z);
+            try testing.expectEqual(t[0], dec.x);
+            try testing.expectEqual(t[1], dec.y);
+            try testing.expectEqual(t[2], dec.z);
         }
     }
 }
 
 test "encode2d known values" {
     // x=1, y=0 -> only bit 0 set -> 0b01
-    try std.testing.expectEqual(@as(u32, 0b01), encode2d(1, 0));
+    try testing.expectEqual(@as(u32, 0b01), encode2d(1, 0));
 
     // x=0, y=1 -> only bit 1 set -> 0b10
-    try std.testing.expectEqual(@as(u32, 0b10), encode2d(0, 1));
+    try testing.expectEqual(@as(u32, 0b10), encode2d(0, 1));
 
     // x=1, y=1 -> bits 0 and 1 set -> 0b11
-    try std.testing.expectEqual(@as(u32, 0b11), encode2d(1, 1));
+    try testing.expectEqual(@as(u32, 0b11), encode2d(1, 1));
 
     // x=0b11, y=0b11 -> interleaved: 0b1111
-    try std.testing.expectEqual(@as(u32, 0b1111), encode2d(0b11, 0b11));
+    try testing.expectEqual(@as(u32, 0b1111), encode2d(0b11, 0b11));
 
     // x=0b101, y=0b010 -> x bits at even positions, y bits at odd
     // x: bit0=1, bit1=0, bit2=1  -> positions 0,2,4: 1,0,1
     // y: bit0=0, bit1=1, bit2=0  -> positions 1,3,5: 0,1,0
     // result: bit5=0, bit4=1, bit3=1, bit2=0, bit1=0, bit0=1 -> 0b010_1_00_01 = 0b011001
-    try std.testing.expectEqual(@as(u32, 0b011001), encode2d(0b101, 0b010));
+    try testing.expectEqual(@as(u32, 0b011001), encode2d(0b101, 0b010));
 
     // x=0xFF, y=0 -> every even bit set for the low 16 bits
     // part1by1(0xFF) = 0x5555 & lower 16 bits = 0x00005555
-    try std.testing.expectEqual(@as(u32, 0x00005555), encode2d(0xFF, 0));
+    try testing.expectEqual(@as(u32, 0x00005555), encode2d(0xFF, 0));
 }
 
 test "encodef2d basic" {
@@ -251,27 +252,27 @@ test "encodef2d basic" {
     // max_val = 15, 0.5 * 15 = 7.5, floor = 7
     const code = try encodef2d(0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 4);
     const expected = encode2d(7, 7);
-    try std.testing.expectEqual(expected, code);
+    try testing.expectEqual(expected, code);
 
     // Min corner -> (0,0)
     const code_min = try encodef2d(0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 8);
-    try std.testing.expectEqual(encode2d(0, 0), code_min);
+    try testing.expectEqual(encode2d(0, 0), code_min);
 
     // Max corner -> (255, 255) for 8 bits
     const code_max = try encodef2d(1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 8);
-    try std.testing.expectEqual(encode2d(255, 255), code_max);
+    try testing.expectEqual(encode2d(255, 255), code_max);
 }
 
 test "encodef2d out of range" {
     // x below min
-    try std.testing.expectError(MortonError.CoordTooLarge, encodef2d(-0.1, 0.5, 0.0, 1.0, 0.0, 1.0, 8));
+    try testing.expectError(MortonError.CoordTooLarge, encodef2d(-0.1, 0.5, 0.0, 1.0, 0.0, 1.0, 8));
 
     // x above max
-    try std.testing.expectError(MortonError.CoordTooLarge, encodef2d(1.1, 0.5, 0.0, 1.0, 0.0, 1.0, 8));
+    try testing.expectError(MortonError.CoordTooLarge, encodef2d(1.1, 0.5, 0.0, 1.0, 0.0, 1.0, 8));
 
     // y below min
-    try std.testing.expectError(MortonError.CoordTooLarge, encodef2d(0.5, -0.1, 0.0, 1.0, 0.0, 1.0, 8));
+    try testing.expectError(MortonError.CoordTooLarge, encodef2d(0.5, -0.1, 0.0, 1.0, 0.0, 1.0, 8));
 
     // y above max
-    try std.testing.expectError(MortonError.CoordTooLarge, encodef2d(0.5, 1.1, 0.0, 1.0, 0.0, 1.0, 8));
+    try testing.expectError(MortonError.CoordTooLarge, encodef2d(0.5, 1.1, 0.0, 1.0, 0.0, 1.0, 8));
 }

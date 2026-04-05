@@ -4,6 +4,8 @@
 //! drains entries due at that tick in FIFO schedule order.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const collections = @import("static_collections");
 
 pub const TimerId = collections.handle.Handle;
@@ -19,7 +21,7 @@ pub const TimerError = error{
 
 pub fn TimerWheel(comptime T: type) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
+        assert(@sizeOf(T) > 0);
     }
 
     return struct {
@@ -168,7 +170,7 @@ pub fn TimerWheel(comptime T: type) type {
         }
 
         fn appendToBucket(self: *Self, slot_index: u32, bucket_index: u32) void {
-            std.debug.assert(bucket_index < self.bucket_head.len);
+            assert(bucket_index < self.bucket_head.len);
 
             const tail_index = self.bucket_tail[bucket_index];
             if (tail_index == invalid_slot) {
@@ -183,7 +185,7 @@ pub fn TimerWheel(comptime T: type) type {
         }
 
         fn removeFromBucket(self: *Self, slot_index: u32, bucket_index: u32) void {
-            std.debug.assert(bucket_index < self.bucket_head.len);
+            assert(bucket_index < self.bucket_head.len);
             const prev_index = self.slots[slot_index].prev;
             const next_index = self.slots[slot_index].next;
 
@@ -243,7 +245,7 @@ pub fn TimerWheel(comptime T: type) type {
 }
 
 test "timer wheel drains due timers in FIFO order" {
-    var wheel = try TimerWheel(u32).init(std.testing.allocator, .{
+    var wheel = try TimerWheel(u32).init(testing.allocator, .{
         .buckets = 8,
         .entries_max = 8,
     });
@@ -255,12 +257,12 @@ test "timer wheel drains due timers in FIFO order" {
 
     var drained: [4]u32 = [_]u32{0} ** 4;
     const count = try wheel.tick(&drained);
-    try std.testing.expectEqual(@as(u32, 3), count);
-    try std.testing.expectEqualSlices(u32, &.{ 10, 20, 30 }, drained[0..3]);
+    try testing.expectEqual(@as(u32, 3), count);
+    try testing.expectEqualSlices(u32, &.{ 10, 20, 30 }, drained[0..3]);
 }
 
 test "timer wheel supports long delays via rounds" {
-    var wheel = try TimerWheel(u32).init(std.testing.allocator, .{
+    var wheel = try TimerWheel(u32).init(testing.allocator, .{
         .buckets = 4,
         .entries_max = 4,
     });
@@ -272,26 +274,26 @@ test "timer wheel supports long delays via rounds" {
     var tick_index: u32 = 0;
     while (tick_index < 9) : (tick_index += 1) {
         const count = try wheel.tick(&drained);
-        if (tick_index < 8) try std.testing.expectEqual(@as(u32, 0), count);
+        if (tick_index < 8) try testing.expectEqual(@as(u32, 0), count);
     }
-    try std.testing.expectEqual(@as(u32, 1), try wheel.tick(&drained));
-    try std.testing.expectEqual(@as(u32, 55), drained[0]);
+    try testing.expectEqual(@as(u32, 1), try wheel.tick(&drained));
+    try testing.expectEqual(@as(u32, 55), drained[0]);
 }
 
 test "timer wheel cancel returns scheduled entry and invalidates stale id" {
-    var wheel = try TimerWheel(u32).init(std.testing.allocator, .{
+    var wheel = try TimerWheel(u32).init(testing.allocator, .{
         .buckets = 4,
         .entries_max = 2,
     });
     defer wheel.deinit();
 
     const id = try wheel.schedule(99, 0);
-    try std.testing.expectEqual(@as(u32, 99), try wheel.cancel(id));
-    try std.testing.expectError(error.NotFound, wheel.cancel(id));
+    try testing.expectEqual(@as(u32, 99), try wheel.cancel(id));
+    try testing.expectError(error.NotFound, wheel.cancel(id));
 }
 
 test "timer wheel tick no space does not advance time" {
-    var wheel = try TimerWheel(u32).init(std.testing.allocator, .{
+    var wheel = try TimerWheel(u32).init(testing.allocator, .{
         .buckets = 8,
         .entries_max = 8,
     });
@@ -300,6 +302,6 @@ test "timer wheel tick no space does not advance time" {
     _ = try wheel.schedule(1, 0);
     _ = try wheel.schedule(2, 0);
     var tiny_out: [1]u32 = [_]u32{0};
-    try std.testing.expectError(error.NoSpaceLeft, wheel.tick(&tiny_out));
-    try std.testing.expectEqual(@as(u64, 0), wheel.nowTick());
+    try testing.expectError(error.NoSpaceLeft, wheel.tick(&tiny_out));
+    try testing.expectEqual(@as(u64, 0), wheel.nowTick());
 }

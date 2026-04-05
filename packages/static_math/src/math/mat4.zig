@@ -31,6 +31,7 @@
 //! No allocation (stack/register only)
 
 const std = @import("std");
+const assert = std.debug.assert;
 const scalar = @import("scalar.zig");
 const vec3_mod = @import("vec3.zig");
 const vec4_mod = @import("vec4.zig");
@@ -45,7 +46,7 @@ pub const Mat4 = extern struct {
 
     comptime {
         // Compile-time invariant: extern struct must be exactly 4 Vec4 columns.
-        std.debug.assert(@sizeOf(Mat4) == 4 * @sizeOf(Vec4));
+        assert(@sizeOf(Mat4) == 4 * @sizeOf(Vec4));
     }
 
     // ── Helpers (private) ───────────────────────────────────────────────
@@ -223,7 +224,7 @@ pub const Mat4 = extern struct {
     /// Precondition: `axis` should be normalized.
     pub inline fn fromAxisAngle(axis: Vec3, angle_rad: f32) Mat4 {
         // Precondition: axis must be unit length (mirrors Mat3.fromRotation pattern).
-        std.debug.assert(Vec3.approxEqual(
+        assert(Vec3.approxEqual(
             Vec3.splat(Vec3.lengthSq(axis)),
             Vec3.one,
             scalar.epsilon * 100.0,
@@ -268,9 +269,9 @@ pub const Mat4 = extern struct {
         near: f32,
         far: f32,
     ) Mat4 {
-        std.debug.assert(near > 0.0);
-        std.debug.assert(far > near);
-        std.debug.assert(aspect > 0.0);
+        assert(near > 0.0);
+        assert(far > near);
+        assert(aspect > 0.0);
 
         const f = 1.0 / @tan(fov_y_rad * 0.5);
         const m00 = f / aspect;
@@ -295,9 +296,9 @@ pub const Mat4 = extern struct {
         near: f32,
         far: f32,
     ) Mat4 {
-        std.debug.assert(right_v != left);
-        std.debug.assert(top_v != bottom);
-        std.debug.assert(far > near);
+        assert(right_v != left);
+        assert(top_v != bottom);
+        assert(far > near);
 
         const m00 = 2.0 / (right_v - left);
         const m11 = 2.0 / (top_v - bottom);
@@ -318,11 +319,11 @@ pub const Mat4 = extern struct {
     pub fn lookAt(eye: Vec3, target: Vec3, up_dir: Vec3) Mat4 {
         const eye_to_target = Vec3.sub(eye, target);
         // eye == target produces a zero vector; normalize would give NaN.
-        std.debug.assert(Vec3.lengthSq(eye_to_target) > 0.0);
+        assert(Vec3.lengthSq(eye_to_target) > 0.0);
         const z_axis = Vec3.normalize(eye_to_target);
         const cross_up_z = Vec3.cross(up_dir, z_axis);
         // up_dir parallel to z_axis produces a zero cross product; normalize would give NaN.
-        std.debug.assert(Vec3.lengthSq(cross_up_z) > 0.0);
+        assert(Vec3.lengthSq(cross_up_z) > 0.0);
         const x_axis = Vec3.normalize(cross_up_z);
         const y_axis = Vec3.cross(z_axis, x_axis);
 
@@ -511,7 +512,7 @@ pub const Mat4 = extern struct {
 
     /// Compare all 16 elements within `tolerance`.
     pub inline fn approxEqual(a: Mat4, b: Mat4, tolerance: f32) bool {
-        std.debug.assert(tolerance >= 0.0);
+        assert(tolerance >= 0.0);
         return Vec4.approxEqual(a.cols[0], b.cols[0], tolerance) and
             Vec4.approxEqual(a.cols[1], b.cols[1], tolerance) and
             Vec4.approxEqual(a.cols[2], b.cols[2], tolerance) and
@@ -546,7 +547,7 @@ pub const Mat4 = extern struct {
     /// Projective point transform: applies M * (p, 1) then divides by w.
     pub fn transformPoint(m: Mat4, p: Vec3) Vec3 {
         const v = mulVec(m, Vec4.fromVec3(p, 1.0));
-        std.debug.assert(v.w != 0.0);
+        assert(v.w != 0.0);
         const inv_w = 1.0 / v.w;
         return Vec3.init(v.x * inv_w, v.y * inv_w, v.z * inv_w);
     }
@@ -609,13 +610,13 @@ pub const Mat4 = extern struct {
     // ── Access ──────────────────────────────────────────────────────────
 
     pub inline fn at(m: Mat4, row_idx: u2, col_idx: u2) f32 {
-        std.debug.assert(row_idx < 4);
-        std.debug.assert(col_idx < 4);
+        assert(row_idx < 4);
+        assert(col_idx < 4);
         return lane(m.cols[@intCast(col_idx)], @intCast(row_idx));
     }
 
     pub inline fn row(m: Mat4, i: u2) Vec4 {
-        std.debug.assert(i < 4);
+        assert(i < 4);
         const idx: usize = @intCast(i);
         return .{
             .x = lane(m.cols[0], idx),
@@ -626,7 +627,7 @@ pub const Mat4 = extern struct {
     }
 
     pub inline fn col(m: Mat4, i: u2) Vec4 {
-        std.debug.assert(i < 4);
+        assert(i < 4);
         return m.cols[@intCast(i)];
     }
 };

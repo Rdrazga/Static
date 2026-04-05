@@ -4,6 +4,7 @@
 //! helpers for calling `WSAIoctl(SIO_GET_EXTENSION_FUNCTION_POINTER, ...)`.
 
 const std = @import("std");
+const assert = std.debug.assert;
 
 const windows = std.os.windows;
 const ws2_32 = windows.ws2_32;
@@ -39,7 +40,7 @@ pub const Extensions = struct {
 
 /// Loads required extension pointers for an overlapped socket.
 pub fn load(socket: ws2_32.SOCKET) error{Unsupported}!Extensions {
-    std.debug.assert(socket != ws2_32.INVALID_SOCKET);
+    assert(socket != ws2_32.INVALID_SOCKET);
     const accept_ex = loadPointer(AcceptExFn, socket, wsaid_accept_ex) catch return error.Unsupported;
     const connect_ex = loadPointer(ConnectExFn, socket, wsaid_connect_ex) catch return error.Unsupported;
     return .{
@@ -50,7 +51,7 @@ pub fn load(socket: ws2_32.SOCKET) error{Unsupported}!Extensions {
 
 /// Calls `WSAIoctl` to resolve one extension function pointer.
 fn loadPointer(comptime T: type, socket: ws2_32.SOCKET, guid: windows.GUID) error{Unsupported}!T {
-    std.debug.assert(socket != ws2_32.INVALID_SOCKET);
+    assert(socket != ws2_32.INVALID_SOCKET);
     var out: T = undefined;
     var bytes: windows.DWORD = 0;
     const rc = ws2_32.WSAIoctl(
@@ -66,7 +67,7 @@ fn loadPointer(comptime T: type, socket: ws2_32.SOCKET, guid: windows.GUID) erro
     );
     if (rc == ws2_32.SOCKET_ERROR) return error.Unsupported;
     if (bytes != @sizeOf(T)) return error.Unsupported;
-    std.debug.assert(bytes == @sizeOf(T));
+    assert(bytes == @sizeOf(T));
     return out;
 }
 

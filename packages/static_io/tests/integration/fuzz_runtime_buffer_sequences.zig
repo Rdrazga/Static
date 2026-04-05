@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_io = @import("static_io");
 const static_testing = @import("static_testing");
 
@@ -41,8 +43,8 @@ test "static_io runtime and buffer pool survive larger deterministic fuzz sequen
         },
     });
 
-    try std.testing.expectEqual(case_count_max, summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(case_count_max, summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 const FuzzContext = struct {
@@ -53,7 +55,7 @@ const FuzzContext = struct {
         var prng = std.Random.DefaultPrng.init(run_identity.seed.value);
         const random = prng.random();
 
-        var pool = static_io.BufferPool.init(std.testing.allocator, .{
+        var pool = static_io.BufferPool.init(testing.allocator, .{
             .buffer_size = buffer_size,
             .capacity = pool_capacity,
         }) catch unreachable;
@@ -61,7 +63,7 @@ const FuzzContext = struct {
 
         var runtime_config = static_io.RuntimeConfig.initForTest(pool_capacity);
         runtime_config.backend_kind = .fake;
-        var runtime = static_io.Runtime.init(std.testing.allocator, runtime_config) catch unreachable;
+        var runtime = static_io.Runtime.init(testing.allocator, runtime_config) catch unreachable;
         defer runtime.deinit();
 
         var held_buffers: [pool_capacity]?static_io.Buffer = [_]?static_io.Buffer{null} ** pool_capacity;
@@ -121,7 +123,7 @@ fn tryAcquire(
     pool: *static_io.BufferPool,
     held_buffers: *[pool_capacity]?static_io.Buffer,
 ) void {
-    std.debug.assert(pool.capacity() == pool_capacity);
+    assert(pool.capacity() == pool_capacity);
 
     const free_slot = firstFreeHeldSlot(held_buffers);
     if (free_slot == null) return;
@@ -138,7 +140,7 @@ fn submitHeldBuffer(
     pending_count: *usize,
 ) void {
     const held_index = firstHeldSlot(held_buffers) orelse return;
-    std.debug.assert(pending_count.* < pending_storage.len);
+    assert(pending_count.* < pending_storage.len);
 
     var buffer = held_buffers[held_index].?;
     held_buffers[held_index] = null;
@@ -236,7 +238,7 @@ fn validateNoSpaceLeftFastPath(
 ) void {
     if (pool.available() != 0) return;
     if (countHeld(held_buffers.*) + pending_count != pool_capacity) return;
-    std.debug.assert(pool.acquire() == error.NoSpaceLeft);
+    assert(pool.acquire() == error.NoSpaceLeft);
 }
 
 fn invariantsHold(
@@ -325,7 +327,7 @@ fn swapRemovePending(
     pending_count: *usize,
     index: usize,
 ) void {
-    std.debug.assert(index < pending_count.*);
+    assert(index < pending_count.*);
     pending_count.* -= 1;
     pending_storage[index] = pending_storage[pending_count.*];
 }

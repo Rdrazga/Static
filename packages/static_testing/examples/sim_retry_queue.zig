@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -14,10 +15,10 @@ pub fn main() !void {
     });
 
     const decision = try queue.scheduleNext(.init(0), 0, 9, 77);
-    std.debug.assert(decision == .queued);
-    std.debug.assert(try queue.emitDueToMailbox(.init(1), &retries, null) == 0);
-    std.debug.assert(try queue.emitDueToMailbox(.init(2), &retries, null) == 1);
+    assert(decision == .queued);
+    assert(try queue.emitDueToMailbox(.init(1), &retries, null) == 0);
+    assert(try queue.emitDueToMailbox(.init(2), &retries, null) == 1);
     const retry = try retries.recv();
-    std.debug.assert(retry.attempt == 1);
+    assert(retry.attempt == 1);
     std.debug.print("retry queue emitted request=9 attempt=1\n", .{});
 }

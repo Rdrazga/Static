@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_net = @import("static_net");
 const static_testing = @import("static_testing");
 
@@ -54,7 +56,7 @@ const IncrementalContext = struct {
         self.delivered_len = 0;
         @memset(self.current_frame[0..], 0);
         @memset(self.payload_out[0..], 0);
-        std.debug.assert(self.deliveredLen() == 0);
+        assert(self.deliveredLen() == 0);
     }
 
     fn deliveredLen(self: *const IncrementalContext) usize {
@@ -388,5 +390,5 @@ test "static_net incremental decoder sequences stay aligned with testing.model" 
         std.debug.print("{s}", .{summary_text});
         return error.TestUnexpectedResult;
     }
-    try std.testing.expectEqual(@as(u32, 96), summary.executed_case_count);
+    try testing.expectEqual(@as(u32, 96), summary.executed_case_count);
 }

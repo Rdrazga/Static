@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const static_testing = @import("static_testing");
 
 const bench = static_testing.bench;
@@ -22,7 +23,7 @@ pub fn openOutputDir(
     io: std.Io,
     benchmark_name: []const u8,
 ) !std.Io.Dir {
-    std.debug.assert(benchmark_name.len > 0);
+    assert(benchmark_name.len > 0);
 
     const cwd = std.Io.Dir.cwd();
     var path_buffer: [192]u8 = undefined;
@@ -31,7 +32,7 @@ pub fn openOutputDir(
         ".zig-cache/static_rng/benchmarks/{s}",
         .{benchmark_name},
     );
-    std.debug.assert(output_dir_path.len > 0);
+    assert(output_dir_path.len > 0);
     return cwd.createDirPathOpen(io, output_dir_path, .{});
 }
 
@@ -41,8 +42,8 @@ pub fn writeGroupReport(
     output_dir: std.Io.Dir,
     environment_note: []const u8,
 ) !void {
-    std.debug.assert(run_result.case_results.len > 0);
-    std.debug.assert(run_result.case_results.len <= 4);
+    assert(run_result.case_results.len > 0);
+    assert(run_result.case_results.len <= 4);
 
     var stats_storage: [4]bench.stats.BenchmarkStats = undefined;
     var baseline_document_buffer: [8192]u8 = undefined;
@@ -94,6 +95,6 @@ pub fn writeGroupReport(
     });
     var out = aw.toArrayList();
     defer out.deinit(std.heap.page_allocator);
-    std.debug.assert(out.items.len > 0);
+    assert(out.items.len > 0);
     std.debug.print("{s}", .{out.items});
 }

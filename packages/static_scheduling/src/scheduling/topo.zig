@@ -8,6 +8,8 @@
 //! Thread safety: not thread-safe — the allocator and output slice are caller-managed.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const Edge = struct {
     from: usize,
@@ -37,14 +39,14 @@ const MinHeap = struct {
     }
 
     pub fn push(self: *MinHeap, value: usize) void {
-        std.debug.assert(self.len < self.items.len);
+        assert(self.len < self.items.len);
         var i: usize = self.len;
         self.len += 1;
         self.items[i] = value;
         // Sift-up bound: depth of a binary heap is floor(log2(len)), which
         // is strictly less than len for any valid heap (len >= 1 after insert).
         const max_sift_steps: usize = self.len;
-        std.debug.assert(max_sift_steps > 0);
+        assert(max_sift_steps > 0);
         var sift_steps: usize = 0;
         while (i > 0 and sift_steps < max_sift_steps) : (sift_steps += 1) {
             const parent = (i - 1) / 2;
@@ -52,9 +54,9 @@ const MinHeap = struct {
             std.mem.swap(usize, &self.items[parent], &self.items[i]);
             i = parent;
         }
-        std.debug.assert(i == 0 or self.items[(i - 1) / 2] <= self.items[i]);
+        assert(i == 0 or self.items[(i - 1) / 2] <= self.items[i]);
         // Postcondition: the heap must not exceed its backing buffer after insertion.
-        std.debug.assert(self.len <= self.items.len);
+        assert(self.len <= self.items.len);
     }
 
     pub fn popMin(self: *MinHeap) ?usize {
@@ -64,7 +66,7 @@ const MinHeap = struct {
         self.len -= 1;
         if (self.len == 0) {
             // Postcondition: popping the last element decrements len to 0.
-            std.debug.assert(self.len < old_len);
+            assert(self.len < old_len);
             return out;
         }
         self.items[0] = self.items[self.len];
@@ -72,7 +74,7 @@ const MinHeap = struct {
         // Sift-down bound: depth of a binary heap is floor(log2(len)), which
         // is strictly less than len for any valid heap (len >= 1 here).
         const max_sift_steps: usize = self.len;
-        std.debug.assert(max_sift_steps > 0);
+        assert(max_sift_steps > 0);
         var sift_steps: usize = 0;
         while (sift_steps < max_sift_steps) : (sift_steps += 1) {
             const left = i * 2 + 1;
@@ -85,7 +87,7 @@ const MinHeap = struct {
             i = smallest;
         }
         // Postcondition: a successful pop always decrements len.
-        std.debug.assert(self.len < old_len);
+        assert(self.len < old_len);
         return out;
     }
 };
@@ -112,7 +114,7 @@ fn buildCsr(
     node_count: usize,
     edges: []const Edge,
 ) TopoError!Csr {
-    std.debug.assert(node_count > 0);
+    assert(node_count > 0);
 
     var indegree = try allocator.alloc(u32, node_count);
     errdefer allocator.free(indegree);
@@ -138,7 +140,7 @@ fn buildCsr(
     // Invariant: the total number of out-neighbor slots equals the edge count,
     // because each edge contributes exactly one out-neighbor entry.
     const total_out = offsets[node_count];
-    std.debug.assert(total_out == edges.len);
+    assert(total_out == edges.len);
 
     var out_neighbors = try allocator.alloc(usize, total_out);
     errdefer allocator.free(out_neighbors);
@@ -207,7 +209,7 @@ pub fn sortDeterministic(
 }
 
 test "sortDeterministic is stable and detects cycles" {
-    const a = std.testing.allocator;
+    const a = testing.allocator;
 
     // 0 -> 2, 1 -> 2, 2 -> 3 should produce 0,1,2,3.
     const edges = [_]Edge{
@@ -217,24 +219,24 @@ test "sortDeterministic is stable and detects cycles" {
     };
     const order = try sortDeterministic(a, 4, &edges);
     defer a.free(order);
-    try std.testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, order);
+    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, order);
 
     const cycle_edges = [_]Edge{
         .{ .from = 0, .to = 1 },
         .{ .from = 1, .to = 0 },
     };
-    try std.testing.expectError(TopoError.CycleDetected, sortDeterministic(a, 2, &cycle_edges));
+    try testing.expectError(TopoError.CycleDetected, sortDeterministic(a, 2, &cycle_edges));
 }
 
 test "sortDeterministic single node with no edges returns [0]" {
-    const a = std.testing.allocator;
+    const a = testing.allocator;
     const order = try sortDeterministic(a, 1, &.{});
     defer a.free(order);
-    try std.testing.expectEqualSlices(usize, &.{0}, order);
+    try testing.expectEqualSlices(usize, &.{0}, order);
 }
 
 test "sortDeterministic ordering is independent of input edge order" {
-    const a = std.testing.allocator;
+    const a = testing.allocator;
     // Diamond: edges provided in reverse order vs original test.
     const edges_reversed = [_]Edge{
         .{ .from = 2, .to = 3 },
@@ -244,30 +246,30 @@ test "sortDeterministic ordering is independent of input edge order" {
     const order = try sortDeterministic(a, 4, &edges_reversed);
     defer a.free(order);
     // Lowest-id-first policy must still produce 0,1,2,3 regardless of edge input order.
-    try std.testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, order);
+    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, order);
 }
 
 test "sortDeterministic disconnected graph returns nodes in ascending id order" {
-    const a = std.testing.allocator;
+    const a = testing.allocator;
     // Four isolated nodes; min-heap drains 0,1,2,3.
     const order = try sortDeterministic(a, 4, &.{});
     defer a.free(order);
-    try std.testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, order);
+    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, order);
 }
 
 test "sortDeterministic out-of-range edge returns InvalidInput" {
-    const a = std.testing.allocator;
+    const a = testing.allocator;
     const bad_edges = [_]Edge{.{ .from = 0, .to = 5 }};
-    try std.testing.expectError(TopoError.InvalidInput, sortDeterministic(a, 4, &bad_edges));
+    try testing.expectError(TopoError.InvalidInput, sortDeterministic(a, 4, &bad_edges));
 }
 
 test "sortDeterministic node_count 0 returns InvalidConfig" {
-    const a = std.testing.allocator;
-    try std.testing.expectError(TopoError.InvalidConfig, sortDeterministic(a, 0, &.{}));
+    const a = testing.allocator;
+    try testing.expectError(TopoError.InvalidConfig, sortDeterministic(a, 0, &.{}));
 }
 
 test "sortDeterministic long serial chain returns forward order" {
-    const a = std.testing.allocator;
+    const a = testing.allocator;
     // 0->1->2->3->4
     const edges = [_]Edge{
         .{ .from = 0, .to = 1 },
@@ -277,7 +279,7 @@ test "sortDeterministic long serial chain returns forward order" {
     };
     const order = try sortDeterministic(a, 5, &edges);
     defer a.free(order);
-    try std.testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3, 4 }, order);
+    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3, 4 }, order);
 }
 
 test "sortDeterministic stress: randomized acyclic edge lists respect all edges and produce full order" {
@@ -286,7 +288,7 @@ test "sortDeterministic stress: randomized acyclic edge lists respect all edges 
     //   1. plan length equals node_count for any acyclic graph.
     //   2. every input edge (from, to) is respected: from appears before to in the output.
     // Acyclicity is guaranteed by construction: edges only go from lower to higher node index.
-    const a = std.testing.allocator;
+    const a = testing.allocator;
 
     var prng = std.Random.DefaultPrng.init(0xdeadbeef_cafef00d);
     const random = prng.random();
@@ -316,19 +318,19 @@ test "sortDeterministic stress: randomized acyclic edge lists respect all edges 
         defer a.free(order);
 
         // Invariant 1: plan covers every node exactly once (paired assert + expectation).
-        std.debug.assert(order.len == node_count);
-        try std.testing.expectEqual(node_count, order.len);
+        assert(order.len == node_count);
+        try testing.expectEqual(node_count, order.len);
 
         // Invariant 2: every input edge is respected in the output order.
         // Build a position map: position[node] = index in order.
         var position: [16]usize = undefined;
-        std.debug.assert(node_count <= position.len);
+        assert(node_count <= position.len);
         for (order, 0..) |node, pos| {
             position[node] = pos;
         }
         for (edges) |e| {
-            std.debug.assert(position[e.from] < position[e.to]);
-            try std.testing.expect(position[e.from] < position[e.to]);
+            assert(position[e.from] < position[e.to]);
+            try testing.expect(position[e.from] < position[e.to]);
         }
     }
 }

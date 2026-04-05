@@ -16,6 +16,8 @@
 //! - Fail-closed on overflow (treat as exceeded).
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const HashBudgetError = error{
     ExceededBytes,
@@ -52,15 +54,15 @@ pub const HashBudget = struct {
     /// Postconditions: all usage counters are zero.
     pub fn init(limits: Limits) HashBudget {
         // A zero-depth budget cannot enter any nesting level. This is a programmer error.
-        std.debug.assert(limits.max_depth != 0);
+        assert(limits.max_depth != 0);
         // Individual limits of zero are valid: they cause immediate failure on
         // that charge path, which is correct fail-fast behavior. For example,
         // max_bytes=0 with max_elems>0 is a valid element-only budget.
         const result: HashBudget = .{ .limits = limits };
         // Postcondition: all counters start at zero.
-        std.debug.assert(result.used_bytes == 0);
-        std.debug.assert(result.used_elems == 0);
-        std.debug.assert(result.depth == 0);
+        assert(result.used_bytes == 0);
+        assert(result.used_elems == 0);
+        assert(result.depth == 0);
         return result;
     }
 
@@ -70,9 +72,9 @@ pub const HashBudget = struct {
     pub fn unlimited() HashBudget {
         const result = init(.{});
         // Postcondition: limits are at their maximums.
-        std.debug.assert(result.limits.max_bytes == std.math.maxInt(u64));
-        std.debug.assert(result.limits.max_elems == std.math.maxInt(u64));
-        std.debug.assert(result.limits.max_depth == std.math.maxInt(u16));
+        assert(result.limits.max_bytes == std.math.maxInt(u64));
+        assert(result.limits.max_elems == std.math.maxInt(u64));
+        assert(result.limits.max_depth == std.math.maxInt(u16));
         return result;
     }
 
@@ -81,13 +83,13 @@ pub const HashBudget = struct {
     /// Preconditions: depth <= max_depth (invariant maintained by enter/leave pairs).
     /// Postconditions: depth incremented by one on success.
     pub fn enter(self: *HashBudget) HashBudgetError!void {
-        std.debug.assert(self.depth <= self.limits.max_depth);
+        assert(self.depth <= self.limits.max_depth);
         if (self.depth == self.limits.max_depth) {
             return error.ExceededDepth;
         }
         self.depth += 1;
         // Postcondition: depth is within bounds after increment.
-        std.debug.assert(self.depth <= self.limits.max_depth);
+        assert(self.depth <= self.limits.max_depth);
     }
 
     /// Leave a nesting level.
@@ -96,10 +98,10 @@ pub const HashBudget = struct {
     /// Postconditions: depth decremented by one.
     pub fn leave(self: *HashBudget) void {
         // Must have a matching enter() call.
-        std.debug.assert(self.depth != 0);
+        assert(self.depth != 0);
         self.depth -= 1;
         // Postcondition: depth is now strictly less than max_depth.
-        std.debug.assert(self.depth < self.limits.max_depth);
+        assert(self.depth < self.limits.max_depth);
     }
 
     /// Charge `bytes` against the byte budget.
@@ -108,7 +110,7 @@ pub const HashBudget = struct {
     /// Postconditions: used_bytes incremented on success; returns `ExceededBytes` if over limit.
     pub fn chargeBytes(self: *HashBudget, bytes: usize) HashBudgetError!void {
         // Invariant: prior successful charges never left us over the limit.
-        std.debug.assert(self.used_bytes <= self.limits.max_bytes);
+        assert(self.used_bytes <= self.limits.max_bytes);
         const n = usizeToU64(bytes) orelse return error.ExceededBytes;
         const new_used = std.math.add(u64, self.used_bytes, n) catch return error.ExceededBytes;
         if (new_used > self.limits.max_bytes) {
@@ -116,7 +118,7 @@ pub const HashBudget = struct {
         }
         self.used_bytes = new_used;
         // Postcondition: used_bytes is within limit after successful charge.
-        std.debug.assert(self.used_bytes <= self.limits.max_bytes);
+        assert(self.used_bytes <= self.limits.max_bytes);
     }
 
     /// Charge `elems` against the element budget.
@@ -125,7 +127,7 @@ pub const HashBudget = struct {
     /// Postconditions: used_elems incremented on success; returns `ExceededElems` if over limit.
     pub fn chargeElems(self: *HashBudget, elems: usize) HashBudgetError!void {
         // Invariant: prior successful charges never left us over the limit.
-        std.debug.assert(self.used_elems <= self.limits.max_elems);
+        assert(self.used_elems <= self.limits.max_elems);
         const n = usizeToU64(elems) orelse return error.ExceededElems;
         const new_used = std.math.add(u64, self.used_elems, n) catch return error.ExceededElems;
         if (new_used > self.limits.max_elems) {
@@ -133,7 +135,7 @@ pub const HashBudget = struct {
         }
         self.used_elems = new_used;
         // Postcondition: used_elems is within limit after successful charge.
-        std.debug.assert(self.used_elems <= self.limits.max_elems);
+        assert(self.used_elems <= self.limits.max_elems);
     }
 
     /// Convert usize to u64, returning null on overflow. On all current Zig
@@ -159,7 +161,7 @@ test "budget init rejects zero max_depth" {
     // max_depth=0 is treated as a programmer error and guarded by an assert.
     // Zig's test runner treats panics as hard failures, so we cover the valid path here.
     const b = HashBudget.init(.{ .max_depth = 1 });
-    try std.testing.expectEqual(@as(u16, 0), b.depth);
+    try testing.expectEqual(@as(u16, 0), b.depth);
 }
 
 test "budget chargeBytes enforces limit" {
@@ -172,7 +174,7 @@ test "budget chargeBytes enforces limit" {
     try b.chargeBytes(3);
     try b.chargeBytes(2);
     // Charge over limit fails.
-    try std.testing.expectError(error.ExceededBytes, b.chargeBytes(1));
+    try testing.expectError(error.ExceededBytes, b.chargeBytes(1));
 }
 
 test "budget chargeElems enforces limit" {
@@ -183,7 +185,7 @@ test "budget chargeElems enforces limit" {
     });
     try b.chargeElems(2);
     try b.chargeElems(1);
-    try std.testing.expectError(error.ExceededElems, b.chargeElems(1));
+    try testing.expectError(error.ExceededElems, b.chargeElems(1));
 }
 
 test "budget enter/leave enforces depth limit" {
@@ -194,10 +196,10 @@ test "budget enter/leave enforces depth limit" {
     });
     try b.enter();
     try b.enter();
-    try std.testing.expectError(error.ExceededDepth, b.enter());
+    try testing.expectError(error.ExceededDepth, b.enter());
     b.leave();
     b.leave();
-    try std.testing.expectEqual(@as(u16, 0), b.depth);
+    try testing.expectEqual(@as(u16, 0), b.depth);
 }
 
 test "budget unlimited allows large charges" {
@@ -215,9 +217,9 @@ test "budget charges are monotonic" {
         .max_depth = std.math.maxInt(u16),
     });
     try b.chargeBytes(5);
-    try std.testing.expectEqual(@as(u64, 5), b.used_bytes);
+    try testing.expectEqual(@as(u64, 5), b.used_bytes);
     try b.chargeBytes(3);
-    try std.testing.expectEqual(@as(u64, 8), b.used_bytes);
+    try testing.expectEqual(@as(u64, 8), b.used_bytes);
     // No way to reduce used_bytes: monotonic by design.
 }
 
@@ -228,7 +230,7 @@ test "budget allows max_bytes=0 with nonzero max_elems" {
         .max_depth = 1,
     });
     // Byte charges fail immediately: correct fail-fast for byte-free budgets.
-    try std.testing.expectError(error.ExceededBytes, b.chargeBytes(1));
+    try testing.expectError(error.ExceededBytes, b.chargeBytes(1));
     // Element charges succeed.
     try b.chargeElems(1);
 }
@@ -241,7 +243,7 @@ test "budget chargeBytes at exact limit succeeds" {
     });
     try b.chargeBytes(5);
     // One more byte exceeds the limit.
-    try std.testing.expectError(error.ExceededBytes, b.chargeBytes(1));
+    try testing.expectError(error.ExceededBytes, b.chargeBytes(1));
 }
 
 test "budget chargeBytes with zero bytes succeeds" {
@@ -262,11 +264,11 @@ test "budget failed charge does not corrupt counter" {
     });
     try b.chargeBytes(2);
     // This charge exceeds the limit and must not modify used_bytes.
-    try std.testing.expectError(error.ExceededBytes, b.chargeBytes(5));
-    try std.testing.expectEqual(@as(u64, 2), b.used_bytes);
+    try testing.expectError(error.ExceededBytes, b.chargeBytes(5));
+    try testing.expectEqual(@as(u64, 2), b.used_bytes);
     // Remaining budget is intact: we can still charge 1 more byte.
     try b.chargeBytes(1);
-    try std.testing.expectEqual(@as(u64, 3), b.used_bytes);
+    try testing.expectEqual(@as(u64, 3), b.used_bytes);
 }
 
 test "budget failed element charge does not corrupt counter" {
@@ -277,11 +279,11 @@ test "budget failed element charge does not corrupt counter" {
     });
     try b.chargeElems(2);
     // This charge exceeds the limit and must not modify used_elems.
-    try std.testing.expectError(error.ExceededElems, b.chargeElems(5));
-    try std.testing.expectEqual(@as(u64, 2), b.used_elems);
+    try testing.expectError(error.ExceededElems, b.chargeElems(5));
+    try testing.expectEqual(@as(u64, 2), b.used_elems);
     // Remaining element budget is intact: we can still charge 1 more element.
     try b.chargeElems(1);
-    try std.testing.expectEqual(@as(u64, 3), b.used_elems);
+    try testing.expectEqual(@as(u64, 3), b.used_elems);
 }
 
 test "budget failed enter does not change depth" {
@@ -291,7 +293,7 @@ test "budget failed enter does not change depth" {
         .max_depth = 1,
     });
     try b.enter();
-    try std.testing.expectError(error.ExceededDepth, b.enter());
+    try testing.expectError(error.ExceededDepth, b.enter());
     // A failed enter must not increase depth.
-    try std.testing.expectEqual(@as(u16, 1), b.depth);
+    try testing.expectEqual(@as(u16, 1), b.depth);
 }

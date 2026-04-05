@@ -1,6 +1,8 @@
 //! Bounded deterministic storage-completion simulator over logical time.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const trace = @import("../trace.zig");
 const clock = @import("clock.zig");
 const mailbox = @import("mailbox.zig");
@@ -161,7 +163,7 @@ fn removePendingAt(
     pending_count: *usize,
     index: usize,
 ) void {
-    std.debug.assert(index < pending_count.*);
+    assert(index < pending_count.*);
     var cursor = index;
     while (cursor + 1 < pending_count.*) : (cursor += 1) {
         storage[cursor] = storage[cursor + 1];
@@ -174,26 +176,26 @@ test "storage lane delivers success and failure completions after delay" {
     var lane = try StorageLane(u32).init(&storage, .{
         .default_delay = .init(2),
     });
-    var completions = try mailbox.Mailbox(OperationResult(u32)).init(std.testing.allocator, .{
+    var completions = try mailbox.Mailbox(OperationResult(u32)).init(testing.allocator, .{
         .capacity = 4,
     });
     defer completions.deinit();
 
     try lane.submitSuccess(.init(0), 11, 200);
     try lane.submitFailure(.init(0), 12, 500);
-    try std.testing.expectEqual(@as(usize, 2), lane.pendingItems().len);
+    try testing.expectEqual(@as(usize, 2), lane.pendingItems().len);
 
     const early = try lane.deliverDueToMailbox(.init(1), &completions, null);
-    try std.testing.expectEqual(@as(u32, 0), early.success_count);
-    try std.testing.expectEqual(@as(u32, 0), early.failure_count);
+    try testing.expectEqual(@as(u32, 0), early.success_count);
+    try testing.expectEqual(@as(u32, 0), early.failure_count);
 
     const delivered = try lane.deliverDueToMailbox(.init(2), &completions, null);
-    try std.testing.expectEqual(@as(u32, 1), delivered.success_count);
-    try std.testing.expectEqual(@as(u32, 1), delivered.failure_count);
-    try std.testing.expectEqual(@as(usize, 0), lane.pendingItems().len);
+    try testing.expectEqual(@as(u32, 1), delivered.success_count);
+    try testing.expectEqual(@as(u32, 1), delivered.failure_count);
+    try testing.expectEqual(@as(usize, 0), lane.pendingItems().len);
 
     const first = try completions.recv();
     const second = try completions.recv();
-    try std.testing.expectEqual(CompletionStatus.success, first.status);
-    try std.testing.expectEqual(CompletionStatus.failed, second.status);
+    try testing.expectEqual(CompletionStatus.success, first.status);
+    try testing.expectEqual(CompletionStatus.failed, second.status);
 }

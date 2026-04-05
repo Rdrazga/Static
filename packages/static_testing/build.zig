@@ -1,6 +1,7 @@
 // This package supports local validation with `zig build` from this directory
 // and workspace-wide validation from the repository root.
 const std = @import("std");
+const assert = std.debug.assert;
 
 const SmokeExample = enum {
     replay_roundtrip,
@@ -466,14 +467,14 @@ fn addExampleStep(b: *std.Build, options: ExampleStepOptions) ExampleSteps {
         }
     }
 
-    std.debug.assert(run_replay_roundtrip_step != null);
-    std.debug.assert(run_bench_smoke_step != null);
-    std.debug.assert(run_bench_baseline_compare_step != null);
-    std.debug.assert(run_fuzz_seeded_runner_step != null);
-    std.debug.assert(run_sim_timer_mailbox_step != null);
-    std.debug.assert(run_system_storage_retry_flow_step != null);
-    std.debug.assert(run_system_process_driver_flow_step != null);
-    std.debug.assert(run_swarm_sim_runner_step != null);
+    assert(run_replay_roundtrip_step != null);
+    assert(run_bench_smoke_step != null);
+    assert(run_bench_baseline_compare_step != null);
+    assert(run_fuzz_seeded_runner_step != null);
+    assert(run_sim_timer_mailbox_step != null);
+    assert(run_system_storage_retry_flow_step != null);
+    assert(run_system_process_driver_flow_step != null);
+    assert(run_swarm_sim_runner_step != null);
 
     return .{
         .run_replay_roundtrip = run_replay_roundtrip_step.?,

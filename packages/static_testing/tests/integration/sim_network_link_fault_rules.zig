@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_testing = @import("static_testing");
 
 const network = static_testing.testing.sim.network_link;
@@ -7,7 +8,7 @@ const temporal = static_testing.testing.temporal;
 test "network link fault rules support asymmetric drops and targeted delay under fixture tracing" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 16) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -41,17 +42,17 @@ test "network link fault rules support asymmetric drops and targeted delay under
     });
 
     var mailbox_7 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_7.deinit();
     var mailbox_11 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_11.deinit();
     var mailbox_13 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_13.deinit();
@@ -63,16 +64,16 @@ test "network link fault rules support asymmetric drops and targeted delay under
     _ = try sim_fixture.sim_clock.advance(.init(1));
     _ = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 11, &mailbox_11, sim_fixture.traceBufferPtr());
     const delivered_7 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 7, &mailbox_7, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_7.delivered_count);
-    try std.testing.expectEqual(@as(u32, 42), try mailbox_7.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_7.delivered_count);
+    try testing.expectEqual(@as(u32, 42), try mailbox_7.recv());
 
     const delayed_early = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 13, &mailbox_13, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 0), delayed_early.delivered_count);
+    try testing.expectEqual(@as(u32, 0), delayed_early.delivered_count);
 
     _ = try sim_fixture.sim_clock.advance(.init(2));
     const delivered_13 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 13, &mailbox_13, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_13.delivered_count);
-    try std.testing.expectEqual(@as(u32, 77), try mailbox_13.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_13.delivered_count);
+    try testing.expectEqual(@as(u32, 77), try mailbox_13.recv());
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const delivered_to_7 = try temporal.checkExactlyOnce(snapshot, .{
@@ -80,27 +81,27 @@ test "network link fault rules support asymmetric drops and targeted delay under
         .value = 7,
         .surface_label = "network_link",
     });
-    try std.testing.expect(delivered_to_7.check_result.passed);
+    try testing.expect(delivered_to_7.check_result.passed);
 
     const delivered_to_13 = try temporal.checkExactlyOnce(snapshot, .{
         .label = "network_link.deliver",
         .value = 13,
         .surface_label = "network_link",
     });
-    try std.testing.expect(delivered_to_13.check_result.passed);
+    try testing.expect(delivered_to_13.check_result.passed);
 
     const never_to_11 = try temporal.checkNever(snapshot, .{
         .label = "network_link.deliver",
         .value = 11,
         .surface_label = "network_link",
     });
-    try std.testing.expect(never_to_11.check_result.passed);
+    try testing.expect(never_to_11.check_result.passed);
 }
 
 test "network link isolate-node partitions block both inbound and outbound traffic while preserving other routes" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 16) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -119,17 +120,17 @@ test "network link isolate-node partitions block both inbound and outbound traff
     });
 
     var mailbox_5 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_5.deinit();
     var mailbox_11 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_11.deinit();
     var mailbox_13 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_13.deinit();
@@ -140,12 +141,12 @@ test "network link isolate-node partitions block both inbound and outbound traff
 
     _ = try sim_fixture.sim_clock.advance(.init(1));
     const delivered_11 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 11, &mailbox_11, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 0), delivered_11.delivered_count);
+    try testing.expectEqual(@as(u32, 0), delivered_11.delivered_count);
     const delivered_5 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 5, &mailbox_5, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 0), delivered_5.delivered_count);
+    try testing.expectEqual(@as(u32, 0), delivered_5.delivered_count);
     const delivered_13 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 13, &mailbox_13, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_13.delivered_count);
-    try std.testing.expectEqual(@as(u32, 77), try mailbox_13.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_13.delivered_count);
+    try testing.expectEqual(@as(u32, 77), try mailbox_13.recv());
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const never_to_11 = try temporal.checkNever(snapshot, .{
@@ -153,27 +154,27 @@ test "network link isolate-node partitions block both inbound and outbound traff
         .value = 11,
         .surface_label = "network_link",
     });
-    try std.testing.expect(never_to_11.check_result.passed);
+    try testing.expect(never_to_11.check_result.passed);
 
     const never_to_5 = try temporal.checkNever(snapshot, .{
         .label = "network_link.deliver",
         .value = 5,
         .surface_label = "network_link",
     });
-    try std.testing.expect(never_to_5.check_result.passed);
+    try testing.expect(never_to_5.check_result.passed);
 
     const once_to_13 = try temporal.checkExactlyOnce(snapshot, .{
         .label = "network_link.deliver",
         .value = 13,
         .surface_label = "network_link",
     });
-    try std.testing.expect(once_to_13.check_result.passed);
+    try testing.expect(once_to_13.check_result.passed);
 }
 
 test "network link group partitions support directed and bidirectional topology faults" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 24) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -199,17 +200,17 @@ test "network link group partitions support directed and bidirectional topology 
     });
 
     var mailbox_1 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_1.deinit();
     var mailbox_2 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_2.deinit();
     var mailbox_3 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_3.deinit();
@@ -220,15 +221,15 @@ test "network link group partitions support directed and bidirectional topology 
 
     _ = try sim_fixture.sim_clock.advance(.init(1));
     const delivered_to_3_directed = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 3, &mailbox_3, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 0), delivered_to_3_directed.delivered_count);
+    try testing.expectEqual(@as(u32, 0), delivered_to_3_directed.delivered_count);
 
     const delivered_to_1_directed = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 1, &mailbox_1, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_to_1_directed.delivered_count);
-    try std.testing.expectEqual(@as(u32, 20), try mailbox_1.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_to_1_directed.delivered_count);
+    try testing.expectEqual(@as(u32, 20), try mailbox_1.recv());
 
     const delivered_to_2_directed = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 2, &mailbox_2, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_to_2_directed.delivered_count);
-    try std.testing.expectEqual(@as(u32, 30), try mailbox_2.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_to_2_directed.delivered_count);
+    try testing.expectEqual(@as(u32, 30), try mailbox_2.recv());
 
     try link.setPartitionMode(.{
         .partition_groups = .{
@@ -239,7 +240,7 @@ test "network link group partitions support directed and bidirectional topology 
     });
     try link.send(sim_fixture.sim_clock.now(), 2, 4, 40);
     try link.send(sim_fixture.sim_clock.now(), 4, 2, 50);
-    try std.testing.expectEqual(@as(usize, 0), link.pendingItems().len);
+    try testing.expectEqual(@as(usize, 0), link.pendingItems().len);
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const delivered_once_to_1 = try temporal.checkExactlyOnce(snapshot, .{
@@ -247,34 +248,34 @@ test "network link group partitions support directed and bidirectional topology 
         .value = 1,
         .surface_label = "network_link",
     });
-    try std.testing.expect(delivered_once_to_1.check_result.passed);
+    try testing.expect(delivered_once_to_1.check_result.passed);
 
     const delivered_once_to_2 = try temporal.checkExactlyOnce(snapshot, .{
         .label = "network_link.deliver",
         .value = 2,
         .surface_label = "network_link",
     });
-    try std.testing.expect(delivered_once_to_2.check_result.passed);
+    try testing.expect(delivered_once_to_2.check_result.passed);
 
     const never_to_3 = try temporal.checkNever(snapshot, .{
         .label = "network_link.deliver",
         .value = 3,
         .surface_label = "network_link",
     });
-    try std.testing.expect(never_to_3.check_result.passed);
+    try testing.expect(never_to_3.check_result.passed);
 
     const never_to_4 = try temporal.checkNever(snapshot, .{
         .label = "network_link.deliver",
         .value = 4,
         .surface_label = "network_link",
     });
-    try std.testing.expect(never_to_4.check_result.passed);
+    try testing.expect(never_to_4.check_result.passed);
 }
 
 test "network link congestion windows hold matching deliveries until the route reopens" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 16) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -300,7 +301,7 @@ test "network link congestion windows hold matching deliveries until the route r
     });
 
     var mailbox_13 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_13.deinit();
@@ -309,12 +310,12 @@ test "network link congestion windows hold matching deliveries until the route r
 
     _ = try sim_fixture.sim_clock.advance(.init(3));
     const still_blocked = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 13, &mailbox_13, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 0), still_blocked.delivered_count);
+    try testing.expectEqual(@as(u32, 0), still_blocked.delivered_count);
 
     _ = try sim_fixture.sim_clock.advance(.init(1));
     const delivered = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 13, &mailbox_13, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered.delivered_count);
-    try std.testing.expectEqual(@as(u32, 77), try mailbox_13.recv());
+    try testing.expectEqual(@as(u32, 1), delivered.delivered_count);
+    try testing.expectEqual(@as(u32, 77), try mailbox_13.recv());
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const once_to_13 = try temporal.checkExactlyOnce(snapshot, .{
@@ -322,13 +323,13 @@ test "network link congestion windows hold matching deliveries until the route r
         .value = 13,
         .surface_label = "network_link",
     });
-    try std.testing.expect(once_to_13.check_result.passed);
+    try testing.expect(once_to_13.check_result.passed);
 }
 
 test "network link backlog pressure can evict the oldest matching pending delivery" {
     var sim_fixture: static_testing.testing.sim.fixture.Fixture(4, 4, 4, 24) = undefined;
     try sim_fixture.init(.{
-        .allocator = std.testing.allocator,
+        .allocator = testing.allocator,
         .timer_queue_config = .{
             .buckets = 8,
             .timers_max = 8,
@@ -354,12 +355,12 @@ test "network link backlog pressure can evict the oldest matching pending delive
     });
 
     var mailbox_13 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_13.deinit();
     var mailbox_17 = try static_testing.testing.sim.mailbox.Mailbox(u32).init(
-        std.testing.allocator,
+        testing.allocator,
         .{ .capacity = 2 },
     );
     defer mailbox_17.deinit();
@@ -370,12 +371,12 @@ test "network link backlog pressure can evict the oldest matching pending delive
 
     _ = try sim_fixture.sim_clock.advance(.init(1));
     const delivered_to_13 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 13, &mailbox_13, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_to_13.delivered_count);
-    try std.testing.expectEqual(@as(u32, 80), try mailbox_13.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_to_13.delivered_count);
+    try testing.expectEqual(@as(u32, 80), try mailbox_13.recv());
 
     const delivered_to_17 = try link.deliverDueToMailbox(sim_fixture.sim_clock.now(), 17, &mailbox_17, sim_fixture.traceBufferPtr());
-    try std.testing.expectEqual(@as(u32, 1), delivered_to_17.delivered_count);
-    try std.testing.expectEqual(@as(u32, 90), try mailbox_17.recv());
+    try testing.expectEqual(@as(u32, 1), delivered_to_17.delivered_count);
+    try testing.expectEqual(@as(u32, 90), try mailbox_17.recv());
 
     const snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const once_to_13 = try temporal.checkExactlyOnce(snapshot, .{
@@ -383,12 +384,12 @@ test "network link backlog pressure can evict the oldest matching pending delive
         .value = 13,
         .surface_label = "network_link",
     });
-    try std.testing.expect(once_to_13.check_result.passed);
+    try testing.expect(once_to_13.check_result.passed);
 
     const once_to_17 = try temporal.checkExactlyOnce(snapshot, .{
         .label = "network_link.deliver",
         .value = 17,
         .surface_label = "network_link",
     });
-    try std.testing.expect(once_to_17.check_result.passed);
+    try testing.expect(once_to_17.check_result.passed);
 }

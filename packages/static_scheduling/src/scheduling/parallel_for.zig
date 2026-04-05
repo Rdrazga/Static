@@ -5,6 +5,8 @@
 //! surfaces continue to evolve under real consumer pressure.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const task_graph = @import("task_graph.zig");
 
 /// Execute all tasks in `plan.order` sequentially on the calling thread.
@@ -19,18 +21,18 @@ pub fn runSequential(
     ctx: anytype,
     comptime dispatch_fn: fn (@TypeOf(ctx), usize) void,
 ) void {
-    std.debug.assert(plan.order.len > 0);
+    assert(plan.order.len > 0);
 
     var index: usize = 0;
     while (index < plan.order.len) : (index += 1) {
         dispatch_fn(ctx, plan.order[index]);
     }
 
-    std.debug.assert(index == plan.order.len);
+    assert(index == plan.order.len);
 }
 
 test "runSequential calls dispatch_fn in plan order for a linear graph" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
 
     var g = task_graph.TaskGraph.init(allocator, 4);
     defer g.deinit();
@@ -47,7 +49,7 @@ test "runSequential calls dispatch_fn in plan order for a linear graph" {
         len: usize = 0,
 
         fn dispatch(self: *@This(), task_id: usize) void {
-            std.debug.assert(self.len < self.buf.len);
+            assert(self.len < self.buf.len);
             self.buf[self.len] = task_id;
             self.len += 1;
         }
@@ -56,15 +58,15 @@ test "runSequential calls dispatch_fn in plan order for a linear graph" {
     var rec = Recorder{};
     runSequential(&plan, &rec, Recorder.dispatch);
 
-    std.debug.assert(rec.len == 4);
-    try std.testing.expectEqual(@as(usize, 4), rec.len);
+    assert(rec.len == 4);
+    try testing.expectEqual(@as(usize, 4), rec.len);
 
-    std.debug.assert(std.mem.eql(usize, rec.buf[0..rec.len], plan.order));
-    try std.testing.expectEqualSlices(usize, plan.order, rec.buf[0..rec.len]);
+    assert(std.mem.eql(usize, rec.buf[0..rec.len], plan.order));
+    try testing.expectEqualSlices(usize, plan.order, rec.buf[0..rec.len]);
 }
 
 test "runSequential calls dispatch_fn in plan order for a fork-join graph" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
 
     var g = task_graph.TaskGraph.init(allocator, 5);
     defer g.deinit();
@@ -78,14 +80,14 @@ test "runSequential calls dispatch_fn in plan order for a fork-join graph" {
     defer plan.deinit();
 
     const expected_order = [_]usize{ 0, 2, 3, 1, 4 };
-    try std.testing.expectEqualSlices(usize, &expected_order, plan.order);
+    try testing.expectEqualSlices(usize, &expected_order, plan.order);
 
     const Recorder = struct {
         buf: [5]usize = undefined,
         len: usize = 0,
 
         fn dispatch(self: *@This(), task_id: usize) void {
-            std.debug.assert(self.len < self.buf.len);
+            assert(self.len < self.buf.len);
             self.buf[self.len] = task_id;
             self.len += 1;
         }
@@ -94,14 +96,14 @@ test "runSequential calls dispatch_fn in plan order for a fork-join graph" {
     var rec = Recorder{};
     runSequential(&plan, &rec, Recorder.dispatch);
 
-    std.debug.assert(rec.len == expected_order.len);
-    try std.testing.expectEqual(@as(usize, expected_order.len), rec.len);
-    std.debug.assert(std.mem.eql(usize, rec.buf[0..rec.len], plan.order));
-    try std.testing.expectEqualSlices(usize, plan.order, rec.buf[0..rec.len]);
+    assert(rec.len == expected_order.len);
+    try testing.expectEqual(@as(usize, expected_order.len), rec.len);
+    assert(std.mem.eql(usize, rec.buf[0..rec.len], plan.order));
+    try testing.expectEqualSlices(usize, plan.order, rec.buf[0..rec.len]);
 }
 
 test "runSequential single task dispatches exactly once" {
-    const allocator = std.testing.allocator;
+    const allocator = testing.allocator;
 
     var g = task_graph.TaskGraph.init(allocator, 1);
     defer g.deinit();
@@ -120,6 +122,6 @@ test "runSequential single task dispatches exactly once" {
     var ctr = Counter{};
     runSequential(&plan, &ctr, Counter.dispatch);
 
-    std.debug.assert(ctr.count == 1);
-    try std.testing.expectEqual(@as(usize, 1), ctr.count);
+    assert(ctr.count == 1);
+    try testing.expectEqual(@as(usize, 1), ctr.count);
 }

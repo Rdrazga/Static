@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_queues = @import("static_queues");
 const static_testing = @import("static_testing");
 
@@ -50,34 +52,34 @@ const Context = struct {
 
     fn resetState(self: *@This()) void {
         if (self.channel_initialized) {
-            std.debug.assert(self.channel.capacity() == 2);
-            std.debug.assert(self.channel.len() <= self.channel.capacity());
+            assert(self.channel.capacity() == 2);
+            assert(self.channel.len() <= self.channel.capacity());
             self.channel.deinit();
         }
 
-        self.channel = Channel.init(std.testing.allocator, .{ .capacity = 2 }) catch unreachable;
+        self.channel = Channel.init(testing.allocator, .{ .capacity = 2 }) catch unreachable;
         self.channel_initialized = true;
         self.saw_wraparound = false;
         self.saw_close = false;
         self.saw_send_rejected_after_close = false;
         self.saw_final_closed_recv = false;
 
-        std.debug.assert(self.channel.capacity() == 2);
-        std.debug.assert(self.channel.len() == 0);
+        assert(self.channel.capacity() == 2);
+        assert(self.channel.len() == 0);
     }
 
     fn deinitState(self: *@This()) void {
         if (!self.channel_initialized) return;
 
-        std.debug.assert(self.channel.capacity() == 2);
-        std.debug.assert(self.channel.len() <= self.channel.capacity());
+        assert(self.channel.capacity() == 2);
+        assert(self.channel.len() <= self.channel.capacity());
         self.channel.deinit();
         self.channel_initialized = false;
     }
 
     fn validate(self: *const @This()) checker.CheckResult {
-        std.debug.assert(self.channel_initialized);
-        std.debug.assert(self.channel.len() <= self.channel.capacity());
+        assert(self.channel_initialized);
+        assert(self.channel.len() <= self.channel.capacity());
         if (!self.saw_wraparound or !self.saw_close or !self.saw_send_rejected_after_close or !self.saw_final_closed_recv) {
             return checker.CheckResult.fail(&violations, null);
         }
@@ -88,46 +90,46 @@ const Context = struct {
     }
 
     fn expectSend(self: *@This(), value: u8, expected_len_after: usize) checker.CheckResult {
-        std.debug.assert(self.channel_initialized);
-        std.debug.assert(self.channel.len() + 1 == expected_len_after);
+        assert(self.channel_initialized);
+        assert(self.channel.len() + 1 == expected_len_after);
         self.channel.trySend(value) catch |err| switch (err) {
             error.WouldBlock, error.Closed => return checker.CheckResult.fail(&violations, null),
         };
-        std.debug.assert(self.channel.len() == expected_len_after);
-        std.debug.assert(self.channel.len() <= self.channel.capacity());
+        assert(self.channel.len() == expected_len_after);
+        assert(self.channel.len() <= self.channel.capacity());
         return checker.CheckResult.pass(null);
     }
 
     fn expectRecv(self: *@This(), expected: u8, expected_len_after: usize) checker.CheckResult {
-        std.debug.assert(self.channel_initialized);
-        std.debug.assert(self.channel.len() == expected_len_after + 1);
+        assert(self.channel_initialized);
+        assert(self.channel.len() == expected_len_after + 1);
         const actual = self.channel.tryRecv() catch |err| switch (err) {
             error.WouldBlock, error.Closed => return checker.CheckResult.fail(&violations, null),
         };
         if (actual != expected) return checker.CheckResult.fail(&violations, null);
-        std.debug.assert(self.channel.len() == expected_len_after);
-        std.debug.assert(self.channel.len() <= self.channel.capacity());
+        assert(self.channel.len() == expected_len_after);
+        assert(self.channel.len() <= self.channel.capacity());
         return checker.CheckResult.pass(null);
     }
 
     fn expectClose(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.channel_initialized);
-        std.debug.assert(self.channel.len() == self.channel.capacity());
+        assert(self.channel_initialized);
+        assert(self.channel.len() == self.channel.capacity());
         self.channel.close();
         self.saw_close = true;
-        std.debug.assert(self.channel.len() == self.channel.capacity());
-        std.debug.assert(self.channel.capacity() == 2);
+        assert(self.channel.len() == self.channel.capacity());
+        assert(self.channel.capacity() == 2);
         return checker.CheckResult.pass(null);
     }
 
     fn expectSendClosed(self: *@This(), value: u8) checker.CheckResult {
-        std.debug.assert(self.channel_initialized);
-        std.debug.assert(self.channel.isFull());
+        assert(self.channel_initialized);
+        assert(self.channel.isFull());
         self.channel.trySend(value) catch |err| switch (err) {
             error.Closed => {
                 self.saw_send_rejected_after_close = true;
-                std.debug.assert(self.channel.isFull());
-                std.debug.assert(self.channel.len() == self.channel.capacity());
+                assert(self.channel.isFull());
+                assert(self.channel.len() == self.channel.capacity());
                 return checker.CheckResult.pass(null);
             },
             error.WouldBlock => return checker.CheckResult.fail(&violations, null),
@@ -136,13 +138,13 @@ const Context = struct {
     }
 
     fn expectRecvClosed(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.channel_initialized);
-        std.debug.assert(self.channel.isEmpty());
+        assert(self.channel_initialized);
+        assert(self.channel.isEmpty());
         _ = self.channel.tryRecv() catch |err| switch (err) {
             error.Closed => {
                 self.saw_final_closed_recv = true;
-                std.debug.assert(self.channel.isEmpty());
-                std.debug.assert(self.channel.len() == 0);
+                assert(self.channel.isEmpty());
+                assert(self.channel.len() == 0);
                 return checker.CheckResult.pass(null);
             },
             error.WouldBlock => return checker.CheckResult.fail(&violations, null),
@@ -182,8 +184,8 @@ test "channel close and wraparound stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(@as(u32, 1), summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -192,8 +194,8 @@ fn nextAction(
     action_index: u32,
     _: seed_mod.Seed,
 ) error{}!model.RecordedAction {
-    std.debug.assert(run_identity.case_index == 0);
-    std.debug.assert(action_index < actions.len);
+    assert(run_identity.case_index == 0);
+    assert(action_index < actions.len);
     return actions[action_index];
 }
 
@@ -204,7 +206,7 @@ fn step(
     action: model.RecordedAction,
 ) error{}!model.ModelStep {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index == 0);
+    assert(run_identity.case_index == 0);
     const tag: ActionTag = @enumFromInt(action.tag);
     const check_result = switch (tag) {
         .send_11 => context.expectSend(11, 1),
@@ -230,7 +232,7 @@ fn finish(
     _: u32,
 ) error{}!checker.CheckResult {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index == 0);
+    assert(run_identity.case_index == 0);
     return context.validate();
 }
 
@@ -256,6 +258,6 @@ fn reset(
     run_identity: identity.RunIdentity,
 ) error{}!void {
     const context: *Context = @ptrCast(@alignCast(context_ptr));
-    std.debug.assert(run_identity.case_index == 0);
+    assert(run_identity.case_index == 0);
     context.resetState();
 }

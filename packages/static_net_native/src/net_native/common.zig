@@ -1,6 +1,7 @@
 //! Shared endpoint conversion helpers for native socket-address adapters.
 
 const std = @import("std");
+const testing = std.testing;
 const static_net = @import("static_net");
 
 pub const Endpoint = static_net.Endpoint;
@@ -73,7 +74,7 @@ test "ipv4 helper round trips byte layout" {
     } };
     const addr_be = ipv4AddrBigEndian(endpoint.ipv4.address.octets);
     const roundtrip = endpointFromIpv4(std.mem.nativeToBig(u16, endpoint.ipv4.port), addr_be);
-    try std.testing.expectEqualDeep(endpoint, roundtrip);
+    try testing.expectEqualDeep(endpoint, roundtrip);
 }
 
 test "ipv6 helper round trips byte layout" {
@@ -83,5 +84,5 @@ test "ipv6 helper round trips byte layout" {
     } };
     const bytes = ipv6BytesFromSegments(endpoint.ipv6.address.segments);
     const roundtrip = endpointFromIpv6(std.mem.nativeToBig(u16, endpoint.ipv6.port), bytes);
-    try std.testing.expectEqualDeep(endpoint, roundtrip);
+    try testing.expectEqualDeep(endpoint, roundtrip);
 }

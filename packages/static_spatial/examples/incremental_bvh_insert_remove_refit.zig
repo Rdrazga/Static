@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const spatial = @import("static_spatial");
 
 pub fn main() !void {
@@ -14,29 +15,29 @@ pub fn main() !void {
         spatial.AABB3.init(-1, -1, -1, 6, 6, 6),
         &truncated_out,
     );
-    std.debug.assert(truncated == 2);
-    std.debug.assert(truncated_out[0] == 10 or truncated_out[0] == 20);
+    assert(truncated == 2);
+    assert(truncated_out[0] == 10 or truncated_out[0] == 20);
 
     var out: [8]u32 = undefined;
     const before_move = bvh.queryAABB(
         spatial.AABB3.init(-1, -1, -1, 2, 2, 2),
         &out,
     );
-    std.debug.assert(before_move == 1);
-    std.debug.assert(out[0] == 10);
+    assert(before_move == 1);
+    assert(out[0] == 10);
 
     bvh.refit(first, spatial.AABB3.init(50, 50, 50, 51, 51, 51));
     const after_move = bvh.queryAABB(
         spatial.AABB3.init(49, 49, 49, 52, 52, 52),
         &out,
     );
-    std.debug.assert(after_move == 1);
-    std.debug.assert(out[0] == 10);
+    assert(after_move == 1);
+    assert(out[0] == 10);
 
     bvh.remove(first);
     const after_remove = bvh.queryAABB(
         spatial.AABB3.init(49, 49, 49, 52, 52, 52),
         &out,
     );
-    std.debug.assert(after_remove == 0);
+    assert(after_remove == 0);
 }

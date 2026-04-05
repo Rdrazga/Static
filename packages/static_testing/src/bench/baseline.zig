@@ -1,6 +1,8 @@
 //! Persisted benchmark baselines and regression-gating helpers.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const artifact = @import("../artifact/root.zig");
 const config = @import("config.zig");
@@ -102,7 +104,7 @@ comptime {
         CorruptData,
         Unsupported,
     });
-    std.debug.assert(baseline_version == 3);
+    assert(baseline_version == 3);
 }
 
 pub fn deriveStats(
@@ -570,10 +572,10 @@ test "baseline ZON round-trips escaped case names" {
         .parse_buffer = &parse_buffer,
     });
 
-    try std.testing.expectEqual(config.BenchmarkMode.smoke, decoded.mode);
-    try std.testing.expectEqual(@as(usize, 1), decoded.cases.len);
-    try std.testing.expectEqualStrings("case\"one\nnext", decoded.cases[0].case_name);
-    try std.testing.expectEqual(@as(?u64, null), decoded.cases[0].p99_elapsed_ns);
+    try testing.expectEqual(config.BenchmarkMode.smoke, decoded.mode);
+    try testing.expectEqual(@as(usize, 1), decoded.cases.len);
+    try testing.expectEqualStrings("case\"one\nnext", decoded.cases[0].case_name);
+    try testing.expectEqual(@as(?u64, null), decoded.cases[0].p99_elapsed_ns);
 }
 
 test "compareArtifactToCandidate classifies matched missing and new cases" {
@@ -637,16 +639,16 @@ test "compareArtifactToCandidate classifies matched missing and new cases" {
         &comparisons,
     );
 
-    try std.testing.expect(!summary.passed);
-    try std.testing.expectEqual(@as(u32, 1), summary.failed_case_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.informational_case_count);
-    try std.testing.expectEqual(@as(u32, 1), summary.passed_case_count);
-    try std.testing.expectEqual(CaseStatus.compared, summary.comparisons[0].status);
-    try std.testing.expectEqual(CaseDecision.fail, summary.comparisons[0].decision);
-    try std.testing.expectEqual(CaseStatus.missing_from_candidate, summary.comparisons[1].status);
-    try std.testing.expectEqual(CaseDecision.informational, summary.comparisons[1].decision);
-    try std.testing.expectEqual(CaseStatus.new_in_candidate, summary.comparisons[2].status);
-    try std.testing.expectEqual(CaseDecision.pass, summary.comparisons[2].decision);
+    try testing.expect(!summary.passed);
+    try testing.expectEqual(@as(u32, 1), summary.failed_case_count);
+    try testing.expectEqual(@as(u32, 1), summary.informational_case_count);
+    try testing.expectEqual(@as(u32, 1), summary.passed_case_count);
+    try testing.expectEqual(CaseStatus.compared, summary.comparisons[0].status);
+    try testing.expectEqual(CaseDecision.fail, summary.comparisons[0].decision);
+    try testing.expectEqual(CaseStatus.missing_from_candidate, summary.comparisons[1].status);
+    try testing.expectEqual(CaseDecision.informational, summary.comparisons[1].decision);
+    try testing.expectEqual(CaseStatus.new_in_candidate, summary.comparisons[2].status);
+    try testing.expectEqual(CaseDecision.pass, summary.comparisons[2].decision);
 }
 
 test "compareArtifactToCandidate supports per-case thresholds and unstable-case decisions" {
@@ -735,13 +737,13 @@ test "compareArtifactToCandidate supports per-case thresholds and unstable-case 
         &comparisons,
     );
 
-    try std.testing.expect(summary.passed);
-    try std.testing.expectEqual(@as(u32, 1), summary.passed_case_count);
-    try std.testing.expectEqual(@as(u32, 2), summary.informational_case_count);
-    try std.testing.expectEqual(@as(u32, 0), summary.failed_case_count);
-    try std.testing.expectEqual(CaseDecision.pass, summary.comparisons[0].decision);
-    try std.testing.expectEqual(CaseDecision.informational, summary.comparisons[1].decision);
-    try std.testing.expectEqual(CaseDecision.informational, summary.comparisons[2].decision);
+    try testing.expect(summary.passed);
+    try testing.expectEqual(@as(u32, 1), summary.passed_case_count);
+    try testing.expectEqual(@as(u32, 2), summary.informational_case_count);
+    try testing.expectEqual(@as(u32, 0), summary.failed_case_count);
+    try testing.expectEqual(CaseDecision.pass, summary.comparisons[0].decision);
+    try testing.expectEqual(CaseDecision.informational, summary.comparisons[1].decision);
+    try testing.expectEqual(CaseDecision.informational, summary.comparisons[2].decision);
 }
 
 test "compareArtifactToCandidate can gate on optional p99 regressions" {
@@ -789,10 +791,10 @@ test "compareArtifactToCandidate can gate on optional p99 regressions" {
         &comparisons,
     );
 
-    try std.testing.expect(!summary.passed);
-    try std.testing.expectEqual(@as(u32, 1), summary.failed_case_count);
-    try std.testing.expectEqual(compare.ComparisonKind.regressed, summary.comparisons[0].p99.?.kind);
-    try std.testing.expectEqual(@as(i64, 500_000), summary.comparisons[0].p99.?.delta_ratio_ppm);
+    try testing.expect(!summary.passed);
+    try testing.expectEqual(@as(u32, 1), summary.failed_case_count);
+    try testing.expectEqual(compare.ComparisonKind.regressed, summary.comparisons[0].p99.?.kind);
+    try testing.expectEqual(@as(i64, 500_000), summary.comparisons[0].p99.?.delta_ratio_ppm);
 }
 
 test "compareArtifactToCandidate skips p99 gating when baseline lacks p99" {
@@ -840,8 +842,8 @@ test "compareArtifactToCandidate skips p99 gating when baseline lacks p99" {
         &comparisons,
     );
 
-    try std.testing.expect(summary.passed);
-    try std.testing.expectEqual(@as(?MetricComparison, null), summary.comparisons[0].p99);
+    try testing.expect(summary.passed);
+    try testing.expectEqual(@as(?MetricComparison, null), summary.comparisons[0].p99);
 }
 
 test "compareArtifactToCandidate rejects duplicate per-case overrides" {
@@ -851,7 +853,7 @@ test "compareArtifactToCandidate rejects duplicate per-case overrides" {
     };
     var comparisons: [2]BaselineCaseComparison = undefined;
 
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidInput,
         compareArtifactToCandidate(
             .{
@@ -899,10 +901,10 @@ test "deriveStats computes baseline cases from raw run results" {
         .case_results = &case_results,
     }, &storage);
 
-    try std.testing.expectEqual(@as(usize, 2), derived.len);
-    try std.testing.expectEqualStrings("a", derived[0].case_name);
-    try std.testing.expectEqual(@as(u64, 10), derived[0].median_elapsed_ns);
-    try std.testing.expectEqualStrings("b", derived[1].case_name);
-    try std.testing.expectEqual(@as(u64, 24), derived[1].p95_elapsed_ns);
-    try std.testing.expectEqual(@as(?u64, 24), derived[1].p99_elapsed_ns);
+    try testing.expectEqual(@as(usize, 2), derived.len);
+    try testing.expectEqualStrings("a", derived[0].case_name);
+    try testing.expectEqual(@as(u64, 10), derived[0].median_elapsed_ns);
+    try testing.expectEqualStrings("b", derived[1].case_name);
+    try testing.expectEqual(@as(u64, 24), derived[1].p95_elapsed_ns);
+    try testing.expectEqual(@as(?u64, 24), derived[1].p99_elapsed_ns);
 }

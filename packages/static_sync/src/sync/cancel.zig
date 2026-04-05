@@ -7,6 +7,8 @@
 //! Safety: `unregister()` waits for an in-flight cancellation callback to finish.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 
 pub const RegisterError = error{
@@ -44,14 +46,14 @@ pub const CancelToken = struct {
     state: *CancelState,
 
     pub fn isCancelled(self: CancelToken) bool {
-        std.debug.assert(@intFromPtr(self.state) != 0);
+        assert(@intFromPtr(self.state) != 0);
         const is_cancelled = self.state.cancelled.load(.acquire);
-        std.debug.assert(is_cancelled == true or is_cancelled == false);
+        assert(is_cancelled == true or is_cancelled == false);
         return is_cancelled;
     }
 
     pub fn throwIfCancelled(self: CancelToken) error{Cancelled}!void {
-        std.debug.assert(@intFromPtr(self.state) != 0);
+        assert(@intFromPtr(self.state) != 0);
         if (self.isCancelled()) return error.Cancelled;
     }
 };
@@ -72,8 +74,8 @@ pub const CancelRegistration = struct {
     }
 
     pub fn register(self: *CancelRegistration, token: CancelToken) RegisterError!void {
-        std.debug.assert(self.state == null);
-        std.debug.assert(self.slot_index == invalid_slot);
+        assert(self.state == null);
+        assert(self.slot_index == invalid_slot);
 
         if (token.isCancelled()) return error.Cancelled;
 
@@ -118,7 +120,7 @@ pub const CancelRegistration = struct {
         const state = self.state orelse return;
         const slot_index = self.slot_index;
         if (slot_index == invalid_slot) return;
-        std.debug.assert(slot_index < state.registrations.len);
+        assert(slot_index < state.registrations.len);
 
         const ptr_value: usize = @intFromPtr(self);
         const removed = state.registrations[slot_index].swap(0, .acq_rel);
@@ -147,13 +149,13 @@ pub const CancelSource = struct {
 
     pub fn token(self: *CancelSource) CancelToken {
         const issued_token = CancelToken{ .state = &self.state };
-        std.debug.assert(issued_token.state == &self.state);
+        assert(issued_token.state == &self.state);
         return issued_token;
     }
 
     pub fn cancel(self: *CancelSource) void {
         const already = self.state.cancelled.swap(true, .acq_rel);
-        std.debug.assert(self.state.cancelled.load(.acquire));
+        assert(self.state.cancelled.load(.acquire));
         if (already) return;
 
         var index: usize = 0;
@@ -166,20 +168,20 @@ pub const CancelSource = struct {
     }
 
     pub fn reset(self: *CancelSource) void {
-        std.debug.assert(!self.state.hasRegistrations());
+        assert(!self.state.hasRegistrations());
         self.state.cancelled.store(false, .release);
-        std.debug.assert(!self.state.cancelled.load(.acquire));
+        assert(!self.state.cancelled.load(.acquire));
     }
 };
 
 test "cancel source propagates to token" {
     var src = CancelSource{};
     const tok = src.token();
-    std.debug.assert(!tok.isCancelled());
-    try std.testing.expect(!tok.isCancelled());
+    assert(!tok.isCancelled());
+    try testing.expect(!tok.isCancelled());
     src.cancel();
-    std.debug.assert(tok.isCancelled());
-    try std.testing.expect(tok.isCancelled());
+    assert(tok.isCancelled());
+    try testing.expect(tok.isCancelled());
 }
 
 test "cancel throwIfCancelled returns Cancelled after cancel" {
@@ -187,16 +189,16 @@ test "cancel throwIfCancelled returns Cancelled after cancel" {
     const tok = src.token();
     try tok.throwIfCancelled();
     src.cancel();
-    try std.testing.expectError(error.Cancelled, tok.throwIfCancelled());
+    try testing.expectError(error.Cancelled, tok.throwIfCancelled());
 }
 
 test "cancel reset clears cancelled state" {
     var src = CancelSource{};
     const tok = src.token();
     src.cancel();
-    std.debug.assert(tok.isCancelled());
+    assert(tok.isCancelled());
     src.reset();
-    try std.testing.expect(!tok.isCancelled());
+    try testing.expect(!tok.isCancelled());
 }
 
 test "cancel is idempotent and shared across issued tokens" {
@@ -206,13 +208,13 @@ test "cancel is idempotent and shared across issued tokens" {
 
     src.cancel();
     src.cancel();
-    try std.testing.expect(token_a.isCancelled());
-    try std.testing.expect(token_b.isCancelled());
+    try testing.expect(token_a.isCancelled());
+    try testing.expect(token_b.isCancelled());
 
     src.reset();
     src.reset();
-    try std.testing.expect(!token_a.isCancelled());
-    try std.testing.expect(!token_b.isCancelled());
+    try testing.expect(!token_a.isCancelled());
+    try testing.expect(!token_b.isCancelled());
 }
 
 fn wakeCounter(ctx: ?*anyopaque) void {
@@ -245,7 +247,7 @@ test "cancel registration fires wake callback" {
     defer reg.unregister();
 
     src.cancel();
-    try std.testing.expectEqual(@as(u32, 1), counter.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), counter.load(.acquire));
 }
 
 test "cancel fanout invokes every registered wake exactly once" {
@@ -273,7 +275,7 @@ test "cancel fanout invokes every registered wake exactly once" {
 
     index = 0;
     while (index < counters.len) : (index += 1) {
-        try std.testing.expectEqual(@as(u32, 1), counters[index].load(.acquire));
+        try testing.expectEqual(@as(u32, 1), counters[index].load(.acquire));
     }
 
     index = 0;
@@ -300,34 +302,34 @@ test "cancel reset allows fanout registrations to re-register and fire again" {
     var index: usize = 0;
     while (index < regs.len) : (index += 1) {
         try regs[index].register(tok);
-        try std.testing.expectEqual(@as(u32, @intCast(index)), regs[index].slot_index);
+        try testing.expectEqual(@as(u32, @intCast(index)), regs[index].slot_index);
     }
 
     src.cancel();
     index = 0;
     while (index < counters.len) : (index += 1) {
-        try std.testing.expectEqual(@as(u32, 1), counters[index].load(.acquire));
+        try testing.expectEqual(@as(u32, 1), counters[index].load(.acquire));
         regs[index].unregister();
-        try std.testing.expect(regs[index].state == null);
-        try std.testing.expectEqual(invalid_slot, regs[index].slot_index);
+        try testing.expect(regs[index].state == null);
+        try testing.expectEqual(invalid_slot, regs[index].slot_index);
     }
 
     src.reset();
-    try std.testing.expect(!tok.isCancelled());
+    try testing.expect(!tok.isCancelled());
 
     index = 0;
     while (index < regs.len) : (index += 1) {
         try regs[index].register(tok);
-        try std.testing.expectEqual(@as(u32, @intCast(index)), regs[index].slot_index);
+        try testing.expectEqual(@as(u32, @intCast(index)), regs[index].slot_index);
     }
 
     src.cancel();
     index = 0;
     while (index < counters.len) : (index += 1) {
-        try std.testing.expectEqual(@as(u32, 2), counters[index].load(.acquire));
+        try testing.expectEqual(@as(u32, 2), counters[index].load(.acquire));
         regs[index].unregister();
-        try std.testing.expect(regs[index].state == null);
-        try std.testing.expectEqual(invalid_slot, regs[index].slot_index);
+        try testing.expect(regs[index].state == null);
+        try testing.expectEqual(invalid_slot, regs[index].slot_index);
     }
 }
 
@@ -366,16 +368,16 @@ test "cancel unregister waits for in-flight callback to finish" {
     var canceller = Canceller{ .src = &src };
     var cancel_thread = try std.Thread.spawn(.{}, Canceller.run, .{&canceller});
 
-    try std.testing.expect(waitForFlagTrue(&canceller.started, 10_000));
-    try std.testing.expect(waitForFlagTrue(&wake_state.started, 10_000));
+    try testing.expect(waitForFlagTrue(&canceller.started, 10_000));
+    try testing.expect(waitForFlagTrue(&wake_state.started, 10_000));
 
     var unregisterer = Unregisterer{ .reg = &reg };
     var unregister_thread = try std.Thread.spawn(.{}, Unregisterer.run, .{&unregisterer});
 
-    try std.testing.expect(waitForFlagTrue(&unregisterer.started, 10_000));
+    try testing.expect(waitForFlagTrue(&unregisterer.started, 10_000));
     var iterations: u32 = 0;
     while (iterations < 1_000) : (iterations += 1) {
-        try std.testing.expect(!unregisterer.done.load(.acquire));
+        try testing.expect(!unregisterer.done.load(.acquire));
         std.Thread.yield() catch {};
     }
 
@@ -383,12 +385,12 @@ test "cancel unregister waits for in-flight callback to finish" {
     unregister_thread.join();
     cancel_thread.join();
 
-    try std.testing.expect(wake_state.finished.load(.acquire));
-    try std.testing.expect(unregisterer.done.load(.acquire));
-    try std.testing.expect(canceller.done.load(.acquire));
-    try std.testing.expect(tok.isCancelled());
-    try std.testing.expect(reg.state == null);
-    try std.testing.expectEqual(invalid_slot, reg.slot_index);
+    try testing.expect(wake_state.finished.load(.acquire));
+    try testing.expect(unregisterer.done.load(.acquire));
+    try testing.expect(canceller.done.load(.acquire));
+    try testing.expect(tok.isCancelled());
+    try testing.expect(reg.state == null);
+    try testing.expectEqual(invalid_slot, reg.slot_index);
 }
 
 fn noopWake(_: ?*anyopaque) void {}
@@ -402,29 +404,29 @@ test "cancel registration enforces fixed capacity and reuses freed slot" {
     while (index < regs.len) : (index += 1) {
         regs[index] = CancelRegistration.init(noopWake, null);
         try regs[index].register(tok);
-        try std.testing.expectEqual(@as(u32, @intCast(index)), regs[index].slot_index);
+        try testing.expectEqual(@as(u32, @intCast(index)), regs[index].slot_index);
     }
 
     var overflow = CancelRegistration.init(noopWake, null);
-    try std.testing.expectError(error.WouldBlock, overflow.register(tok));
-    try std.testing.expect(overflow.state == null);
-    try std.testing.expectEqual(invalid_slot, overflow.slot_index);
+    try testing.expectError(error.WouldBlock, overflow.register(tok));
+    try testing.expect(overflow.state == null);
+    try testing.expectEqual(invalid_slot, overflow.slot_index);
 
     const reused_index: usize = 5;
     regs[reused_index].unregister();
-    try std.testing.expect(regs[reused_index].state == null);
-    try std.testing.expectEqual(invalid_slot, regs[reused_index].slot_index);
+    try testing.expect(regs[reused_index].state == null);
+    try testing.expectEqual(invalid_slot, regs[reused_index].slot_index);
 
     try overflow.register(tok);
     defer overflow.unregister();
-    try std.testing.expectEqual(@as(u32, @intCast(reused_index)), overflow.slot_index);
+    try testing.expectEqual(@as(u32, @intCast(reused_index)), overflow.slot_index);
 
     index = 0;
     while (index < regs.len) : (index += 1) {
         if (index == reused_index) continue;
         regs[index].unregister();
-        try std.testing.expect(regs[index].state == null);
-        try std.testing.expectEqual(invalid_slot, regs[index].slot_index);
+        try testing.expect(regs[index].state == null);
+        try testing.expectEqual(invalid_slot, regs[index].slot_index);
     }
 }
 
@@ -480,17 +482,17 @@ test "cancel registration reports Cancelled when cancel races after slot install
     };
     var register_thread = try std.Thread.spawn(.{}, RegisterRunner.run, .{&runner});
 
-    try std.testing.expect(waitForFlagTrue(&hook_state.state.installed, 10_000));
+    try testing.expect(waitForFlagTrue(&hook_state.state.installed, 10_000));
     src.cancel();
     hook_state.state.release.store(true, .release);
     register_thread.join();
 
-    try std.testing.expect(runner.finished.load(.acquire));
-    try std.testing.expectEqual(@as(?RegisterError, error.Cancelled), runner.result);
-    try std.testing.expect(tok.isCancelled());
-    try std.testing.expectEqual(@as(u32, 1), counter.load(.acquire));
-    try std.testing.expect(reg.state == null);
-    try std.testing.expectEqual(invalid_slot, reg.slot_index);
+    try testing.expect(runner.finished.load(.acquire));
+    try testing.expectEqual(@as(?RegisterError, error.Cancelled), runner.result);
+    try testing.expect(tok.isCancelled());
+    try testing.expectEqual(@as(u32, 1), counter.load(.acquire));
+    try testing.expect(reg.state == null);
+    try testing.expectEqual(invalid_slot, reg.slot_index);
 }
 
 test "register after cancellation returns Cancelled" {
@@ -500,7 +502,7 @@ test "register after cancellation returns Cancelled" {
 
     var counter = std.atomic.Value(u32).init(0);
     var reg = CancelRegistration.init(wakeCounter, &counter);
-    try std.testing.expectError(error.Cancelled, reg.register(tok));
+    try testing.expectError(error.Cancelled, reg.register(tok));
 }
 
 fn waitForFlagTrue(flag: *const std.atomic.Value(bool), iterations_max: u32) bool {

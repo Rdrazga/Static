@@ -4,6 +4,7 @@
 //! bit patterns, conversion back to bits, and aggregate queries.
 
 const std = @import("std");
+const testing = std.testing;
 
 pub const Mask2 = MaskType(2);
 pub const Mask4 = MaskType(4);
@@ -62,37 +63,37 @@ test "Mask4 fromBits -> toBits roundtrip" {
     inline for (0..16) |i| {
         const bits: u4 = @intCast(i);
         const mask = Mask4.fromBits(bits);
-        try std.testing.expectEqual(bits, mask.toBits());
+        try testing.expectEqual(bits, mask.toBits());
     }
 }
 
 test "Mask4 splat and aggregate" {
     const all_true = Mask4.splat(true);
-    try std.testing.expect(all_true.all());
-    try std.testing.expect(all_true.any());
-    try std.testing.expectEqual(@as(u4, 0b1111), all_true.toBits());
+    try testing.expect(all_true.all());
+    try testing.expect(all_true.any());
+    try testing.expectEqual(@as(u4, 0b1111), all_true.toBits());
 
     const all_false = Mask4.splat(false);
-    try std.testing.expect(!all_false.all());
-    try std.testing.expect(!all_false.any());
-    try std.testing.expectEqual(@as(u4, 0b0000), all_false.toBits());
+    try testing.expect(!all_false.all());
+    try testing.expect(!all_false.any());
+    try testing.expectEqual(@as(u4, 0b0000), all_false.toBits());
 }
 
 test "Mask2 roundtrip" {
     inline for (0..4) |i| {
         const bits: u2 = @intCast(i);
         const mask = Mask2.fromBits(bits);
-        try std.testing.expectEqual(bits, mask.toBits());
+        try testing.expectEqual(bits, mask.toBits());
     }
 }
 
 test "Mask8 any/all" {
     const one_set = Mask8.fromBits(0b00010000);
-    try std.testing.expect(one_set.any());
-    try std.testing.expect(!one_set.all());
+    try testing.expect(one_set.any());
+    try testing.expect(!one_set.all());
 
     const all_set = Mask8.fromBits(0b11111111);
-    try std.testing.expect(all_set.all());
+    try testing.expect(all_set.all());
 }
 
 test "Mask8 fromBits -> toBits roundtrip" {
@@ -100,7 +101,7 @@ test "Mask8 fromBits -> toBits roundtrip" {
     while (i < 256) : (i += 1) {
         const bits: u8 = @intCast(i);
         const mask = Mask8.fromBits(bits);
-        try std.testing.expectEqual(bits, mask.toBits());
+        try testing.expectEqual(bits, mask.toBits());
     }
 }
 
@@ -109,9 +110,9 @@ test "Mask16 fromBits -> toBits roundtrip" {
     while (i <= std.math.maxInt(u16)) : (i += 1) {
         const bits: u16 = @intCast(i);
         const mask = Mask16.fromBits(bits);
-        try std.testing.expectEqual(bits, mask.toBits());
+        try testing.expectEqual(bits, mask.toBits());
     }
 
-    try std.testing.expect(!Mask16.fromBits(0).any());
-    try std.testing.expect(Mask16.fromBits(0xFFFF).all());
+    try testing.expect(!Mask16.fromBits(0).any());
+    try testing.expect(Mask16.fromBits(0xFFFF).all());
 }

@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const hash = @import("static_hash");
 const static_testing = @import("static_testing");
 
@@ -65,14 +67,14 @@ const Context = struct {
         self.crc32c = hash.crc32.Crc32c.init();
         self.sip64 = hash.siphash.SipHasher64_24.init(&self.sip_key);
         self.sip128 = hash.siphash.SipHasher128_24.init(&self.sip_key);
-        std.debug.assert(self.payload_len <= payload_max_len);
-        std.debug.assert(self.cursor == 0);
-        std.debug.assert(!self.finalized);
+        assert(self.payload_len <= payload_max_len);
+        assert(self.cursor == 0);
+        assert(!self.finalized);
     }
 
     fn feed(self: *@This(), bytes: []const u8) void {
-        std.debug.assert(!self.finalized);
-        std.debug.assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
+        assert(!self.finalized);
+        assert(bytes.len == 0 or @intFromPtr(bytes.ptr) != 0);
         self.fnv32.update(bytes);
         self.fnv64.update(bytes);
         self.wyhash.update(bytes);
@@ -89,8 +91,8 @@ const Context = struct {
         action_index: u32,
         action_value: u64,
     ) checker.CheckResult {
-        std.debug.assert(!self.finalized);
-        std.debug.assert(self.cursor <= self.payload_len);
+        assert(!self.finalized);
+        assert(self.cursor <= self.payload_len);
         const remaining = self.payload_len - self.cursor;
         const span = chooseSpan(run_seed, action_index, action_value, remaining);
 
@@ -99,7 +101,7 @@ const Context = struct {
         }
 
         if (span > 0) {
-            std.debug.assert(span <= remaining);
+            assert(span <= remaining);
             const end = self.cursor + span;
             self.feed(self.payload[self.cursor..end]);
             self.cursor = end;
@@ -107,13 +109,13 @@ const Context = struct {
             self.feed(self.payload[self.cursor..self.cursor]);
         }
 
-        std.debug.assert(self.cursor <= self.payload_len);
+        assert(self.cursor <= self.payload_len);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(progressCheckpoint(self)));
     }
 
     fn verifyFinalized(self: *@This()) checker.CheckResult {
-        std.debug.assert(self.finalized);
-        std.debug.assert(self.cursor == self.payload_len);
+        assert(self.finalized);
+        assert(self.cursor == self.payload_len);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(self.checkpoint));
     }
 
@@ -121,8 +123,8 @@ const Context = struct {
         self: *@This(),
         action_value: u64,
     ) checker.CheckResult {
-        std.debug.assert(!self.finalized);
-        std.debug.assert(self.cursor <= self.payload_len);
+        assert(!self.finalized);
+        assert(self.cursor <= self.payload_len);
 
         if ((action_value & 1) != 0) {
             self.feed(self.payload[self.cursor..self.cursor]);
@@ -134,7 +136,7 @@ const Context = struct {
             self.cursor = end;
         }
 
-        std.debug.assert(self.cursor == self.payload_len);
+        assert(self.cursor == self.payload_len);
         const bytes = self.payload[0..self.payload_len];
 
         const fnv32_actual = self.fnv32.final();
@@ -187,8 +189,8 @@ const Context = struct {
 
         self.finalized = true;
         self.checkpoint = makeCheckpoint(fnv64_actual, sip64_actual);
-        std.debug.assert(self.finalized);
-        std.debug.assert(self.cursor == self.payload_len);
+        assert(self.finalized);
+        assert(self.cursor == self.payload_len);
         return checker.CheckResult.pass(checker.CheckpointDigest.init(self.checkpoint));
     }
 
@@ -231,8 +233,8 @@ test "static_hash streaming hashers stay aligned with testing.model" {
         .reduction_scratch = &reduction_scratch,
     });
 
-    try std.testing.expectEqual(@as(u32, 64), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case == null);
+    try testing.expectEqual(@as(u32, 64), summary.executed_case_count);
+    try testing.expect(summary.failed_case == null);
 }
 
 fn nextAction(
@@ -280,7 +282,7 @@ fn finish(
     if (!context.finalized) {
         return context.finalizeStreams(0);
     }
-    std.debug.assert(context.cursor == context.payload_len);
+    assert(context.cursor == context.payload_len);
     return checker.CheckResult.pass(checker.CheckpointDigest.init(context.checkpoint));
 }
 
@@ -334,7 +336,7 @@ fn chooseSpan(
 fn buildPayload(seed_value: u64, storage: []u8) usize {
     const lengths = [_]usize{ 0, 1, 3, 7, 8, 15, 16, 31, 32, 47, 48, 63, 64, 95, 96, 127, 128, 159, 160, 191 };
     const len = lengths[@as(usize, @intCast(seed_value % lengths.len))];
-    std.debug.assert(len <= storage.len);
+    assert(len <= storage.len);
     const bytes = storage[0..len];
 
     switch (@as(u2, @truncate(seed_value >> 8))) {

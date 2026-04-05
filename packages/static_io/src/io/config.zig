@@ -1,6 +1,8 @@
 //! Runtime configuration and validation.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const operation_ids = @import("operation_ids.zig");
 
@@ -42,7 +44,7 @@ pub const Config = struct {
         const needed_sq: u32 = std.math.add(u32, max_in_flight, 1) catch max_in_flight;
         const seed_sq: u32 = if (needed_sq == 0) 1 else needed_sq;
         const uring_sq_entries = std.math.ceilPowerOfTwo(u32, seed_sq) catch seed_sq;
-        std.debug.assert(seed_sq != 0);
+        assert(seed_sq != 0);
         return .{
             .max_in_flight = max_in_flight,
             .submission_queue_capacity = max_in_flight,
@@ -96,8 +98,8 @@ pub fn validate(cfg: Config) Error!void {
     _ = std.math.add(u32, cfg.max_in_flight, cfg.submission_queue_capacity) catch return error.Overflow;
     _ = std.math.add(u32, cfg.max_in_flight, cfg.completion_queue_capacity) catch return error.Overflow;
     _ = std.math.add(u32, cfg.handles_max, cfg.max_in_flight) catch return error.Overflow;
-    std.debug.assert(cfg.submission_queue_capacity >= cfg.max_in_flight);
-    std.debug.assert(cfg.completion_queue_capacity >= cfg.max_in_flight);
+    assert(cfg.submission_queue_capacity >= cfg.max_in_flight);
+    assert(cfg.completion_queue_capacity >= cfg.max_in_flight);
 }
 
 test "config validation catches invalid bounds" {
@@ -108,21 +110,21 @@ test "config validation catches invalid bounds" {
         .handles_max = 4,
         .threaded_worker_count = 1,
     });
-    try std.testing.expectError(error.InvalidConfig, validate(.{
+    try testing.expectError(error.InvalidConfig, validate(.{
         .max_in_flight = 0,
         .submission_queue_capacity = 4,
         .completion_queue_capacity = 4,
         .handles_max = 4,
         .threaded_worker_count = 1,
     }));
-    try std.testing.expectError(error.InvalidConfig, validate(.{
+    try testing.expectError(error.InvalidConfig, validate(.{
         .max_in_flight = 4,
         .submission_queue_capacity = 2,
         .completion_queue_capacity = 4,
         .handles_max = 4,
         .threaded_worker_count = 1,
     }));
-    try std.testing.expectError(error.InvalidConfig, validate(.{
+    try testing.expectError(error.InvalidConfig, validate(.{
         .max_in_flight = 4,
         .submission_queue_capacity = 4,
         .completion_queue_capacity = 4,

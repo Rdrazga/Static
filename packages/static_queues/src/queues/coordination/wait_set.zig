@@ -8,14 +8,16 @@
 //! - `recvAny` is bounded polling with cancellation.
 //! - `recvAnyTimeout` is timeout-bounded polling with cancellation.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const sync = @import("static_sync");
 const qi = @import("../queue_internal.zig");
 
 pub fn WaitSet(comptime T: type, comptime source_count_max: usize) type {
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
-        std.debug.assert(source_count_max > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
+        assert(source_count_max > 0);
     }
 
     return struct {
@@ -41,14 +43,14 @@ pub fn WaitSet(comptime T: type, comptime source_count_max: usize) type {
         poll_attempts_max: u32,
 
         pub fn init(cfg: Config) Self {
-            std.debug.assert(cfg.poll_attempts_max > 0);
+            assert(cfg.poll_attempts_max > 0);
             return .{
                 .poll_attempts_max = cfg.poll_attempts_max,
             };
         }
 
         pub fn registerRaw(self: *Self, ctx: *anyopaque, try_recv_fn: TryRecvFn) error{NoSpaceLeft}!usize {
-            std.debug.assert(self.active_count <= source_count_max);
+            assert(self.active_count <= source_count_max);
             var slot_index: usize = 0;
             while (slot_index < source_count_max) : (slot_index += 1) {
                 if (self.slots[slot_index] != null) continue;
@@ -57,7 +59,7 @@ pub fn WaitSet(comptime T: type, comptime source_count_max: usize) type {
                     .try_recv_fn = try_recv_fn,
                 };
                 self.active_count += 1;
-                std.debug.assert(self.active_count > 0);
+                assert(self.active_count > 0);
                 return slot_index;
             }
             return error.NoSpaceLeft;
@@ -95,7 +97,7 @@ pub fn WaitSet(comptime T: type, comptime source_count_max: usize) type {
             if (source_index >= source_count_max) return error.InvalidIndex;
             if (self.slots[source_index] == null) return error.InvalidIndex;
             self.slots[source_index] = null;
-            std.debug.assert(self.active_count > 0);
+            assert(self.active_count > 0);
             self.active_count -= 1;
             if (self.scan_start_index >= source_count_max) {
                 self.scan_start_index = 0;
@@ -130,8 +132,8 @@ pub fn WaitSet(comptime T: type, comptime source_count_max: usize) type {
                 };
             }
 
-            std.debug.assert(scanned_active_count == self.active_count);
-            std.debug.assert(closed_count + open_count == self.active_count);
+            assert(scanned_active_count == self.active_count);
+            assert(closed_count + open_count == self.active_count);
             if (open_count > 0) return error.WouldBlock;
             if (closed_count == self.active_count) return error.Closed;
             return error.WouldBlock;
@@ -183,59 +185,59 @@ test "wait set selects the source that has data" {
     const wait_set_type = WaitSet(u8, 2);
     var wait_set = wait_set_type.init(.{});
 
-    var c1 = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c1 = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c1.deinit();
-    var c2 = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 2 });
+    var c2 = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 2 });
     defer c2.deinit();
 
     const idx1 = try wait_set.registerChannel(&c1);
     const idx2 = try wait_set.registerChannel(&c2);
-    try std.testing.expect(idx1 != idx2);
+    try testing.expect(idx1 != idx2);
 
     try c2.trySend(9);
     const selected = try wait_set.tryRecvAny();
-    try std.testing.expectEqual(idx2, selected.source_index);
-    try std.testing.expectEqual(@as(u8, 9), selected.value);
+    try testing.expectEqual(idx2, selected.source_index);
+    try testing.expectEqual(@as(u8, 9), selected.value);
 }
 
 test "wait set timeout and cancellation behavior are bounded" {
     const wait_set_type = WaitSet(u8, 1);
     var wait_set = wait_set_type.init(.{ .poll_attempts_max = 8 });
 
-    var c = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 1 });
+    var c = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 1 });
     defer c.deinit();
     _ = try wait_set.registerChannel(&c);
 
-    try std.testing.expectError(error.Timeout, wait_set.recvAnyTimeout(null, 0));
+    try testing.expectError(error.Timeout, wait_set.recvAnyTimeout(null, 0));
 
     var source = sync.cancel.CancelSource{};
     source.cancel();
-    try std.testing.expectError(error.Cancelled, wait_set.recvAny(source.token()));
+    try testing.expectError(error.Cancelled, wait_set.recvAny(source.token()));
 }
 
 test "wait set returns WouldBlock when at least one source remains open" {
     const wait_set_type = WaitSet(u8, 2);
     var wait_set = wait_set_type.init(.{});
 
-    var c1 = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 1 });
+    var c1 = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 1 });
     defer c1.deinit();
-    var c2 = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 1 });
+    var c2 = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 1 });
     defer c2.deinit();
 
     _ = try wait_set.registerChannel(&c1);
     _ = try wait_set.registerChannel(&c2);
 
     c1.close();
-    try std.testing.expectError(error.WouldBlock, wait_set.tryRecvAny());
+    try testing.expectError(error.WouldBlock, wait_set.tryRecvAny());
 }
 
 test "wait set returns Closed when all sources are closed" {
     const wait_set_type = WaitSet(u8, 2);
     var wait_set = wait_set_type.init(.{});
 
-    var c1 = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 1 });
+    var c1 = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 1 });
     defer c1.deinit();
-    var c2 = try @import("../channel.zig").Channel(u8).init(std.testing.allocator, .{ .capacity = 1 });
+    var c2 = try @import("../channel.zig").Channel(u8).init(testing.allocator, .{ .capacity = 1 });
     defer c2.deinit();
 
     _ = try wait_set.registerChannel(&c1);
@@ -243,5 +245,5 @@ test "wait set returns Closed when all sources are closed" {
 
     c1.close();
     c2.close();
-    try std.testing.expectError(error.Closed, wait_set.tryRecvAny());
+    try testing.expectError(error.Closed, wait_set.tryRecvAny());
 }

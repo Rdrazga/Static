@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const static_net_native = @import("static_net_native");
 const static_testing = @import("static_testing");
 
@@ -55,10 +56,10 @@ const StorageCase = union(enum) {
 };
 
 test "static_net_native sockaddr storage invariants stay replayable" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -89,14 +90,14 @@ test "static_net_native sockaddr storage invariants stay replayable" {
     }).run();
 
     try expectNoFailureOrReplay(io, tmp_dir.dir, summary);
-    try std.testing.expectEqual(invariant_case_count, summary.executed_case_count);
+    try testing.expectEqual(invariant_case_count, summary.executed_case_count);
 }
 
 test "static_net_native retained invalid-family bundles preserve replay metadata" {
-    var tmp_dir = std.testing.tmpDir(.{});
+    var tmp_dir = testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    var threaded_io = std.Io.Threaded.init(std.testing.allocator, .{
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
         .environ = .empty,
     });
     defer threaded_io.deinit();
@@ -126,13 +127,13 @@ test "static_net_native retained invalid-family bundles preserve replay metadata
         },
     }).run();
 
-    try std.testing.expectEqual(@as(u32, 1), summary.executed_case_count);
-    try std.testing.expect(summary.failed_case != null);
+    try testing.expectEqual(@as(u32, 1), summary.executed_case_count);
+    try testing.expect(summary.failed_case != null);
     const failed_case = summary.failed_case.?;
-    try std.testing.expect(failed_case.persisted_entry_name != null);
+    try testing.expect(failed_case.persisted_entry_name != null);
 
     const retained_case = buildRetainedInvalidCase(failed_case.run_identity.seed.value);
-    try std.testing.expect(retainedInvalidCaseMatches(retained_case));
+    try testing.expect(retainedInvalidCaseMatches(retained_case));
 
     var corpus_buffer: [640]u8 = undefined;
     const entry = try corpus.readCorpusEntry(
@@ -141,7 +142,7 @@ test "static_net_native retained invalid-family bundles preserve replay metadata
         failed_case.persisted_entry_name.?,
         &corpus_buffer,
     );
-    try std.testing.expectEqual(
+    try testing.expectEqual(
         failed_case.run_identity.seed.value,
         entry.artifact.identity.seed.value,
     );
@@ -157,7 +158,7 @@ test "static_net_native retained invalid-family bundles preserve replay metadata
             .expected_identity_hash = entry.meta.identity_hash,
         },
     );
-    try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, replay_outcome);
+    try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, replay_outcome);
 
     var bundle_entry_name_buffer: [128]u8 = undefined;
     var bundle_artifact_buffer: [640]u8 = undefined;
@@ -194,15 +195,15 @@ test "static_net_native retained invalid-family bundles preserve replay metadata
         .violations_parse_buffer = &read_violations_parse,
     });
 
-    try std.testing.expectEqualStrings("static_net_native", bundle.manifest_document.package_name);
-    try std.testing.expectEqualStrings("retained_invalid_family", bundle.manifest_document.run_name);
-    try std.testing.expectEqualStrings(retained_case.label, bundle.manifest_document.scenario_variant_label.?);
-    try std.testing.expectEqual(
+    try testing.expectEqualStrings("static_net_native", bundle.manifest_document.package_name);
+    try testing.expectEqualStrings("retained_invalid_family", bundle.manifest_document.run_name);
+    try testing.expectEqualStrings(retained_case.label, bundle.manifest_document.scenario_variant_label.?);
+    try testing.expectEqual(
         failed_case.run_identity.seed.value,
         bundle.replay_artifact_view.identity.seed.value,
     );
-    try std.testing.expect(bundle.trace_document != null);
-    try std.testing.expectEqualStrings(
+    try testing.expect(bundle.trace_document != null);
+    try testing.expectEqualStrings(
         failed_case.check_result.violations[0].code,
         bundle.violations_document.violations[0].code,
     );
@@ -302,7 +303,7 @@ fn expectNoFailureOrReplay(
     summary: fuzz_runner.FuzzRunSummary,
 ) !void {
     if (summary.failed_case) |failed_case| {
-        try std.testing.expect(failed_case.persisted_entry_name != null);
+        try testing.expect(failed_case.persisted_entry_name != null);
 
         var read_buffer: [640]u8 = undefined;
         const entry = try corpus.readCorpusEntry(
@@ -322,7 +323,7 @@ fn expectNoFailureOrReplay(
                 .expected_identity_hash = entry.meta.identity_hash,
             },
         );
-        try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
+        try testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
         return error.TestUnexpectedResult;
     }
 }

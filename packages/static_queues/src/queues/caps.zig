@@ -1,6 +1,7 @@
 //! Build-time capability helpers for `static_queues`.
 
 const std = @import("std");
+const testing = std.testing;
 const static_core = @import("static_core");
 const sync = @import("static_sync");
 
@@ -16,9 +17,9 @@ pub fn shouldSkipThreadedTests() bool {
 }
 
 test "blocking wait is never true when threads are disabled" {
-    if (!threads_enabled) try std.testing.expect(!blocking_wait_enabled);
+    if (!threads_enabled) try testing.expect(!blocking_wait_enabled);
 }
 
 test "wait queue support implies blocking wait support" {
-    if (wait_queue_enabled) try std.testing.expect(blocking_wait_enabled);
+    if (wait_queue_enabled) try testing.expect(blocking_wait_enabled);
 }

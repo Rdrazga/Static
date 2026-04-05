@@ -5,6 +5,8 @@
 //! `baseline.zon` plus `history.binlog` path.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_collections = @import("static_collections");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -24,7 +26,7 @@ const LookupContext = struct {
 
     fn run(context_ptr: *anyopaque) void {
         const context: *LookupContext = @ptrCast(@alignCast(context_ptr));
-        std.debug.assert(context.map.len() == lookup_key_count);
+        assert(context.map.len() == lookup_key_count);
 
         var key: u32 = 0;
         while (key < lookup_key_count) : (key += 1) {
@@ -32,7 +34,7 @@ const LookupContext = struct {
             context.sink +%= bench.case.blackBox(@as(u64, value.*));
         }
 
-        std.debug.assert(context.sink != 0);
+        assert(context.sink != 0);
     }
 };
 
@@ -44,7 +46,7 @@ const ChurnContext = struct {
         const context: *ChurnContext = @ptrCast(@alignCast(context_ptr));
 
         context.map.clear();
-        std.debug.assert(context.map.len() == 0);
+        assert(context.map.len() == 0);
 
         var key: u32 = 0;
         while (key < churn_key_count) : (key += 1) {
@@ -57,7 +59,7 @@ const ChurnContext = struct {
             context.sink +%= bench.case.blackBox(@as(u64, removed));
         }
 
-        std.debug.assert(context.map.len() == churn_key_count / 2);
+        assert(context.map.len() == churn_key_count / 2);
     }
 };
 
@@ -135,9 +137,9 @@ fn validateSemanticPreflight(allocator: std.mem.Allocator) !void {
     var lookup_map = try initMap(allocator);
     defer lookup_map.deinit();
     try fillLookupHotset(&lookup_map);
-    try std.testing.expectEqual(@as(usize, lookup_key_count), lookup_map.len());
-    try std.testing.expectEqual(@as(u32, 3), lookup_map.getConst(0).?.*);
-    try std.testing.expectEqual(
+    try testing.expectEqual(@as(usize, lookup_key_count), lookup_map.len());
+    try testing.expectEqual(@as(u32, 3), lookup_map.getConst(0).?.*);
+    try testing.expectEqual(
         @as(u32, (lookup_key_count - 1) * 7 + 3),
         lookup_map.getConst(lookup_key_count - 1).?.*,
     );
@@ -148,13 +150,13 @@ fn validateSemanticPreflight(allocator: std.mem.Allocator) !void {
     while (key < churn_key_count) : (key += 1) {
         try churn_map.putNoClobber(key, key * 3 + 1);
     }
-    try std.testing.expectEqual(@as(usize, churn_key_count), churn_map.len());
+    try testing.expectEqual(@as(usize, churn_key_count), churn_map.len());
 
     key = 0;
     while (key < churn_key_count) : (key += 2) {
-        try std.testing.expectEqual(key * 3 + 1, try churn_map.remove(key));
+        try testing.expectEqual(key * 3 + 1, try churn_map.remove(key));
     }
-    try std.testing.expectEqual(@as(usize, churn_key_count / 2), churn_map.len());
-    try std.testing.expect(churn_map.getConst(0) == null);
-    try std.testing.expectEqual(@as(u32, 4), churn_map.getConst(1).?.*);
+    try testing.expectEqual(@as(usize, churn_key_count / 2), churn_map.len());
+    try testing.expect(churn_map.getConst(0) == null);
+    try testing.expectEqual(@as(u32, 4), churn_map.getConst(1).?.*);
 }

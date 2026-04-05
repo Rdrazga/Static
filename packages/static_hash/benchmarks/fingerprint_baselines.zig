@@ -7,6 +7,7 @@
 //!   FNV-1a and direct-combine lower bounds that define its implementation.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const static_hash = @import("static_hash");
 const static_testing = @import("static_testing");
 const support = @import("support.zig");
@@ -297,15 +298,15 @@ fn validateSemanticPreflight(
     incrementing_payload: []const u8,
     random_payload: []const u8,
 ) void {
-    std.debug.assert(
+    assert(
         static_hash.fingerprint64(zero_payload) ==
             std.hash.Wyhash.hash(0, zero_payload),
     );
-    std.debug.assert(
+    assert(
         static_hash.fingerprint64Seeded(0x1020_3040_5060_7080, random_payload) ==
             std.hash.Wyhash.hash(0x1020_3040_5060_7080, random_payload),
     );
-    std.debug.assert(
+    assert(
         static_hash.fingerprint.fingerprint128Seeded(fp128_seed_a, fp128_seed_b, random_payload) ==
             directFingerprint128LowerBound(fp128_seed_a, fp128_seed_b, random_payload),
     );
@@ -316,8 +317,8 @@ fn validateSemanticPreflight(
     var fp_chunked = static_hash.fingerprint.Fingerprint64V1.init();
     updateInFixedChunks(&fp_chunked, incrementing_payload, 17);
 
-    std.debug.assert(fp_whole.final() == fp_chunked.final());
-    std.debug.assert(
+    assert(fp_whole.final() == fp_chunked.final());
+    assert(
         fp_whole.final() ==
             static_hash.fnv1a.hash64(0, incrementing_payload),
     );
@@ -325,7 +326,7 @@ fn validateSemanticPreflight(
     var fp_add = static_hash.fingerprint.Fingerprint64V1.init();
     fp_add.update(incrementing_payload);
     fp_add.addU64(v1_add_value);
-    std.debug.assert(
+    assert(
         fp_add.final() ==
             static_hash.combineOrdered64(.{
                 .left = static_hash.fnv1a.hash64(0, incrementing_payload),
@@ -345,7 +346,7 @@ fn updateInFixedChunks(
     payload: []const u8,
     chunk_len: usize,
 ) void {
-    std.debug.assert(chunk_len != 0);
+    assert(chunk_len != 0);
     var index: usize = 0;
     while (index < payload.len) {
         const end = @min(index + chunk_len, payload.len);

@@ -5,6 +5,8 @@
 //!   and `publish` is called by the writer to atomically swap pending items in.
 //! Blocking behavior: non-blocking; `trySend`/`tryRecv` return `error.WouldBlock`; `publish` uses overwrite semantics.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const memory = @import("static_memory");
 const ring = @import("ring_buffer.zig");
 const contracts = @import("../contracts.zig");
@@ -13,8 +15,8 @@ pub fn InboxOutbox(comptime T: type) type {
     // Guard against zero-size types: both internal ring buffers require
     // addressable storage; ZSTs would make capacity calculations meaningless.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -56,16 +58,16 @@ pub fn InboxOutbox(comptime T: type) type {
                 .outbox = outbox,
             };
             // Postcondition: both buffers are valid and the epoch starts at zero.
-            std.debug.assert(self.inbox.capacity() > 0);
-            std.debug.assert(self.outbox.capacity() > 0);
-            std.debug.assert(self.publish_epoch == 0);
+            assert(self.inbox.capacity() > 0);
+            assert(self.outbox.capacity() > 0);
+            assert(self.publish_epoch == 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: both ring buffers must still be valid.
-            std.debug.assert(self.inbox.capacity() > 0);
-            std.debug.assert(self.outbox.capacity() > 0);
+            assert(self.inbox.capacity() > 0);
+            assert(self.outbox.capacity() > 0);
             self.inbox.deinit();
             self.outbox.deinit();
             self.* = undefined;
@@ -73,19 +75,19 @@ pub fn InboxOutbox(comptime T: type) type {
 
         pub fn trySend(self: *Self, value: T) TrySendError!void {
             // Precondition: outbox must have capacity.
-            std.debug.assert(self.outbox.capacity() > 0);
+            assert(self.outbox.capacity() > 0);
             try self.outbox.tryPush(value);
             // Postcondition: outbox is non-empty after a successful send.
-            std.debug.assert(self.outbox.len() > 0);
+            assert(self.outbox.len() > 0);
         }
 
         pub fn tryRecv(self: *Self) TryRecvError!T {
             // Precondition: inbox must have capacity.
-            std.debug.assert(self.inbox.capacity() > 0);
+            assert(self.inbox.capacity() > 0);
             const old_len = self.inbox.len();
             const value = try self.inbox.tryPop();
             // Postcondition: inbox shrank by one.
-            std.debug.assert(self.inbox.len() == old_len - 1);
+            assert(self.inbox.len() == old_len - 1);
             return value;
         }
 
@@ -99,16 +101,16 @@ pub fn InboxOutbox(comptime T: type) type {
             // queued, so the loop is guaranteed to terminate without draining more
             // items than exist. tryPop returns error.WouldBlock when empty.
             const max_drain: usize = self.outbox.capacity();
-            std.debug.assert(max_drain > 0);
+            assert(max_drain > 0);
             var published: usize = 0;
             while (published < max_drain) {
                 const value = self.outbox.tryPop() catch break;
                 _ = self.inbox.pushOverwrite(value);
                 published += 1;
             }
-            std.debug.assert(published <= max_drain);
+            assert(published <= max_drain);
             if (published != 0) {
-                std.debug.assert(self.publish_epoch < std.math.maxInt(u64));
+                assert(self.publish_epoch < std.math.maxInt(u64));
                 self.publish_epoch += 1;
             }
             return published;
@@ -116,27 +118,27 @@ pub fn InboxOutbox(comptime T: type) type {
 
         pub fn inboxLen(self: Self) usize {
             // Invariant: len cannot exceed capacity.
-            std.debug.assert(self.inbox.len() <= self.inbox.capacity());
+            assert(self.inbox.len() <= self.inbox.capacity());
             return self.inbox.len();
         }
 
         pub fn outboxLen(self: Self) usize {
             // Invariant: len cannot exceed capacity.
-            std.debug.assert(self.outbox.len() <= self.outbox.capacity());
+            assert(self.outbox.len() <= self.outbox.capacity());
             return self.outbox.len();
         }
 
         pub fn epoch(self: Self) u64 {
             // Invariant: epoch only grows; it cannot wrap past maxInt(u64) in practice
             // because publish guards against it.
-            std.debug.assert(self.publish_epoch < std.math.maxInt(u64));
+            assert(self.publish_epoch < std.math.maxInt(u64));
             return self.publish_epoch;
         }
     };
 }
 
 test "inbox_outbox enforces publish barrier visibility" {
-    var io = try InboxOutbox(u8).init(std.testing.allocator, .{
+    var io = try InboxOutbox(u8).init(testing.allocator, .{
         .inbox_capacity = 4,
         .outbox_capacity = 4,
     });
@@ -144,16 +146,16 @@ test "inbox_outbox enforces publish barrier visibility" {
 
     try io.trySend(1);
     try io.trySend(2);
-    try std.testing.expectError(error.WouldBlock, io.tryRecv());
+    try testing.expectError(error.WouldBlock, io.tryRecv());
 
     const moved = io.publish();
-    try std.testing.expectEqual(@as(usize, 2), moved);
-    try std.testing.expectEqual(@as(u8, 1), try io.tryRecv());
-    try std.testing.expectEqual(@as(u8, 2), try io.tryRecv());
+    try testing.expectEqual(@as(usize, 2), moved);
+    try testing.expectEqual(@as(u8, 1), try io.tryRecv());
+    try testing.expectEqual(@as(u8, 2), try io.tryRecv());
 }
 
 test "inbox_outbox publish uses overwrite semantics when inbox is full" {
-    var io = try InboxOutbox(u8).init(std.testing.allocator, .{
+    var io = try InboxOutbox(u8).init(testing.allocator, .{
         .inbox_capacity = 1,
         .outbox_capacity = 2,
     });
@@ -164,6 +166,6 @@ test "inbox_outbox publish uses overwrite semantics when inbox is full" {
     _ = io.publish();
 
     // Inbox size is 1, so only the newest published value remains.
-    try std.testing.expectEqual(@as(u8, 9), try io.tryRecv());
-    try std.testing.expectError(error.WouldBlock, io.tryRecv());
+    try testing.expectEqual(@as(u8, 9), try io.tryRecv());
+    try testing.expectError(error.WouldBlock, io.tryRecv());
 }

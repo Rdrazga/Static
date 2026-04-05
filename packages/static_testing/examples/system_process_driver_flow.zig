@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 const example_options = @import("static_testing_example_options");
 
@@ -57,8 +58,8 @@ pub fn main() !void {
             self: *@This(),
             context: *system.SystemContext(@TypeOf(sim_fixture)),
         ) anyerror!testing.testing.checker.CheckResult {
-            std.debug.assert(context.hasComponent("echo_driver"));
-            std.debug.assert(context.hasComponent("response_mailbox"));
+            assert(context.hasComponent("echo_driver"));
+            assert(context.hasComponent("response_mailbox"));
 
             try context.traceBufferPtr().?.append(.{
                 .timestamp_ns = context.fixture.sim_clock.now().tick,
@@ -86,9 +87,9 @@ pub fn main() !void {
 
             var payload_buffer: [16]u8 = undefined;
             const response = try driver.recvResponse(&payload_buffer);
-            std.debug.assert(response.header.request_id == request_id);
-            std.debug.assert(response.header.kind == .ok);
-            std.debug.assert(std.mem.eql(u8, response.payload, "hello"));
+            assert(response.header.request_id == request_id);
+            assert(response.header.kind == .ok);
+            assert(std.mem.eql(u8, response.payload, "hello"));
 
             _ = try context.fixture.sim_clock.advance(.init(1));
             try context.traceBufferPtr().?.append(.{
@@ -104,7 +105,7 @@ pub fn main() !void {
 
             try self.mailbox.send(@intCast(response.payload.len));
             const payload_len = try self.mailbox.recv();
-            std.debug.assert(payload_len == response.payload.len);
+            assert(payload_len == response.payload.len);
 
             try driver.shutdown();
 
@@ -114,13 +115,13 @@ pub fn main() !void {
                 .{ .label = "process.request", .surface_label = "echo_driver" },
                 .{ .label = "process.response", .surface_label = "echo_driver" },
             );
-            std.debug.assert(ordering.check_result.passed);
+            assert(ordering.check_result.passed);
 
             const response_once = try temporal.checkExactlyOnce(
                 snapshot,
                 .{ .label = "process.response", .surface_label = "echo_driver" },
             );
-            std.debug.assert(response_once.check_result.passed);
+            assert(response_once.check_result.passed);
 
             return testing.testing.checker.CheckResult.pass(null);
         }
@@ -135,7 +136,7 @@ pub fn main() !void {
         .components = &components,
     }, &runner, Runner.run);
 
-    std.debug.assert(execution.check_result.passed);
+    assert(execution.check_result.passed);
     std.debug.print(
         "system process flow passed run={s} components={} trace_events={}\n",
         .{ execution.run_identity.run_name, execution.component_count, execution.trace_metadata.event_count },

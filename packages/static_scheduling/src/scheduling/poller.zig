@@ -5,6 +5,8 @@
 //! forever". If no events are pending, the fake returns `error.Timeout`.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const sync = @import("static_sync");
 
 pub const Interest = packed struct(u8) {
@@ -223,7 +225,7 @@ pub fn FakePoller(comptime NativeHandle: type) type {
         }
 
         fn removeRegistration(self: *Self, index: u32) void {
-            std.debug.assert(index < self.registrations_len);
+            assert(index < self.registrations_len);
             const last_index = self.registrations_len - 1;
             if (index != last_index) {
                 self.registrations[index] = self.registrations[last_index];
@@ -305,7 +307,7 @@ fn intersectInterest(a: Interest, b: Interest) Interest {
 }
 
 test "poller fake register inject and coalesced poll" {
-    var fake = try FakePoller(i32).init(std.testing.allocator, .{
+    var fake = try FakePoller(i32).init(testing.allocator, .{
         .registrations_max = 8,
         .pending_events_max = 8,
     });
@@ -318,14 +320,14 @@ test "poller fake register inject and coalesced poll" {
     var iface = fake.asPoller();
     var out: [2]Poller(i32).Event = undefined;
     const count = try iface.poll(&out, 0, null);
-    try std.testing.expectEqual(@as(u32, 1), count);
-    try std.testing.expectEqual(@as(u64, 100), out[0].token);
-    try std.testing.expect(out[0].interest.readable);
-    try std.testing.expect(out[0].interest.writable);
+    try testing.expectEqual(@as(u32, 1), count);
+    try testing.expectEqual(@as(u64, 100), out[0].token);
+    try testing.expect(out[0].interest.readable);
+    try testing.expect(out[0].interest.writable);
 }
 
 test "poller fake timeout and cancellation semantics" {
-    var fake = try FakePoller(i32).init(std.testing.allocator, .{
+    var fake = try FakePoller(i32).init(testing.allocator, .{
         .registrations_max = 2,
         .pending_events_max = 2,
     });
@@ -333,16 +335,16 @@ test "poller fake timeout and cancellation semantics" {
 
     var iface = fake.asPoller();
     var out: [1]Poller(i32).Event = undefined;
-    try std.testing.expectError(error.Timeout, iface.poll(&out, 0, null));
-    try std.testing.expectError(error.Timeout, iface.poll(&out, null, null));
+    try testing.expectError(error.Timeout, iface.poll(&out, 0, null));
+    try testing.expectError(error.Timeout, iface.poll(&out, null, null));
 
     var source = sync.cancel.CancelSource{};
     source.cancel();
-    try std.testing.expectError(error.Cancelled, iface.poll(&out, null, source.token()));
+    try testing.expectError(error.Cancelled, iface.poll(&out, null, source.token()));
 }
 
 test "poller fake ready events beat timeout budgets" {
-    var fake = try FakePoller(i32).init(std.testing.allocator, .{
+    var fake = try FakePoller(i32).init(testing.allocator, .{
         .registrations_max = 2,
         .pending_events_max = 2,
     });
@@ -355,22 +357,22 @@ test "poller fake ready events beat timeout budgets" {
     var out: [1]Poller(i32).Event = undefined;
 
     const zero_count = try iface.poll(&out, 0, null);
-    try std.testing.expectEqual(@as(u32, 1), zero_count);
-    try std.testing.expectEqual(@as(u64, 5), out[0].token);
-    try std.testing.expect(out[0].interest.readable);
+    try testing.expectEqual(@as(u32, 1), zero_count);
+    try testing.expectEqual(@as(u64, 5), out[0].token);
+    try testing.expect(out[0].interest.readable);
 
     try fake.inject(11, .{ .readable = true });
 
     const finite_count = try iface.poll(&out, 10 * std.time.ns_per_ms, null);
-    try std.testing.expectEqual(@as(u32, 1), finite_count);
-    try std.testing.expectEqual(@as(u64, 5), out[0].token);
-    try std.testing.expect(out[0].interest.readable);
+    try testing.expectEqual(@as(u32, 1), finite_count);
+    try testing.expectEqual(@as(u64, 5), out[0].token);
+    try testing.expect(out[0].interest.readable);
 
-    try std.testing.expectError(error.Timeout, iface.poll(&out, 10 * std.time.ns_per_ms, null));
+    try testing.expectError(error.Timeout, iface.poll(&out, 10 * std.time.ns_per_ms, null));
 }
 
 test "poller fake unregister removes registrations" {
-    var fake = try FakePoller(i32).init(std.testing.allocator, .{
+    var fake = try FakePoller(i32).init(testing.allocator, .{
         .registrations_max = 2,
         .pending_events_max = 2,
     });
@@ -378,11 +380,11 @@ test "poller fake unregister removes registrations" {
 
     try fake.register(11, 5, .{ .readable = true });
     try fake.unregister(11);
-    try std.testing.expectError(error.InvalidInput, fake.inject(11, .{ .readable = true }));
+    try testing.expectError(error.InvalidInput, fake.inject(11, .{ .readable = true }));
 }
 
 test "poller fake unregister drops queued pending events for removed registrations" {
-    var fake = try FakePoller(i32).init(std.testing.allocator, .{
+    var fake = try FakePoller(i32).init(testing.allocator, .{
         .registrations_max = 2,
         .pending_events_max = 2,
     });
@@ -394,12 +396,12 @@ test "poller fake unregister drops queued pending events for removed registratio
 
     var iface = fake.asPoller();
     var out: [1]Poller(i32).Event = undefined;
-    try std.testing.expectEqual(@as(u32, 0), try iface.poll(&out, 0, null));
-    try std.testing.expectError(error.Timeout, iface.poll(&out, 0, null));
+    try testing.expectEqual(@as(u32, 0), try iface.poll(&out, 0, null));
+    try testing.expectError(error.Timeout, iface.poll(&out, 0, null));
 }
 
 test "poller fake counts more than 128 unique tokens without hidden cap" {
-    var fake = try FakePoller(i32).init(std.testing.allocator, .{
+    var fake = try FakePoller(i32).init(testing.allocator, .{
         .registrations_max = 130,
         .pending_events_max = 130,
     });
@@ -416,7 +418,7 @@ test "poller fake counts more than 128 unique tokens without hidden cap" {
     var iface = fake.asPoller();
     var out: [130]Poller(i32).Event = undefined;
     const count = try iface.poll(&out, 0, null);
-    try std.testing.expectEqual(@as(u32, 130), count);
-    try std.testing.expectEqual(@as(u64, 1000), out[0].token);
-    try std.testing.expectEqual(@as(u64, 1129), out[129].token);
+    try testing.expectEqual(@as(u32, 130), count);
+    try testing.expectEqual(@as(u64, 1000), out[0].token);
+    try testing.expectEqual(@as(u64, 1129), out[129].token);
 }

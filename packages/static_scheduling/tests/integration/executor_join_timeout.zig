@@ -1,4 +1,6 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const static_scheduling = @import("static_scheduling");
 
 test "executor join reports timeout while a worker is blocked, then completes after release" {
@@ -28,7 +30,7 @@ test "executor join reports timeout while a worker is blocked, then completes af
         .finished = &finished,
     };
 
-    var executor = Executor.init(std.testing.allocator, .{
+    var executor = Executor.init(testing.allocator, .{
         .jobs_max = 1,
         .worker_count = 1,
         .queue_capacity = 1,
@@ -43,16 +45,16 @@ test "executor join reports timeout while a worker is blocked, then completes af
         .run = JobState.run,
     });
 
-    std.debug.assert(waitForBool(&started, true, 20_000));
+    assert(waitForBool(&started, true, 20_000));
 
-    try std.testing.expectError(error.Timeout, executor.join(job_id, null, 0));
-    try std.testing.expectError(error.WouldBlock, executor.tryJoin(job_id));
+    try testing.expectError(error.Timeout, executor.join(job_id, null, 0));
+    try testing.expectError(error.WouldBlock, executor.tryJoin(job_id));
 
     release.store(true, .release);
     try executor.join(job_id, null, 50 * std.time.ns_per_ms);
 
-    try std.testing.expectEqual(@as(u32, 1), finished.load(.acquire));
-    try std.testing.expectError(error.NotFound, executor.tryJoin(job_id));
+    try testing.expectEqual(@as(u32, 1), finished.load(.acquire));
+    try testing.expectError(error.NotFound, executor.tryJoin(job_id));
 }
 
 fn waitForBool(counter: *const std.atomic.Value(bool), expected: bool, iterations_max: u32) bool {

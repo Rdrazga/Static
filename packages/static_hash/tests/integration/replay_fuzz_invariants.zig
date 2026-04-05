@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const assert = std.debug.assert;
 const hash = @import("static_hash");
 const testing = @import("static_testing");
 
@@ -1034,7 +1035,7 @@ fn failEvaluation(
 fn buildByteCase(seed_value: u64, storage: []u8) []const u8 {
     const lengths = [_]usize{ 0, 1, 3, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128, 255, 256, 511 };
     const len = lengths[@as(usize, @intCast(seed_value % lengths.len))];
-    std.debug.assert(len <= storage.len);
+    assert(len <= storage.len);
     const bytes = storage[0..len];
 
     switch (@as(u2, @truncate(seed_value >> 8))) {

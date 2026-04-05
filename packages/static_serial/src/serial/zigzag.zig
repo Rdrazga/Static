@@ -6,6 +6,8 @@
 //! Thread safety: not thread-safe — all functions are pure and stateless.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 
 pub const Error = error{
     InvalidInput,
@@ -18,14 +20,14 @@ pub fn zigZagEncode(value: anytype) signedToUnsigned(@TypeOf(value)) {
         @compileError("zigZagEncode expects a signed integer type");
     }
     // Comptime: bit width must be positive (zero-width signed ints are unusable).
-    comptime std.debug.assert(info.int.bits > 0);
+    comptime assert(info.int.bits > 0);
 
     const U = signedToUnsigned(S);
     const shift_amt: std.math.Log2Int(U) = @intCast(info.int.bits - 1);
     const sign: U = @bitCast(value >> shift_amt);
     const encoded = (@as(U, @bitCast(value)) << 1) ^ sign;
     // Postcondition: zigzag roundtrip -- decode(encode(x)) == x.
-    std.debug.assert(zigZagDecode(S, encoded) == value);
+    assert(zigZagDecode(S, encoded) == value);
     return encoded;
 }
 
@@ -35,7 +37,7 @@ pub fn zigZagDecode(comptime Signed: type, value: anytype) Signed {
         @compileError("zigZagDecode expects a signed integer type");
     }
     // Comptime: signed bit width must be positive.
-    comptime std.debug.assert(signed_info.int.bits > 0);
+    comptime assert(signed_info.int.bits > 0);
 
     const U = @TypeOf(value);
     const u_info = @typeInfo(U);
@@ -72,7 +74,7 @@ test "zigzag roundtrip signed values" {
     for (values) |v| {
         const enc = zigZagEncode(v);
         const dec = zigZagDecode(i64, enc);
-        try std.testing.expectEqual(v, dec);
+        try testing.expectEqual(v, dec);
     }
 }
 
@@ -83,7 +85,7 @@ test "SE-T3: zigzag i8 boundary values roundtrip" {
     for (values) |v| {
         const enc = zigZagEncode(v);
         const dec = zigZagDecode(i8, enc);
-        try std.testing.expectEqual(v, dec);
+        try testing.expectEqual(v, dec);
     }
 }
 
@@ -94,7 +96,7 @@ test "SE-T3: zigzag i16 boundary values roundtrip" {
     for (values) |v| {
         const enc = zigZagEncode(v);
         const dec = zigZagDecode(i16, enc);
-        try std.testing.expectEqual(v, dec);
+        try testing.expectEqual(v, dec);
     }
 }
 
@@ -105,6 +107,6 @@ test "SE-T3: zigzag i32 boundary values roundtrip" {
     for (values) |v| {
         const enc = zigZagEncode(v);
         const dec = zigZagDecode(i32, enc);
-        try std.testing.expectEqual(v, dec);
+        try testing.expectEqual(v, dec);
     }
 }

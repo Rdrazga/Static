@@ -1,4 +1,5 @@
 const std = @import("std");
+const testing = std.testing;
 const sync = @import("static_sync");
 
 test "misuse-paths keep cancel unregister-after-fire and reset-after-cancel safe" {
@@ -12,36 +13,36 @@ test "misuse-paths keep cancel unregister-after-fire and reset-after-cancel safe
     source.cancel();
     registration.unregister();
 
-    try std.testing.expectEqual(@as(u32, 1), callback_count.load(.acquire));
-    try std.testing.expect(token.isCancelled());
+    try testing.expectEqual(@as(u32, 1), callback_count.load(.acquire));
+    try testing.expect(token.isCancelled());
 
     source.reset();
-    try std.testing.expect(!token.isCancelled());
+    try testing.expect(!token.isCancelled());
 
     try registration.register(token);
     registration.unregister();
-    try std.testing.expectEqual(@as(u32, 1), callback_count.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), callback_count.load(.acquire));
 }
 
 test "misuse-paths keep zero-timeout semantics explicit across wait primitives" {
     if (@hasDecl(sync.event.Event, "timedWait")) {
         var event = sync.event.Event{};
-        try std.testing.expectError(error.Timeout, event.timedWait(0));
+        try testing.expectError(error.Timeout, event.timedWait(0));
         event.set();
         try event.timedWait(0);
     }
 
     if (@hasDecl(sync.semaphore.Semaphore, "timedWait")) {
         var semaphore = sync.semaphore.Semaphore{};
-        try std.testing.expectError(error.Timeout, semaphore.timedWait(0));
+        try testing.expectError(error.Timeout, semaphore.timedWait(0));
         semaphore.post(1);
         try semaphore.timedWait(0);
-        try std.testing.expectError(error.WouldBlock, semaphore.tryWait());
+        try testing.expectError(error.WouldBlock, semaphore.tryWait());
     }
 
     if (sync.wait_queue.supports_wait_queue) {
         var state: u32 = 0;
-        try std.testing.expectError(error.Timeout, sync.wait_queue.waitValue(u32, &state, 0, .{
+        try testing.expectError(error.Timeout, sync.wait_queue.waitValue(u32, &state, 0, .{
             .timeout_ns = 0,
         }));
 

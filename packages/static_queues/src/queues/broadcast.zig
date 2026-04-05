@@ -11,6 +11,8 @@
 //! - Producer throughput is moderate and predictable behavior matters more than peak throughput.
 //! - You want straightforward registration/backpressure semantics without lock-free sequence races.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const ring = @import("ring_buffer.zig");
 const memory = @import("static_memory");
 const sync = @import("static_sync");
@@ -23,8 +25,8 @@ pub fn Broadcast(comptime T: type) type {
     // Guard against zero-size types: the ring buffer requires addressable
     // storage and ZSTs would make byte-size calculations meaningless.
     comptime {
-        std.debug.assert(@sizeOf(T) > 0);
-        std.debug.assert(@alignOf(T) > 0);
+        assert(@sizeOf(T) > 0);
+        assert(@alignOf(T) > 0);
     }
 
     return struct {
@@ -62,7 +64,7 @@ pub fn Broadcast(comptime T: type) type {
             // (write_seq % buf.len) is consistent across the sequence space,
             // matching the contract established by Disruptor.
             if (!std.math.isPowerOfTwo(cfg.capacity)) return error.InvalidConfig;
-            std.debug.assert(std.math.isPowerOfTwo(cfg.capacity));
+            assert(std.math.isPowerOfTwo(cfg.capacity));
 
             const buf_bytes = std.math.mul(usize, cfg.capacity, @sizeOf(T)) catch return error.Overflow;
             const consumers_bytes = std.math.mul(usize, cfg.consumers_max, @sizeOf(Consumer)) catch return error.Overflow;
@@ -85,15 +87,15 @@ pub fn Broadcast(comptime T: type) type {
                 .consumers = consumers,
             };
             // Postcondition: buffer is properly sized and write_seq starts at zero.
-            std.debug.assert(self.buf.len == cfg.capacity);
-            std.debug.assert(self.write_seq == 0);
+            assert(self.buf.len == cfg.capacity);
+            assert(self.write_seq == 0);
             return self;
         }
 
         pub fn deinit(self: *Self) void {
             // Precondition: buffer and consumer table must still be valid.
-            std.debug.assert(self.buf.len > 0);
-            std.debug.assert(self.consumers.len > 0);
+            assert(self.buf.len > 0);
+            assert(self.consumers.len > 0);
             const buf_bytes = qi.bytesForItems(self.buf.len, @sizeOf(T));
             const consumers_bytes = qi.bytesForItems(self.consumers.len, @sizeOf(Consumer));
             const total_bytes = qi.addBytesExact(buf_bytes, consumers_bytes);
@@ -108,15 +110,15 @@ pub fn Broadcast(comptime T: type) type {
             defer self.mutex.unlock();
 
             // Precondition: the consumer table must be valid.
-            std.debug.assert(self.consumers.len > 0);
+            assert(self.consumers.len > 0);
             var index: usize = 0;
             while (index < self.consumers.len) : (index += 1) {
                 if (!self.consumers[index].active) {
                     self.consumers[index].active = true;
                     self.consumers[index].read_seq = self.write_seq;
                     // Postcondition: the returned id is in bounds and the slot is now active.
-                    std.debug.assert(index < self.consumers.len);
-                    std.debug.assert(self.consumers[index].active);
+                    assert(index < self.consumers.len);
+                    assert(self.consumers[index].active);
                     return index;
                 }
             }
@@ -126,8 +128,8 @@ pub fn Broadcast(comptime T: type) type {
         pub fn removeConsumer(self: *Self, consumer_id: ConsumerId) void {
             self.mutex.lock();
             defer self.mutex.unlock();
-            std.debug.assert(consumer_id < self.consumers.len);
-            std.debug.assert(self.consumers[consumer_id].active);
+            assert(consumer_id < self.consumers.len);
+            assert(self.consumers[consumer_id].active);
             self.consumers[consumer_id] = .{};
         }
 
@@ -136,9 +138,9 @@ pub fn Broadcast(comptime T: type) type {
             defer self.mutex.unlock();
 
             // Precondition: buffer must be valid with non-zero capacity.
-            std.debug.assert(self.buf.len > 0);
+            assert(self.buf.len > 0);
             // Precondition: write_seq must not be at the u64 ceiling (guard overflow).
-            std.debug.assert(self.write_seq < std.math.maxInt(u64));
+            assert(self.write_seq < std.math.maxInt(u64));
             if (self.isFullForActiveConsumers()) return error.WouldBlock;
 
             const pre_seq = self.write_seq;
@@ -146,7 +148,7 @@ pub fn Broadcast(comptime T: type) type {
             self.buf[index] = value;
             self.write_seq += 1;
             // Postcondition: write_seq advanced by exactly one after the write.
-            std.debug.assert(self.write_seq == pre_seq + 1);
+            assert(self.write_seq == pre_seq + 1);
         }
 
         pub fn tryRecv(self: *Self, consumer_id: ConsumerId) TryRecvError!T {
@@ -157,16 +159,16 @@ pub fn Broadcast(comptime T: type) type {
             const consumer = &self.consumers[consumer_id];
             // Precondition: read_seq cannot be ahead of write_seq (consumer must not
             // be reading data not yet published).
-            std.debug.assert(consumer.read_seq <= self.write_seq);
+            assert(consumer.read_seq <= self.write_seq);
             if (consumer.read_seq == self.write_seq) return error.WouldBlock;
 
             const index: usize = @intCast(consumer.read_seq % self.buf.len);
             const value = self.buf[index];
-            std.debug.assert(consumer.read_seq < std.math.maxInt(u64));
+            assert(consumer.read_seq < std.math.maxInt(u64));
             const pre_read_seq = consumer.read_seq;
             consumer.read_seq += 1;
             // Postcondition: consumer read sequence advanced by exactly one.
-            std.debug.assert(consumer.read_seq == pre_read_seq + 1);
+            assert(consumer.read_seq == pre_read_seq + 1);
             return value;
         }
 
@@ -176,23 +178,23 @@ pub fn Broadcast(comptime T: type) type {
             self.assertActiveConsumer(consumer_id);
             const consumer = self.consumers[consumer_id];
             // Invariant: consumer read_seq cannot exceed write_seq.
-            std.debug.assert(consumer.read_seq <= self.write_seq);
+            assert(consumer.read_seq <= self.write_seq);
             const delta = self.write_seq - consumer.read_seq;
             // Invariant: pending items cannot exceed the ring buffer capacity.
-            std.debug.assert(delta <= self.buf.len);
+            assert(delta <= self.buf.len);
             return @intCast(delta);
         }
 
         pub fn capacity(self: *const Self) usize {
             // Invariant: a valid broadcast always has a non-zero buffer.
-            std.debug.assert(self.buf.len > 0);
-            std.debug.assert(@intFromPtr(self.buf.ptr) != 0);
+            assert(self.buf.len > 0);
+            assert(@intFromPtr(self.buf.ptr) != 0);
             return self.buf.len;
         }
 
         fn isFullForActiveConsumers(self: *Self) bool {
             // Precondition: the consumer table must be valid.
-            std.debug.assert(self.consumers.len > 0);
+            assert(self.consumers.len > 0);
             var has_active = false;
             var min_read_seq: u64 = self.write_seq;
             for (self.consumers) |consumer| {
@@ -206,19 +208,19 @@ pub fn Broadcast(comptime T: type) type {
             }
             if (!has_active) return false;
             const used = self.write_seq - min_read_seq;
-            std.debug.assert(used <= self.buf.len);
+            assert(used <= self.buf.len);
             return used == self.buf.len;
         }
 
         fn assertActiveConsumer(self: *Self, consumer_id: ConsumerId) void {
-            std.debug.assert(consumer_id < self.consumers.len);
-            std.debug.assert(self.consumers[consumer_id].active);
+            assert(consumer_id < self.consumers.len);
+            assert(self.consumers[consumer_id].active);
         }
     };
 }
 
 test "broadcast fans out one producer stream to multiple consumers" {
-    var b = try Broadcast(u8).init(std.testing.allocator, .{
+    var b = try Broadcast(u8).init(testing.allocator, .{
         .capacity = 4,
         .consumers_max = 2,
     });
@@ -230,15 +232,15 @@ test "broadcast fans out one producer stream to multiple consumers" {
     try b.trySend(10);
     try b.trySend(20);
 
-    try std.testing.expectEqual(@as(u8, 10), try b.tryRecv(c0));
-    try std.testing.expectEqual(@as(u8, 10), try b.tryRecv(c1));
-    try std.testing.expectEqual(@as(u8, 20), try b.tryRecv(c0));
-    try std.testing.expectEqual(@as(u8, 20), try b.tryRecv(c1));
-    try std.testing.expectError(error.WouldBlock, b.tryRecv(c0));
+    try testing.expectEqual(@as(u8, 10), try b.tryRecv(c0));
+    try testing.expectEqual(@as(u8, 10), try b.tryRecv(c1));
+    try testing.expectEqual(@as(u8, 20), try b.tryRecv(c0));
+    try testing.expectEqual(@as(u8, 20), try b.tryRecv(c1));
+    try testing.expectError(error.WouldBlock, b.tryRecv(c0));
 }
 
 test "broadcast applies backpressure to the slowest consumer" {
-    var b = try Broadcast(u8).init(std.testing.allocator, .{
+    var b = try Broadcast(u8).init(testing.allocator, .{
         .capacity = 2,
         .consumers_max = 2,
     });
@@ -249,27 +251,27 @@ test "broadcast applies backpressure to the slowest consumer" {
 
     try b.trySend(1);
     try b.trySend(2);
-    try std.testing.expectError(error.WouldBlock, b.trySend(3));
+    try testing.expectError(error.WouldBlock, b.trySend(3));
 
     b.removeConsumer(c0);
-    try std.testing.expectEqual(@as(u8, 1), try b.tryRecv(c1));
+    try testing.expectEqual(@as(u8, 1), try b.tryRecv(c1));
     try b.trySend(3);
 }
 
 test "broadcast rejects non-power-of-two capacity" {
     // Goal: verify that init enforces the power-of-two capacity contract.
     // Method: supply an odd capacity and assert error.InvalidConfig is returned.
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
-        Broadcast(u64).init(std.testing.allocator, .{ .capacity = 7 }),
+        Broadcast(u64).init(testing.allocator, .{ .capacity = 7 }),
     );
 }
 
 test "broadcast rejects capacity of zero" {
     // Goal: verify that init rejects a zero capacity (pre-existing check).
     // Method: supply zero and assert error.InvalidConfig is returned.
-    try std.testing.expectError(
+    try testing.expectError(
         error.InvalidConfig,
-        Broadcast(u64).init(std.testing.allocator, .{ .capacity = 0 }),
+        Broadcast(u64).init(testing.allocator, .{ .capacity = 0 }),
     );
 }

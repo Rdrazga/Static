@@ -1,6 +1,7 @@
 //! Demonstrates Chrome-trace JSON export from a bounded deterministic trace.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -27,7 +28,7 @@ pub fn main() !void {
     var out = aw.toArrayList();
     defer out.deinit(std.heap.page_allocator);
 
-    std.debug.assert(std.mem.eql(
+    assert(std.mem.eql(
         u8,
         out.items,
         "[{\"name\":\"boot\",\"cat\":\"info\",\"ph\":\"i\",\"ts\":10,\"pid\":0,\"tid\":0,\"s\":\"t\",\"args\":{\"seq\":41,\"value\":1}},{\"name\":\"choose\",\"cat\":\"decision\",\"ph\":\"i\",\"ts\":15,\"pid\":0,\"tid\":0,\"s\":\"t\",\"args\":{\"seq\":42,\"value\":7}}]",

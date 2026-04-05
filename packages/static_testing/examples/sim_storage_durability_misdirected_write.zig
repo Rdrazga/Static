@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 const durability = testing.testing.sim.storage_durability;
@@ -20,21 +21,21 @@ pub fn main() !void {
 
     try simulator.submitWrite(.init(0), 1, 4, 111);
     const fault_summary = try simulator.deliverDueToMailbox(.init(1), &completions, null);
-    std.debug.assert(fault_summary.corrupted_count == 1);
-    std.debug.assert((try completions.recv()).status == .corrupted);
-    std.debug.assert(simulator.storedItems()[0].slot_id == 9);
+    assert(fault_summary.corrupted_count == 1);
+    assert((try completions.recv()).status == .corrupted);
+    assert(simulator.storedItems()[0].slot_id == 9);
 
     _ = try simulator.crash(.init(1), null);
     try simulator.recover(.init(1), null);
     try simulator.submitWrite(.init(1), 2, 4, 222);
     const repair_summary = try simulator.deliverDueToMailbox(.init(2), &completions, null);
-    std.debug.assert(repair_summary.write_success_count == 1);
-    std.debug.assert((try completions.recv()).status == .success);
+    assert(repair_summary.write_success_count == 1);
+    assert((try completions.recv()).status == .success);
 
     try simulator.submitRead(.init(2), 3, 4);
     const repair_read_summary = try simulator.deliverDueToMailbox(.init(3), &completions, null);
-    std.debug.assert(repair_read_summary.read_success_count == 1);
-    std.debug.assert((try completions.recv()).value.? == 222);
+    assert(repair_read_summary.read_success_count == 1);
+    assert((try completions.recv()).value.? == 222);
 
     std.debug.print(
         "storage durability misdirected the fault-phase write to slot 9, then restabilized writes and reads for slot 4 after recovery\n",

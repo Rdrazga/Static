@@ -8,6 +8,8 @@
 //! Thread safety: safe for concurrent use when `-Denable_os_backends=true`.
 //! Single-threaded mode: blocking `wait`/`timedWait` are absent; the type exists as a zero-size placeholder.
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const core = @import("static_core");
 const caps = @import("caps.zig");
 const mutex = std.Thread;
@@ -27,22 +29,22 @@ pub const Condvar = if (supports_blocking_wait) struct {
     impl: StdCondition = .{},
 
     pub fn wait(self: *Condvar, m: *mutex.Mutex) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
         self.impl.wait(m);
     }
 
     pub fn timedWait(self: *Condvar, m: *mutex.Mutex, timeout_ns: u64) error{Timeout}!void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
         return self.impl.timedWait(m, timeout_ns);
     }
 
     pub fn signal(self: *Condvar) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
         self.impl.signal();
     }
 
     pub fn broadcast(self: *Condvar) void {
-        std.debug.assert(supports_blocking_wait);
+        assert(supports_blocking_wait);
         self.impl.broadcast();
     }
 
@@ -58,20 +60,20 @@ pub const Condvar = if (supports_blocking_wait) struct {
 test "condvar APIs are compiled only when blocking wait is supported" {
     // Goal: verify API surface matches capability gating.
     // Method: inspect declaration presence with `@hasDecl`.
-    try std.testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "wait"));
-    try std.testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "timedWait"));
-    try std.testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "signal"));
-    try std.testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "broadcast"));
+    try testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "wait"));
+    try testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "timedWait"));
+    try testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "signal"));
+    try testing.expectEqual(supports_blocking_wait, @hasDecl(Condvar, "broadcast"));
 }
 
 test "condvar wrapper stays layout-compatible with std condition when enabled" {
     if (!supports_blocking_wait) return error.SkipZigTest;
 
-    try std.testing.expectEqual(@sizeOf(StdCondition), @sizeOf(Condvar));
-    try std.testing.expectEqual(@alignOf(StdCondition), @alignOf(Condvar));
+    try testing.expectEqual(@sizeOf(StdCondition), @sizeOf(Condvar));
+    try testing.expectEqual(@alignOf(StdCondition), @alignOf(Condvar));
 
     var cv = Condvar{};
-    try std.testing.expect(@intFromPtr(cv.raw()) == @intFromPtr(&cv));
+    try testing.expect(@intFromPtr(cv.raw()) == @intFromPtr(&cv));
 }
 
 test "condvar timedWait reports timeout" {
@@ -83,8 +85,8 @@ test "condvar timedWait reports timeout" {
     var cv = Condvar{};
     m.lock();
     defer m.unlock();
-    try std.testing.expectError(error.Timeout, cv.timedWait(&m, std.time.ns_per_ms));
-    try std.testing.expectError(error.Timeout, cv.timedWait(&m, 0));
+    try testing.expectError(error.Timeout, cv.timedWait(&m, std.time.ns_per_ms));
+    try testing.expectError(error.Timeout, cv.timedWait(&m, 0));
 }
 
 test "condvar signal wakes exactly one waiter" {
@@ -103,7 +105,7 @@ test "condvar signal wakes exactly one waiter" {
         fn waiter(state: *@This()) void {
             state.mutex.lock();
             defer state.mutex.unlock();
-            std.debug.assert(state.waiting_count < 2);
+            assert(state.waiting_count < 2);
             state.waiting_count += 1;
             while (!state.ready) {
                 state.cond.wait(&state.mutex);
@@ -132,11 +134,11 @@ test "condvar signal wakes exactly one waiter" {
     state.cond.signal();
 
     try waitForAwokenCount(&state.awoken_count, 1, 100 * std.time.ns_per_ms);
-    try std.testing.expectEqual(@as(u8, 1), state.awoken_count.load(.acquire));
+    try testing.expectEqual(@as(u8, 1), state.awoken_count.load(.acquire));
 
     state.cond.signal();
     try waitForAwokenCount(&state.awoken_count, 2, 100 * std.time.ns_per_ms);
-    try std.testing.expectEqual(@as(u8, 2), state.awoken_count.load(.acquire));
+    try testing.expectEqual(@as(u8, 2), state.awoken_count.load(.acquire));
 }
 
 test "condvar broadcast wakes all blocked waiters" {
@@ -156,7 +158,7 @@ test "condvar broadcast wakes all blocked waiters" {
             state.mutex.lock();
             defer state.mutex.unlock();
 
-            std.debug.assert(state.waiting_count < 2);
+            assert(state.waiting_count < 2);
             state.waiting_count += 1;
             while (!state.ready) {
                 state.cond.wait(&state.mutex);
@@ -185,7 +187,7 @@ test "condvar broadcast wakes all blocked waiters" {
     state.cond.broadcast();
 
     try waitForAwokenCount(&state.awoken_count, 2, 100 * std.time.ns_per_ms);
-    try std.testing.expectEqual(@as(u8, 2), state.awoken_count.load(.acquire));
+    try testing.expectEqual(@as(u8, 2), state.awoken_count.load(.acquire));
 }
 
 fn waitForBlockedWaiters(state: anytype, expected: u8, timeout_ns: u64) !void {

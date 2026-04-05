@@ -1,6 +1,7 @@
 //! Demonstrates timer delivery, deterministic scheduling, and mailbox handoff.
 
 const std = @import("std");
+const assert = std.debug.assert;
 const testing = @import("static_testing");
 
 pub fn main() !void {
@@ -32,7 +33,7 @@ pub fn main() !void {
     _ = try sim_fixture.step();
 
     const first = try sim_fixture.step();
-    std.debug.assert(first.decision != null);
+    assert(first.decision != null);
     const first_snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const first_decision_sequence_no = first_snapshot.items[first_snapshot.items.len - 1].sequence_no;
     try sim_fixture.traceBufferPtr().?.append(.{
@@ -50,7 +51,7 @@ pub fn main() !void {
 
     _ = try sim_fixture.step();
     const second = try sim_fixture.step();
-    std.debug.assert(second.decision != null);
+    assert(second.decision != null);
     const second_snapshot = sim_fixture.traceBufferPtr().?.snapshot();
     const second_decision_sequence_no = second_snapshot.items[second_snapshot.items.len - 1].sequence_no;
     try sim_fixture.traceBufferPtr().?.append(.{
@@ -66,8 +67,8 @@ pub fn main() !void {
     });
     try mailbox.send(second.decision.?.chosen_id);
 
-    std.debug.assert(try mailbox.recv() == 11);
-    std.debug.assert(try mailbox.recv() == 22);
+    assert(try mailbox.recv() == 11);
+    assert(try mailbox.recv() == 22);
 
     var aw: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
     defer aw.deinit();

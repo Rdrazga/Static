@@ -14,6 +14,8 @@
 //! Thread safety: not thread-safe; use one instance per thread.
 
 const std = @import("std");
+const assert = std.debug.assert;
+const testing = std.testing;
 const splitmix64 = @import("splitmix64.zig");
 
 pub const Xoroshiro128Plus = struct {
@@ -48,7 +50,7 @@ pub const Xoroshiro128Plus = struct {
     pub fn jump(self: *Xoroshiro128Plus) void {
         // Precondition: state must be non-zero before the jump. A zero state would
         // produce zero output from nextU64 indefinitely and must never occur.
-        std.debug.assert(self.s0 != 0 or self.s1 != 0);
+        assert(self.s0 != 0 or self.s1 != 0);
         const state_s0_before = self.s0;
         const state_s1_before = self.s1;
 
@@ -75,9 +77,9 @@ pub const Xoroshiro128Plus = struct {
         self.s0 = next_s0;
         self.s1 = next_s1;
         // Postcondition: the jump must have changed the state (it advances 2^64 steps).
-        std.debug.assert(self.s0 != state_s0_before or self.s1 != state_s1_before);
+        assert(self.s0 != state_s0_before or self.s1 != state_s1_before);
         // Postcondition: state must remain non-zero after the jump.
-        std.debug.assert(self.s0 != 0 or self.s1 != 0);
+        assert(self.s0 != 0 or self.s1 != 0);
     }
 
     pub fn split(self: *Xoroshiro128Plus) Xoroshiro128Plus {
@@ -85,8 +87,8 @@ pub const Xoroshiro128Plus = struct {
         // that successive split() calls produce independent, non-overlapping streams.
         const child_start = self.*;
         self.jump();
-        std.debug.assert(self.s0 != child_start.s0 or self.s1 != child_start.s1);
-        std.debug.assert(self.s0 != 0 or self.s1 != 0);
+        assert(self.s0 != child_start.s0 or self.s1 != child_start.s1);
+        assert(self.s0 != 0 or self.s1 != 0);
         return child_start;
     }
 
@@ -102,7 +104,7 @@ test "Xoroshiro128Plus deterministic for same seed" {
 
     var index: usize = 0;
     while (index < 24) : (index += 1) {
-        try std.testing.expectEqual(a.nextU64(), b.nextU64());
+        try testing.expectEqual(a.nextU64(), b.nextU64());
     }
 }
 
@@ -110,7 +112,7 @@ test "Xoroshiro128Plus jump changes stream" {
     var a = Xoroshiro128Plus.init(99);
     var b = Xoroshiro128Plus.init(99);
     b.jump();
-    try std.testing.expect(a.nextU64() != b.nextU64());
+    try testing.expect(a.nextU64() != b.nextU64());
 }
 
 test "Xoroshiro128Plus split is deterministic for same parent state" {
@@ -122,6 +124,6 @@ test "Xoroshiro128Plus split is deterministic for same parent state" {
 
     var index: usize = 0;
     while (index < 12) : (index += 1) {
-        try std.testing.expectEqual(child_a.nextU64(), child_b.nextU64());
+        try testing.expectEqual(child_a.nextU64(), child_b.nextU64());
     }
 }

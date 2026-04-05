@@ -1,4 +1,5 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const serial = @import("static_serial");
 
 pub fn main() !void {
@@ -13,7 +14,7 @@ pub fn main() !void {
     try writer.writeBytes("hello");
 
     const frame_len = writer.position();
-    std.debug.assert(frame_len == 13);
+    assert(frame_len == 13);
 
     var reader = serial.reader.Reader.init(frame_bytes[0..frame_len]);
     const message_kind = try reader.readInt(u16, .big);
@@ -21,9 +22,9 @@ pub fn main() !void {
     const sequence_id = try reader.readInt(u32, .little);
     const payload = try reader.readBytes(payload_len);
 
-    std.debug.assert(message_kind == 0xCAFE);
-    std.debug.assert(payload_len == 5);
-    std.debug.assert(sequence_id == 0x01020304);
-    std.debug.assert(std.mem.eql(u8, payload, "hello"));
-    std.debug.assert(reader.position() == frame_len);
+    assert(message_kind == 0xCAFE);
+    assert(payload_len == 5);
+    assert(sequence_id == 0x01020304);
+    assert(std.mem.eql(u8, payload, "hello"));
+    assert(reader.position() == frame_len);
 }
