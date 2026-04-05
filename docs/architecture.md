@@ -61,9 +61,20 @@ Examples:
   lifecycle/accounting/misuse review, with `Budget.release()` now failing fast
   on over-release in all builds.
 - `static_collections` keeps bounded container ownership package-local while
-  now using `static_testing` for package-owned `SlotMap`, `IndexPool`, and
-  `Vec` mutation/resource-boundary sequence review, direct `SlotMap` iterator
-  visibility proof, and shared `flat_hash_map` benchmark-workflow review,
+  now using `static_testing` for package-owned `SlotMap`, `IndexPool`, `Vec`,
+  `FlatHashMap`, `SortedVecMap`, and `SparseSet` mutation/resource-boundary
+  sequence review, a package-owned negative compile-contract harness for the
+  main generic `@compileError` boundaries, direct `SlotMap` iterator
+  visibility proof including the read-only iterator path, shared
+  `flat_hash_map` benchmark-workflow review, an explicit `Vec`
+  oversized-capacity operating-error contract before allocator or budget side
+  effects, `SmallVec` read/reset parity without hiding the one-way spill
+  boundary, and public `SortedVecMap` / `FlatHashMap` iterator surfaces that
+  keep map keys immutable through iteration plus additive borrowed
+  lookup/removal helpers, aligned bounded `getOrPut` plus `removeOrNull`
+  helpers for the map families, and dual by-value or `*const` callback
+  signatures for the affected map and heap families, with `SortedVecMap`
+  comparator-signature validation now firing at type instantiation,
   while the root surface keeps the `memory` alias and cuts the `core` and
   `hash` aliases.
 - `static_scheduling` keeps scheduler coordination policy package-local while
@@ -154,6 +165,12 @@ The workspace build is intentionally centralized in the root `build.zig`.
 Individual package directories contain local build files, but the supported
 validation path is the root workspace so that package-local integration tests
 and cross-package imports stay consistent.
+
+Root command semantics are intentionally split between pass/fail validation and
+review-only surfaces: `zig build test`, `zig build harness`,
+`zig build examples`, and `zig build ci` are pass/fail validation commands,
+while `zig build bench` remains review-only by default unless a benchmark
+workflow explicitly opts into gating.
 
 Primary repository entry points are:
 

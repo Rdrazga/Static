@@ -134,3 +134,13 @@ contract rather than a local workflow preference.
 - `zig build examples`
 - `zig build bench`
 - `zig build docs-lint`
+
+Command intent:
+
+- `zig build harness` is the success-only smoke surface for shared deterministic
+  harness examples.
+- Intentionally retained-failure demos such as model, fuzz, or swarm examples
+  stay on `zig build examples` unless they are rewritten to produce
+  unambiguous success-only smoke output.
+- `zig build bench` is review-only by default; baseline comparison output is
+  informative unless the caller explicitly enables gating.

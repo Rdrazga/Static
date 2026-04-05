@@ -26,6 +26,15 @@ package.
 - `zig build bench`
 - `zig build docs-lint`
 
+Command intent:
+
+- Keep `zig build harness` as a success-only smoke surface for deterministic
+  shared-harness examples.
+- Keep retained-failure demos on `zig build examples` unless their output can
+  read as unambiguous success-only smoke validation.
+- Treat `zig build bench` as review-only unless a caller-owned workflow
+  explicitly opts into regression gating.
+
 ## Working agreements
 
 - Choose the smallest harness that directly proves the invariant:

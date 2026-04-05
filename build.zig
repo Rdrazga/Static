@@ -313,7 +313,7 @@ fn addBenchStep(
     target: std.Build.ResolvedTarget,
     mods: Modules,
 ) *std.Build.Step {
-    const step = b.step("bench", "Build and run benchmarks (ReleaseFast)");
+    const step = b.step("bench", "Build and run non-gating benchmark review workloads (ReleaseFast)");
 
     // Benchmark executables always compile at ReleaseFast. Measuring in Debug
     // mode is misleading: assertion overhead dominates and numbers cannot be
@@ -794,7 +794,7 @@ fn addHarnessStep(
     optimize: std.builtin.OptimizeMode,
     mods: Modules,
 ) *std.Build.Step {
-    const step = b.step("harness", "Run deterministic harness smoke validation");
+    const step = b.step("harness", "Run deterministic success-only harness smoke validation");
 
     const driver_echo_exe = b.addExecutable(.{
         .name = "workspace_static_testing_driver_echo",
@@ -861,16 +861,8 @@ fn addHarnessStep(
             .name = "workspace_static_testing_sim_timer_mailbox",
         },
         .{
-            .path = "packages/static_testing/examples/swarm_sim_runner.zig",
-            .name = "workspace_static_testing_swarm_sim_runner",
-        },
-        .{
             .path = "packages/static_testing/examples/repair_liveness_basic.zig",
             .name = "workspace_static_testing_repair_liveness_basic",
-        },
-        .{
-            .path = "packages/static_testing/examples/model_sim_fixture.zig",
-            .name = "workspace_static_testing_model_sim_fixture",
         },
         .{
             .path = "packages/static_testing/examples/sim_storage_durability.zig",
@@ -887,6 +879,8 @@ fn addHarnessStep(
         },
     };
 
+    // Keep retained-failure demo examples on the `examples` surface so the
+    // supported `harness` command remains a success-only smoke validation path.
     for (harness_examples) |example| {
         const example_exe = b.addExecutable(.{
             .name = example.name,

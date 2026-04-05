@@ -100,13 +100,25 @@ Workspace for the `static_*` Zig packages.
   removed.
 - `static_collections` now has package-level `testing.model` coverage for
   `SlotMap` runtime mutation sequences, `IndexPool` handle invalidation,
-  generation-bump reuse, and exhaustion behavior, plus `Vec`
+  generation-bump reuse, and exhaustion behavior, `Vec`
   budget-aware growth, exact-capacity fallback, `NoSpaceLeft` stability,
-  append/pop order, and budget accounting, direct `SlotMap` iterator
-  handle/value visibility coverage, and shared benchmark-workflow adoption for
-  `flat_hash_map` lookup-hit and insert/remove churn review artifacts, while
-  the root surface now keeps only the collection families plus the `memory`
-  alias.
+  an explicit oversized-capacity `Overflow` contract before allocator or
+  budget side effects, append/pop order, and budget accounting, plus
+  collision-heavy `FlatHashMap`, ordered borrowed-lookup `SortedVecMap`, and
+  dense-membership `SparseSet` runtime sequences, a package-owned negative
+  compile-contract harness for the main generic `@compileError` boundaries in
+  `FlatHashMap`, `SortedVecMap`, and `MinHeap`, `SmallVec` read/reset parity
+  on top of its one-way spill contract, direct `SlotMap` iterator handle/value
+  visibility coverage including the read-only iterator path, public
+  `SortedVecMap` and `FlatHashMap` iterator surfaces with const keys and
+  mutable values where safe, additive borrowed lookup/removal helpers for the
+  map families, aligned bounded `getOrPut` plus `removeOrNull` helper surfaces
+  for the two map implementations, dual by-value or `*const`
+  comparator/hash/equality callback support across the affected map and heap
+  surfaces, `SortedVecMap` comparator-signature validation at type
+  instantiation, and shared benchmark-workflow adoption for `flat_hash_map`
+  lookup-hit and insert/remove churn review artifacts, while the root surface
+  now keeps only the collection families plus the `memory` alias.
 - `static_meta` now serves as the narrow runtime-registry downstream adopter of
   `static_testing` bounded mutation and lookup sequence review.
 - `static_profile` now has package-level integration coverage for exact mixed
@@ -146,13 +158,18 @@ Workspace for the `static_*` Zig packages.
 
 ## Common commands
 
-- `zig build docs-lint`
-- `zig build check`
-- `zig build test`
-- `zig build harness`
-- `zig build examples`
-- `zig build bench`
-- `zig build ci`
+- `zig build docs-lint`: repository docs topology and source-of-truth checks.
+- `zig build check`: compile-oriented validation across the workspace.
+- `zig build test`: primary pass/fail correctness surface for unit and
+  integration coverage.
+- `zig build harness`: success-only deterministic smoke validation for shared
+  `static_testing` harness surfaces.
+- `zig build examples`: build all examples, including retained-failure demos
+  that are intentionally kept off the `harness` smoke surface.
+- `zig build bench`: benchmark review surface; baseline comparisons report
+  regressions but do not fail the build unless a workflow opts into gating.
+- `zig build ci`: aggregate pass/fail validation over docs lint, tests, harness
+  smoke, and example builds.
 
 ## Package groups
 
