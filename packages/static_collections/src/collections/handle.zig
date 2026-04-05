@@ -4,7 +4,7 @@
 //! generation counter. The generation counter allows containers to detect stale
 //! references to slots that have been freed and reused.
 //!
-//! A null/invalid sentinel is provided via `Handle.invalid`.
+//! A null/invalid sentinel is provided via `Handle.invalid()`.
 //!
 //! Thread safety: value type; no shared state.
 const std = @import("std");

@@ -4,6 +4,10 @@
 //! cache locality of a flat array outweighs the O(N) insertion cost. Iteration is
 //! in key order.
 //!
+//! `Cmp.less` may use either `fn(a: K, b: K) bool` or
+//! `fn(a: *const K, b: *const K) bool`. Borrowed lookup helpers are provided so
+//! larger keys do not need to be copied for routine lookup and removal.
+//!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
 const testing = std.testing;
@@ -19,6 +23,7 @@ pub const Error = error{
 };
 
 pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type {
+    comptime validateLessSignature(K, Cmp);
     return struct {
         const Self = @This();
         const Entry = struct { key: K, value: V };
@@ -26,6 +31,10 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         pub const Key = K;
         pub const Value = V;
         pub const Compare = Cmp;
+        pub const GetOrPutResult = struct {
+            value_ptr: *V,
+            found_existing: bool,
+        };
         pub const Config = struct {
             initial_capacity: u32 = 0,
             budget: ?*memory.budget.Budget,
@@ -160,7 +169,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             // Manual ArrayListUnmanaged construction: std.ArrayListUnmanaged
             // does not expose a clone or init-from-buffer API, so we must set
             // .items and .capacity directly. This couples to the stdlib type's
-            // internal layout — revisit if the layout changes.
+            // internal layout. Revisit if the layout changes.
             assert(len_val <= cap);
             var result: Self = .{
                 .allocator = self.allocator,
@@ -191,20 +200,94 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             return self.entries.items.len;
         }
 
-        pub fn get(self: *Self, key: K) ?*V {
+        pub const IterEntry = struct {
+            key_ptr: *const K,
+            value_ptr: *V,
+        };
+
+        pub const ConstIterEntry = struct {
+            key_ptr: *const K,
+            value_ptr: *const V,
+        };
+
+        pub const Iterator = struct {
+            entries: []Entry,
+            index: usize = 0,
+
+            pub fn next(self: *Iterator) ?IterEntry {
+                if (self.index >= self.entries.len) return null;
+                const index = self.index;
+                self.index += 1;
+                return .{
+                    .key_ptr = &self.entries[index].key,
+                    .value_ptr = &self.entries[index].value,
+                };
+            }
+        };
+
+        pub const ConstIterator = struct {
+            entries: []const Entry,
+            index: usize = 0,
+
+            pub fn next(self: *ConstIterator) ?ConstIterEntry {
+                if (self.index >= self.entries.len) return null;
+                const index = self.index;
+                self.index += 1;
+                return .{
+                    .key_ptr = &self.entries[index].key,
+                    .value_ptr = &self.entries[index].value,
+                };
+            }
+        };
+
+        /// Returns an iterator over entries in sorted key order.
+        /// Keys stay immutable through the iterator so callers cannot break
+        /// the ordering invariant by mutating them in place.
+        pub fn iterator(self: *Self) Iterator {
             self.assertStructuralInvariants();
-            const search = self.findIndex(key);
+            return .{ .entries = self.entries.items };
+        }
+
+        /// Returns a read-only iterator over entries in sorted key order.
+        pub fn iteratorConst(self: *const Self) ConstIterator {
+            self.assertStructuralInvariants();
+            return .{ .entries = self.entries.items };
+        }
+
+        pub fn get(self: *Self, key: K) ?*V {
+            const lookup_key = key;
+            return self.getBorrowed(&lookup_key);
+        }
+
+        pub fn getBorrowed(self: *Self, key: *const K) ?*V {
+            self.assertStructuralInvariants();
+            const search = self.findIndexBorrowed(key);
             if (!search.found) return null;
             assert(search.index < self.entries.items.len);
             return &self.entries.items[search.index].value;
         }
 
         pub fn getConst(self: *const Self, key: K) ?*const V {
+            const lookup_key = key;
+            return self.getConstBorrowed(&lookup_key);
+        }
+
+        pub fn getConstBorrowed(self: *const Self, key: *const K) ?*const V {
             self.assertStructuralInvariants();
-            const search = self.findIndex(key);
+            const search = self.findIndexBorrowed(key);
             if (!search.found) return null;
             assert(search.index < self.entries.items.len);
             return &self.entries.items[search.index].value;
+        }
+
+        pub fn contains(self: *const Self, key: K) bool {
+            const lookup_key = key;
+            return self.containsBorrowed(&lookup_key);
+        }
+
+        pub fn containsBorrowed(self: *const Self, key: *const K) bool {
+            self.assertStructuralInvariants();
+            return self.findIndexBorrowed(key).found;
         }
 
         /// Resets the map to empty without releasing backing memory or budget.
@@ -218,12 +301,93 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
 
         pub fn put(self: *Self, key: K, value: V) Error!void {
             self.assertStructuralInvariants();
-            const search = self.findIndex(key);
+            const search = self.findIndexBorrowed(&key);
             if (search.found) {
                 self.entries.items[search.index].value = value;
                 self.assertFullInvariants();
                 return;
             }
+            _ = try self.insertAtSearch(search, key, value);
+            self.assertFullInvariants();
+        }
+
+        /// Returns the existing value pointer when `key` is already present, or
+        /// inserts `default_value` and returns a pointer to the new slot.
+        /// Any later structural mutation invalidates the returned pointer.
+        pub fn getOrPut(self: *Self, key: K, default_value: V) Error!GetOrPutResult {
+            self.assertStructuralInvariants();
+            const search = self.findIndexBorrowed(&key);
+            if (search.found) {
+                assert(search.index < self.entries.items.len);
+                return .{
+                    .value_ptr = &self.entries.items[search.index].value,
+                    .found_existing = true,
+                };
+            }
+
+            const value_ptr = try self.insertAtSearch(search, key, default_value);
+            self.assertFullInvariants();
+            return .{
+                .value_ptr = value_ptr,
+                .found_existing = false,
+            };
+        }
+
+        pub fn remove(self: *Self, key: K) Error!V {
+            const lookup_key = key;
+            return self.removeBorrowed(&lookup_key);
+        }
+
+        pub fn removeBorrowed(self: *Self, key: *const K) Error!V {
+            self.assertStructuralInvariants();
+            const search = self.findIndexBorrowed(key);
+            if (!search.found) return error.NotFound;
+            const old_len = self.entries.items.len;
+            assert(old_len > 0);
+            const old = self.entries.items[search.index].value;
+            if (search.index + 1 < old_len) {
+                @memmove(
+                    self.entries.items[search.index .. old_len - 1],
+                    self.entries.items[search.index + 1 .. old_len],
+                );
+            }
+            _ = self.entries.pop();
+            assert(self.entries.items.len == old_len - 1);
+            self.assertFullInvariants();
+            return old;
+        }
+
+        pub fn removeOrNull(self: *Self, key: K) ?V {
+            const lookup_key = key;
+            return self.removeOrNullBorrowed(&lookup_key);
+        }
+
+        pub fn removeOrNullBorrowed(self: *Self, key: *const K) ?V {
+            self.assertStructuralInvariants();
+            const search = self.findIndexBorrowed(key);
+            if (!search.found) return null;
+            const old_len = self.entries.items.len;
+            assert(old_len > 0);
+            const old = self.entries.items[search.index].value;
+            if (search.index + 1 < old_len) {
+                @memmove(
+                    self.entries.items[search.index .. old_len - 1],
+                    self.entries.items[search.index + 1 .. old_len],
+                );
+            }
+            _ = self.entries.pop();
+            assert(self.entries.items.len == old_len - 1);
+            self.assertFullInvariants();
+            return old;
+        }
+
+        const FindResult = struct {
+            index: usize,
+            found: bool,
+        };
+
+        fn insertAtSearch(self: *Self, search: FindResult, key: K, value: V) Error!*V {
+            assert(!search.found);
 
             // Reserve budget and backing capacity before mutating.
             const needed_capacity = std.math.add(usize, self.entries.items.len, 1) catch return error.Overflow;
@@ -251,34 +415,15 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
                 );
             }
             self.entries.items[search.index] = .{ .key = key, .value = value };
-            self.assertFullInvariants();
+            return &self.entries.items[search.index].value;
         }
-
-        pub fn remove(self: *Self, key: K) Error!V {
-            self.assertStructuralInvariants();
-            const search = self.findIndex(key);
-            if (!search.found) return error.NotFound;
-            const old_len = self.entries.items.len;
-            assert(old_len > 0);
-            const old = self.entries.items[search.index].value;
-            if (search.index + 1 < old_len) {
-                @memmove(
-                    self.entries.items[search.index .. old_len - 1],
-                    self.entries.items[search.index + 1 .. old_len],
-                );
-            }
-            _ = self.entries.pop();
-            assert(self.entries.items.len == old_len - 1);
-            self.assertFullInvariants();
-            return old;
-        }
-
-        const FindResult = struct {
-            index: usize,
-            found: bool,
-        };
 
         fn findIndex(self: *const Self, key: K) FindResult {
+            const lookup_key = key;
+            return self.findIndexBorrowed(&lookup_key);
+        }
+
+        fn findIndexBorrowed(self: *const Self, key: *const K) FindResult {
             var lo: usize = 0;
             var hi: usize = self.entries.items.len;
             // Capacity invariant: binary search range is always within allocated bounds.
@@ -287,7 +432,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             var steps: usize = 0;
             while (lo < hi and steps < max_steps) : (steps += 1) {
                 const mid = lo + (hi - lo) / 2;
-                switch (compareKeys(self.entries.items[mid].key, key)) {
+                switch (compareKeysBorrowed(&self.entries.items[mid].key, key)) {
                     .lt => lo = mid + 1,
                     .gt => hi = mid,
                     .eq => return .{ .index = mid, .found = true },
@@ -299,13 +444,21 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         }
 
         fn compareKeys(a: K, b: K) std.math.Order {
+            return compareKeysBorrowed(&a, &b);
+        }
+
+        fn compareKeysBorrowed(a: *const K, b: *const K) std.math.Order {
             if (@hasDecl(Cmp, "less")) {
-                const less_fn = Cmp.less;
-                if (less_fn(a, b)) return .lt;
-                if (less_fn(b, a)) return .gt;
+                if (lessKeys(a, b)) return .lt;
+                if (lessKeys(b, a)) return .gt;
                 return .eq;
             }
-            return std.math.order(a, b);
+            return std.math.order(a.*, b.*);
+        }
+
+        fn lessKeys(a: *const K, b: *const K) bool {
+            if (comptime cmpLessTakesBorrowed(K, Cmp)) return Cmp.less(a, b);
+            return Cmp.less(a.*, b.*);
         }
 
         /// O(1) structural check: entry count within capacity.
@@ -323,15 +476,42 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
 
             var i: usize = 1;
             while (i < list.len) : (i += 1) {
-                assert(compareKeys(list[i - 1].key, list[i].key) == .lt);
+                assert(compareKeysBorrowed(&list[i - 1].key, &list[i].key) == .lt);
             }
         }
     };
 }
 
+fn validateLessSignature(comptime K: type, comptime Cmp: type) void {
+    if (!@hasDecl(Cmp, "less")) return;
+
+    const less_info = @typeInfo(@TypeOf(Cmp.less));
+    if (less_info != .@"fn") @compileError("Cmp.less must be a function");
+    const less_fn = less_info.@"fn";
+    if (less_fn.params.len != 2) {
+        @compileError("Cmp.less must have signature `fn(a: K, b: K) bool` or `fn(a: *const K, b: *const K) bool`");
+    }
+    const p0 = less_fn.params[0].type orelse @compileError("Cmp.less parameter 0 must have a concrete type");
+    const p1 = less_fn.params[1].type orelse @compileError("Cmp.less parameter 1 must have a concrete type");
+    const ret = less_fn.return_type orelse @compileError("Cmp.less must have a concrete return type");
+    if (ret != bool) @compileError("Cmp.less must return bool");
+
+    const uses_value_keys = p0 == K and p1 == K;
+    const uses_borrowed_keys = p0 == *const K and p1 == *const K;
+    if (!uses_value_keys and !uses_borrowed_keys) {
+        @compileError("Cmp.less must have signature `fn(a: K, b: K) bool` or `fn(a: *const K, b: *const K) bool`");
+    }
+}
+
+fn cmpLessTakesBorrowed(comptime K: type, comptime Cmp: type) bool {
+    const less_info = @typeInfo(@TypeOf(Cmp.less));
+    const less_fn = less_info.@"fn";
+    return less_fn.params[0].type.? == *const K;
+}
+
 test "sorted vec map keeps deterministic key order" {
     // Goal: verify insertion order is normalized to sorted key order.
-    // Method: insert unsorted keys and assert internal order by value mapping.
+    // Method: insert unsorted keys and assert iterator order by key/value mapping.
     const Cmp = struct {};
     var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
     defer m.deinit();
@@ -339,9 +519,16 @@ test "sorted vec map keeps deterministic key order" {
     try m.put(5, 2);
     try m.put(7, 3);
     assert(m.len() == 3);
-    try testing.expectEqual(@as(u32, 2), m.entries.items[0].value);
-    try testing.expectEqual(@as(u32, 3), m.entries.items[1].value);
-    try testing.expectEqual(@as(u32, 1), m.entries.items[2].value);
+
+    const expected_keys = [_]u32{ 5, 7, 10 };
+    const expected_values = [_]u32{ 2, 3, 1 };
+    var index: usize = 0;
+    var it = m.iteratorConst();
+    while (it.next()) |entry| : (index += 1) {
+        try testing.expectEqual(expected_keys[index], entry.key_ptr.*);
+        try testing.expectEqual(expected_values[index], entry.value_ptr.*);
+    }
+    try testing.expectEqual(expected_keys.len, index);
 }
 
 test "sorted vec map put updates existing key" {
@@ -398,9 +585,84 @@ test "sorted vec map honors custom comparator" {
     try m.put(3, 30);
     try m.put(2, 20);
 
-    try testing.expectEqual(@as(u32, 3), m.entries.items[0].key);
-    try testing.expectEqual(@as(u32, 2), m.entries.items[1].key);
-    try testing.expectEqual(@as(u32, 1), m.entries.items[2].key);
+    const expected_keys = [_]u32{ 3, 2, 1 };
+    var index: usize = 0;
+    var it = m.iteratorConst();
+    while (it.next()) |entry| : (index += 1) {
+        try testing.expectEqual(expected_keys[index], entry.key_ptr.*);
+    }
+    try testing.expectEqual(expected_keys.len, index);
+}
+
+test "sorted vec map supports borrowed lookup and pointer comparator signatures" {
+    const Key = struct {
+        hi: u64,
+        lo: u64,
+        tag: u32,
+        pad: u32 = 0,
+    };
+    const PtrCmp = struct {
+        pub fn less(a: *const Key, b: *const Key) bool {
+            if (a.hi != b.hi) return a.hi < b.hi;
+            if (a.lo != b.lo) return a.lo < b.lo;
+            return a.tag < b.tag;
+        }
+    };
+
+    var m = try SortedVecMap(Key, u32, PtrCmp).init(testing.allocator, .{ .budget = null });
+    defer m.deinit();
+
+    try m.put(.{ .hi = 2, .lo = 0, .tag = 9 }, 20);
+    try m.put(.{ .hi = 1, .lo = 5, .tag = 7 }, 10);
+
+    const lookup = Key{ .hi = 1, .lo = 5, .tag = 7 };
+    try testing.expect(m.containsBorrowed(&lookup));
+    try testing.expectEqual(@as(u32, 10), m.getConstBorrowed(&lookup).?.*);
+    try testing.expectEqual(@as(u32, 10), try m.removeBorrowed(&lookup));
+    try testing.expect(!m.containsBorrowed(&lookup));
+}
+
+test "sorted vec map iterator allows value mutation while keeping keys const" {
+    const Cmp = struct {};
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
+    defer m.deinit();
+
+    try m.put(1, 10);
+    try m.put(2, 20);
+
+    var it = m.iterator();
+    while (it.next()) |entry| {
+        entry.value_ptr.* += 1;
+    }
+
+    try testing.expectEqual(@as(u32, 11), m.getConst(1).?.*);
+    try testing.expectEqual(@as(u32, 21), m.getConst(2).?.*);
+}
+
+test "sorted vec map getOrPut reports whether insertion happened" {
+    const Cmp = struct {};
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
+    defer m.deinit();
+
+    const inserted = try m.getOrPut(4, 40);
+    try testing.expect(!inserted.found_existing);
+    inserted.value_ptr.* += 1;
+
+    const existing = try m.getOrPut(4, 99);
+    try testing.expect(existing.found_existing);
+    try testing.expectEqual(@as(u32, 41), existing.value_ptr.*);
+    try testing.expectEqual(@as(usize, 1), m.len());
+}
+
+test "sorted vec map removeOrNull keeps strict remove available" {
+    const Cmp = struct {};
+    var m = try SortedVecMap(u32, u32, Cmp).init(testing.allocator, .{ .budget = null });
+    defer m.deinit();
+
+    try m.put(1, 10);
+    try testing.expectEqual(@as(?u32, 10), m.removeOrNull(1));
+    try testing.expectEqual(@as(?u32, null), m.removeOrNull(1));
+    try testing.expectError(error.NotFound, m.remove(1));
 }
 
 test "sorted vec map clear resets length and allows reuse" {

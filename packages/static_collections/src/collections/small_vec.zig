@@ -5,9 +5,10 @@
 //!
 //! Spill is permanent: once heap-allocated, the SmallVec remains heap-backed
 //! regardless of subsequent element count. `shrinkToFit()` may still reduce the
-//! spilled Vec's reserved capacity, but it never migrates elements back into the
-//! inline buffer. Use `ensureCapacity` during setup to pre-allocate if the
-//! expected size is known to exceed inline capacity.
+//! spilled Vec's reserved capacity, including shrinking an empty spilled Vec to
+//! zero capacity, but it never migrates elements back into the inline buffer.
+//! Use `ensureCapacity` during setup to pre-allocate if the expected size is
+//! known to exceed inline capacity.
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
@@ -61,10 +62,35 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             return self.inline_len;
         }
 
+        pub fn capacity(self: *const Self) usize {
+            self.assertInvariants();
+            if (self.spill) |spill| return spill.capacity();
+            return InlineN;
+        }
+
         pub fn items(self: *Self) []T {
             self.assertInvariants();
             if (self.spill) |*spill| return spill.items();
             return self.inline_items[0..self.inline_len];
+        }
+
+        pub fn itemsConst(self: *const Self) []const T {
+            self.assertInvariants();
+            if (self.spill) |spill| return spill.itemsConst();
+            return self.inline_items[0..self.inline_len];
+        }
+
+        /// Resets the logical length to zero without undoing a prior spill.
+        /// When already spilled, the heap allocation stays owned by the SmallVec.
+        pub fn clear(self: *Self) void {
+            self.assertInvariants();
+            if (self.spill) |*spill| {
+                spill.clear();
+            } else {
+                self.inline_len = 0;
+            }
+            assert(self.len() == 0);
+            self.assertInvariants();
         }
 
         pub fn pop(self: *Self) ?T {
@@ -176,9 +202,10 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
             assert(self.inline_len <= InlineN);
             if (self.spill) |spill| {
                 // Once spilled, the heap-backed Vec becomes the only authoritative
-                // storage and the inline prefix is retired.
+                // storage and the inline prefix is retired. An empty spilled Vec
+                // may legitimately shrink to zero capacity after shrinkToFit().
                 assert(self.inline_len == 0);
-                assert(spill.len() > 0 or spill.capacity() > 0);
+                assert(spill.capacity() >= spill.len());
             }
         }
     };
@@ -281,4 +308,66 @@ test "small vec ensureCapacity returns Overflow for oversized public requests" {
     defer s.deinit();
 
     try testing.expectError(error.Overflow, s.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));
+}
+
+test "small vec exposes const items and capacity across inline and spill storage" {
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
+    defer s.deinit();
+
+    try testing.expectEqual(@as(usize, 2), s.capacity());
+    try s.append(4);
+    try s.append(5);
+    try testing.expectEqualSlices(u8, &.{ 4, 5 }, s.itemsConst());
+
+    try s.append(6);
+    try testing.expect(s.capacity() >= s.len());
+    try testing.expectEqualSlices(u8, &.{ 4, 5, 6 }, s.itemsConst());
+}
+
+test "small vec clear resets length while preserving the spill state" {
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
+    defer s.deinit();
+
+    try s.append(1);
+    try s.append(2);
+    s.clear();
+    try testing.expectEqual(@as(usize, 0), s.len());
+    try testing.expectEqual(@as(usize, 2), s.capacity());
+
+    try s.append(3);
+    try s.append(4);
+    try s.append(5);
+    try testing.expect(s.spill != null);
+    const spill_capacity = s.capacity();
+
+    s.clear();
+    try testing.expectEqual(@as(usize, 0), s.len());
+    try testing.expect(s.spill != null);
+    try testing.expectEqual(spill_capacity, s.capacity());
+
+    try s.append(6);
+    try testing.expectEqual(@as(usize, 1), s.len());
+    try testing.expectEqual(@as(u8, 6), s.itemsConst()[0]);
+}
+
+test "small vec spilled empty shrinkToFit keeps the one-way spill state reusable" {
+    var s = SmallVec(u8, 2).init(testing.allocator, .{ .budget = null });
+    defer s.deinit();
+
+    try s.append(1);
+    try s.append(2);
+    try s.append(3);
+    try testing.expect(s.spill != null);
+
+    s.clear();
+    try testing.expectEqual(@as(usize, 0), s.len());
+
+    s.shrinkToFit();
+    try testing.expect(s.spill != null);
+    try testing.expectEqual(@as(usize, 0), s.capacity());
+
+    try s.append(4);
+    try testing.expect(s.spill != null);
+    try testing.expectEqual(@as(usize, 1), s.len());
+    try testing.expectEqual(@as(u8, 4), s.itemsConst()[0]);
 }

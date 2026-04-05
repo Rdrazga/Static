@@ -181,7 +181,7 @@ pub fn SlotMap(comptime T: type) type {
             // Manual ArrayListUnmanaged construction: std.ArrayListUnmanaged
             // does not expose a clone or init-from-buffer API, so we must set
             // .items and .capacity directly. This couples to the stdlib type's
-            // internal layout — revisit if the layout changes.
+            // internal layout. Revisit if the layout changes.
             var result: Self = .{
                 .allocator = self.allocator,
                 .budget = self.budget,
@@ -272,7 +272,7 @@ pub fn SlotMap(comptime T: type) type {
         /// Resets the slot map to empty without releasing backing memory or
         /// budget reservation. All existing handles become stale (generations
         /// are bumped). The free list is rebuilt in forward order so that
-        /// free_head points to the highest index — subsequent inserts reuse
+        /// free_head points to the highest index. Subsequent inserts reuse
         /// slots in descending index order (LIFO).
         pub fn clear(self: *Self) void {
             self.assertStructuralInvariants();
@@ -322,11 +322,36 @@ pub fn SlotMap(comptime T: type) type {
             value_ptr: *T,
         };
 
+        pub const ConstIterEntry = struct {
+            handle: Handle,
+            value_ptr: *const T,
+        };
+
         pub const Iterator = struct {
             slots: []Slot,
             index: usize = 0,
 
             pub fn next(self: *Iterator) ?IterEntry {
+                while (self.index < self.slots.len) {
+                    const i = self.index;
+                    self.index += 1;
+                    if (self.slots[i].occupied) {
+                        assert(i <= std.math.maxInt(u32));
+                        return .{
+                            .handle = .{ .index = @intCast(i), .generation = self.slots[i].generation },
+                            .value_ptr = &self.slots[i].value,
+                        };
+                    }
+                }
+                return null;
+            }
+        };
+
+        pub const ConstIterator = struct {
+            slots: []const Slot,
+            index: usize = 0,
+
+            pub fn next(self: *ConstIterator) ?ConstIterEntry {
                 while (self.index < self.slots.len) {
                     const i = self.index;
                     self.index += 1;
@@ -349,6 +374,17 @@ pub fn SlotMap(comptime T: type) type {
         /// invalidates the iterator and all `value_ptr` pointers it has yielded.
         /// Restart iteration after any structural change.
         pub fn iterator(self: *Self) Iterator {
+            self.assertStructuralInvariants();
+            return .{ .slots = self.slots.items };
+        }
+
+        /// Returns a read-only iterator over all live entries as
+        /// (Handle, *const T) pairs.
+        ///
+        /// The const iterator borrows the current slot slice under the same
+        /// invalidation rules as `iterator()`: any structural mutation
+        /// invalidates the iterator and every `value_ptr` it has yielded.
+        pub fn iteratorConst(self: *const Self) ConstIterator {
             self.assertStructuralInvariants();
             return .{ .slots = self.slots.items };
         }
@@ -513,6 +549,28 @@ test "slot map iterator yields all live entries" {
     }
     try testing.expectEqual(@as(usize, 2), count);
     try testing.expectEqual(@as(u32, 40), sum);
+}
+
+test "slot map const iterator yields live entries without mutable access" {
+    var sm = try SlotMap(u32).init(testing.allocator, .{ .budget = null });
+    defer sm.deinit();
+
+    _ = try sm.insert(11);
+    const removed = try sm.insert(22);
+    _ = try sm.insert(33);
+    _ = try sm.remove(removed);
+
+    const const_sm: *const SlotMap(u32) = &sm;
+    var it = const_sm.iteratorConst();
+    var sum: u32 = 0;
+    var count: usize = 0;
+    while (it.next()) |entry| {
+        sum += entry.value_ptr.*;
+        try testing.expect(const_sm.getConst(entry.handle) != null);
+        count += 1;
+    }
+    try testing.expectEqual(@as(usize, 2), count);
+    try testing.expectEqual(@as(u32, 44), sum);
 }
 
 test "slot map budget tracks actual capacity" {

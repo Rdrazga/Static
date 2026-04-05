@@ -38,7 +38,7 @@ pub const SparseSet = struct {
         if (config.universe_size == 0) return error.InvalidConfig;
         if (config.universe_size > std.math.maxInt(u32)) return error.InvalidConfig;
 
-        const sparse_bytes = std.math.mul(usize, config.universe_size, @sizeOf(u32)) catch return error.InvalidConfig;
+        const sparse_bytes = std.math.mul(usize, config.universe_size, @sizeOf(u32)) catch return error.Overflow;
         if (config.budget) |budget| {
             budget.tryReserve(sparse_bytes) catch |err| switch (err) {
                 error.NoSpaceLeft => return error.NoSpaceLeft,

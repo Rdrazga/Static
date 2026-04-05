@@ -17,9 +17,9 @@ const assert = std.debug.assert;
 pub fn FixedVec(comptime T: type, comptime N: usize) type {
     comptime {
         // A zero-capacity FixedVec is always full and useless as a container.
-        assert(N > 0);
+        if (N == 0) @compileError("FixedVec requires at least one element of capacity.");
         // max_capacity is stored as u32; reject values that would overflow.
-        if (N > std.math.maxInt(u32)) @compileError("FixedVec capacity N exceeds u32 range");
+        if (N > std.math.maxInt(u32)) @compileError("FixedVec capacity N exceeds u32 range.");
     }
 
     return struct {

@@ -4,6 +4,10 @@
 //! Budget to enforce per-subsystem memory caps. Capacity growth is controlled by the
 //! configured growth strategy.
 //!
+//! Public capacity requests are bounded to `u32` elements even though the read-only
+//! `len()` / `capacity()` accessors report `usize`. This keeps the budgeted and
+//! non-budgeted growth paths on the same stable operating-error contract.
+//!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
 const testing = std.testing;
@@ -36,6 +40,8 @@ pub fn Vec(comptime T: type) type {
         budget: ?*memory.budget.Budget,
         budget_reserved_capacity: u32 = 0,
         storage: std.ArrayListUnmanaged(T) = .{},
+
+        const max_capacity_supported: usize = std.math.maxInt(u32);
 
         pub fn init(allocator: std.mem.Allocator, config: Config) Error!Self {
             var self: Self = .{
@@ -92,15 +98,17 @@ pub fn Vec(comptime T: type) type {
         }
 
         /// Bulk-append a slice of items without allocating. The caller must have
-        /// already reserved sufficient capacity via `ensureCapacity`. This keeps
-        /// all storage field access inside Vec, avoiding direct coupling to
-        /// ArrayListUnmanaged internals from external callers.
+        /// already reserved sufficient capacity via `ensureCapacity`. Overlap is
+        /// allowed, so callers may append from a slice borrowed from this same
+        /// Vec as long as no reallocation is needed. This keeps all storage field
+        /// access inside Vec, avoiding direct coupling to ArrayListUnmanaged
+        /// internals from external callers.
         pub fn appendSliceAssumeCapacity(self: *Self, src: []const T) void {
             self.assertInvariants();
             const before_len = self.storage.items.len;
             assert(self.storage.capacity >= before_len + src.len);
             const dst = self.storage.items.ptr;
-            @memcpy(dst[before_len..][0..src.len], src);
+            @memmove(dst[before_len..][0..src.len], src);
             self.storage.items.len = before_len + src.len;
             assert(self.storage.items.len == before_len + src.len);
             self.assertInvariants();
@@ -114,6 +122,7 @@ pub fn Vec(comptime T: type) type {
         /// when the remaining budget cannot afford the geometric step.
         pub fn ensureCapacity(self: *Self, n: usize) Error!void {
             self.assertInvariants();
+            if (n > max_capacity_supported) return error.Overflow;
             _ = bytesForCapacity(n) catch return error.Overflow;
             if (self.budget) |budget| {
                 if (n <= self.budget_reserved_capacity) return;
@@ -136,11 +145,11 @@ pub fn Vec(comptime T: type) type {
                     budget.release(delta);
                     return error.OutOfMemory;
                 };
-                // chosen_capacity is bounded by the usize → u32 narrowing assertion below because
+                // chosen_capacity is bounded by the usize to u32 narrowing assertion below because
                 // bytesForCapacity already guards overflow at the top of ensureCapacity, so any
                 // capacity that passes that check fits in a usize; the u32 bound is tighter and
                 // is enforced here explicitly before the cast.
-                assert(chosen_capacity <= std.math.maxInt(u32));
+                assert(chosen_capacity <= max_capacity_supported);
                 self.budget_reserved_capacity = @intCast(chosen_capacity);
                 assert(self.storage.capacity == chosen_capacity);
                 self.assertInvariants();
@@ -333,7 +342,7 @@ test "vec budget exhaustion returns NoSpaceLeft" {
     var v = try Vec(u8).init(testing.allocator, .{ .budget = &budget });
     defer v.deinit();
     try v.append(1);
-    // Second append requires more than 1 byte budget — should be NoSpaceLeft.
+    // Second append requires more than 1 byte budget and should fail cleanly.
     try testing.expectError(error.NoSpaceLeft, v.append(2));
 }
 
@@ -403,6 +412,20 @@ test "vec ensureCapacity detects element-size overflow" {
     try testing.expectError(error.Overflow, v.ensureCapacity(max_count + 1));
 }
 
+test "vec ensureCapacity rejects requests above the supported public capacity bound" {
+    // Goal: keep budgeted and non-budgeted growth on the same stable overflow contract.
+    // Method: request more than `u32` elements in both modes and assert Overflow before allocation.
+    var plain = try Vec(u8).init(testing.allocator, .{ .budget = null });
+    defer plain.deinit();
+    try testing.expectError(error.Overflow, plain.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));
+
+    var budget = try memory.budget.Budget.init(64);
+    var budgeted = try Vec(u8).init(testing.allocator, .{ .budget = &budget });
+    defer budgeted.deinit();
+    try testing.expectError(error.Overflow, budgeted.ensureCapacity(@as(usize, std.math.maxInt(u32)) + 1));
+    try testing.expectEqual(@as(u64, 0), budget.used());
+}
+
 test "vec clone produces independent copy" {
     // Goal: verify clone creates a separate copy; mutations are independent.
     // Method: clone, mutate clone, verify original unchanged.
@@ -419,6 +442,22 @@ test "vec clone produces independent copy" {
     try c.append(30);
     try testing.expectEqual(@as(usize, 3), c.len());
     try testing.expectEqual(@as(usize, 2), v.len());
+}
+
+test "vec appendSliceAssumeCapacity supports self-alias append with reserved capacity" {
+    var v = try Vec(u32).init(testing.allocator, .{ .budget = null });
+    defer v.deinit();
+
+    try v.append(1);
+    try v.append(2);
+    try v.append(3);
+    try v.ensureCapacity(6);
+
+    const src = v.itemsConst();
+    v.appendSliceAssumeCapacity(src);
+
+    try testing.expectEqual(@as(usize, 6), v.len());
+    try testing.expectEqualSlices(u32, &.{ 1, 2, 3, 1, 2, 3 }, v.itemsConst());
 }
 
 test "vec const item access is read-only" {

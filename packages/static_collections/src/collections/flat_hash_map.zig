@@ -4,13 +4,16 @@
 //!
 //! Uses linear probing with tombstone deletion. Capacity is always a power of two.
 //! The optional `Ctx` type may provide `hash(key: K, seed: u64) u64` and/or
-//! `eql(a: K, b: K) bool`; both are validated at comptime. Missing declarations
-//! fall back to wyhash and `std.meta.eql` respectively.
+//! `eql(a: K, b: K) bool`, or borrowed forms using `*const K`; both are
+//! validated at comptime. Missing declarations fall back to wyhash and
+//! `std.meta.eql` respectively.
 //!
-//! The default hash path uses `std.mem.asBytes(&key)`. Composite key types with
-//! padding in their in-memory representation must provide a custom `Ctx.hash`
-//! to avoid padding-dependent hash instability. Primitive key types (`u32`,
-//! `u64`, etc.) have no padding and work correctly with the default.
+//! The default hash path uses `std.mem.asBytes(&key)`. Key types whose raw byte
+//! representation may differ across semantically equal values, such as padded
+//! composites or union-shaped payloads, must provide a custom `Ctx.hash` to
+//! normalize the relevant fields explicitly. Primitive key types (`u32`, `u64`,
+//! etc.) have stable raw-byte representations and work correctly with the
+//! default.
 //!
 //! Thread safety: none. External synchronization required.
 const std = @import("std");
@@ -38,62 +41,77 @@ const SlotState = enum(u8) {
 /// with correct arity. Called comptime at the top of `FlatHashMap` to give a
 /// clear error message instead of a cryptic missing-field type error.
 fn validateCtx(comptime K: type, comptime Ctx: type) void {
-    if (!@hasDecl(Ctx, "hash") and hasDefaultHashPaddingRisk(K)) {
+    const BorrowedKey = *const K;
+    if (!@hasDecl(Ctx, "hash") and hasDefaultHashRepresentationRisk(K)) {
         @compileError(
             "FlatHashMap default hashing cannot safely hash key type `" ++
                 @typeName(K) ++
-                "` because its raw byte representation contains padding; provide Ctx.hash",
+                "` because its raw byte representation is not stable across semantically equal values; provide Ctx.hash",
         );
     }
-    // If Ctx declares `hash`, it must be fn(key: K, seed: u64) u64.
+    // If Ctx declares `hash`, it must use either a value or borrowed key.
     if (@hasDecl(Ctx, "hash")) {
         const hash_info = @typeInfo(@TypeOf(Ctx.hash));
         if (hash_info != .@"fn") @compileError("Ctx.hash must be a function");
         const hfn = hash_info.@"fn";
         if (hfn.params.len != 2) @compileError(
-            "Ctx.hash must have signature `fn(key: K, seed: u64) u64` (two parameters)",
+            "Ctx.hash must have signature `fn(key: K, seed: u64) u64` or `fn(key: *const K, seed: u64) u64`",
         );
         const hp0 = hfn.params[0].type orelse @compileError("Ctx.hash parameter 0 must have a concrete type");
-        if (hp0 != K) @compileError("Ctx.hash first parameter must be key type K");
+        if (hp0 != K and hp0 != BorrowedKey) {
+            @compileError("Ctx.hash first parameter must be key type K or *const K");
+        }
         const hp1 = hfn.params[1].type orelse @compileError("Ctx.hash parameter 1 must have a concrete type");
         if (hp1 != u64) @compileError("Ctx.hash second parameter must be u64");
         const hret = hfn.return_type orelse @compileError("Ctx.hash must have a concrete return type");
         if (hret != u64) @compileError("Ctx.hash must return u64");
     }
-    // If Ctx declares `eql`, it must be fn(a: K, b: K) bool.
+    // If Ctx declares `eql`, it must use either a value or borrowed key pair.
     if (@hasDecl(Ctx, "eql")) {
         const eql_info = @typeInfo(@TypeOf(Ctx.eql));
         if (eql_info != .@"fn") @compileError("Ctx.eql must be a function");
         const efn = eql_info.@"fn";
         if (efn.params.len != 2) @compileError(
-            "Ctx.eql must have signature `fn(a: K, b: K) bool` (two parameters)",
+            "Ctx.eql must have signature `fn(a: K, b: K) bool` or `fn(a: *const K, b: *const K) bool`",
         );
         const ep0 = efn.params[0].type orelse @compileError("Ctx.eql parameter 0 must have a concrete type");
-        if (ep0 != K) @compileError("Ctx.eql first parameter must be key type K");
         const ep1 = efn.params[1].type orelse @compileError("Ctx.eql parameter 1 must have a concrete type");
-        if (ep1 != K) @compileError("Ctx.eql second parameter must be key type K");
         const eret = efn.return_type orelse @compileError("Ctx.eql must have a concrete return type");
         if (eret != bool) @compileError("Ctx.eql must return bool");
+        const uses_value_keys = ep0 == K and ep1 == K;
+        const uses_borrowed_keys = ep0 == BorrowedKey and ep1 == BorrowedKey;
+        if (!uses_value_keys and !uses_borrowed_keys) {
+            @compileError("Ctx.eql parameters must both be K or both be *const K");
+        }
     }
 }
 
 /// Comptime-only recursion bounded by the finite type graph. Each recursive
 /// call descends one level in the type tree; Zig types form a DAG with no
 /// cycles, so termination is guaranteed. TigerStyle 3.1 exception.
-fn hasDefaultHashPaddingRisk(comptime T: type) bool {
+fn hasDefaultHashRepresentationRisk(comptime T: type) bool {
     return switch (@typeInfo(T)) {
         .@"struct" => |info| blk: {
-            if (info.layout == .@"packed") break :blk false;
-
+            if (info.layout == .@"packed") {
+                inline for (info.fields) |field| {
+                    if (field.is_comptime) continue;
+                    if (hasDefaultHashRepresentationRisk(field.type)) break :blk true;
+                }
+                break :blk false;
+            }
             var runtime_fields_size: usize = 0;
             inline for (info.fields) |field| {
                 if (field.is_comptime) continue;
-                if (hasDefaultHashPaddingRisk(field.type)) break :blk true;
+                if (hasDefaultHashRepresentationRisk(field.type)) break :blk true;
                 runtime_fields_size += @sizeOf(field.type);
             }
             break :blk runtime_fields_size != @sizeOf(T);
         },
-        .array => |info| hasDefaultHashPaddingRisk(info.child),
+        .array => |info| hasDefaultHashRepresentationRisk(info.child),
+        .vector => |info| hasDefaultHashRepresentationRisk(info.child),
+        .optional => |info| hasDefaultHashRepresentationRisk(info.child),
+        .error_union => |info| hasDefaultHashRepresentationRisk(info.payload),
+        .@"union" => true,
         else => false,
     };
 }
@@ -106,6 +124,10 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         pub const Key = K;
         pub const Value = V;
         pub const Context = Ctx;
+        pub const GetOrPutResult = struct {
+            value_ptr: *V,
+            found_existing: bool,
+        };
         pub const Config = struct {
             /// Requested initial slot count. Clamped to a minimum of 8 and
             /// rounded up to the next power of two.
@@ -228,12 +250,12 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             const new_states = self.allocator.alloc(SlotState, cap) catch return error.OutOfMemory;
             errdefer self.allocator.free(new_states);
 
-            // Copy all states and all entries unconditionally. Copying
-            // tombstone/empty entries avoids leaving uninitialized memory in
-            // new_entries (buffer bleed, TigerStyle 5.6) and is simpler than
-            // per-element branching.
             @memcpy(new_states, self.states);
-            @memcpy(new_entries, self.entries);
+            var index: usize = 0;
+            while (index < cap) : (index += 1) {
+                if (self.states[index] != .occupied) continue;
+                new_entries[index] = self.entries[index];
+            }
 
             var result: Self = .{
                 .allocator = self.allocator,
@@ -260,6 +282,74 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             return self.entries.len;
         }
 
+        pub const IterEntry = struct {
+            key_ptr: *const K,
+            value_ptr: *V,
+        };
+
+        pub const ConstIterEntry = struct {
+            key_ptr: *const K,
+            value_ptr: *const V,
+        };
+
+        pub const Iterator = struct {
+            entries: []Entry,
+            states: []const SlotState,
+            index: usize = 0,
+
+            pub fn next(self: *Iterator) ?IterEntry {
+                while (self.index < self.states.len) {
+                    const index = self.index;
+                    self.index += 1;
+                    if (self.states[index] != .occupied) continue;
+                    return .{
+                        .key_ptr = &self.entries[index].key,
+                        .value_ptr = &self.entries[index].value,
+                    };
+                }
+                return null;
+            }
+        };
+
+        pub const ConstIterator = struct {
+            entries: []const Entry,
+            states: []const SlotState,
+            index: usize = 0,
+
+            pub fn next(self: *ConstIterator) ?ConstIterEntry {
+                while (self.index < self.states.len) {
+                    const index = self.index;
+                    self.index += 1;
+                    if (self.states[index] != .occupied) continue;
+                    return .{
+                        .key_ptr = &self.entries[index].key,
+                        .value_ptr = &self.entries[index].value,
+                    };
+                }
+                return null;
+            }
+        };
+
+        /// Returns an iterator over occupied entries only.
+        /// Keys stay immutable through the iterator so callers cannot break
+        /// the probing and stored-hash invariants by mutating them in place.
+        pub fn iterator(self: *Self) Iterator {
+            self.assertInvariants();
+            return .{
+                .entries = self.entries,
+                .states = self.states,
+            };
+        }
+
+        /// Returns a read-only iterator over occupied entries only.
+        pub fn iteratorConst(self: *const Self) ConstIterator {
+            self.assertInvariants();
+            return .{
+                .entries = self.entries,
+                .states = self.states,
+            };
+        }
+
         /// Resets the map to empty without releasing backing memory or budget.
         /// Capacity and budget remain unchanged.
         pub fn clear(self: *Self) void {
@@ -271,8 +361,13 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         }
 
         pub fn get(self: *Self, key: K) ?*V {
+            const lookup_key = key;
+            return self.getBorrowed(&lookup_key);
+        }
+
+        pub fn getBorrowed(self: *Self, key: *const K) ?*V {
             self.assertInvariants();
-            const h = hashKey(key, self.seed);
+            const h = hashKeyBorrowed(key, self.seed);
             const slot = self.findSlot(key, h);
             if (!slot.found) return null;
             assert(slot.index < self.entries.len);
@@ -280,39 +375,81 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         }
 
         pub fn getConst(self: *const Self, key: K) ?*const V {
+            const lookup_key = key;
+            return self.getConstBorrowed(&lookup_key);
+        }
+
+        pub fn getConstBorrowed(self: *const Self, key: *const K) ?*const V {
             self.assertInvariants();
-            const h = hashKey(key, self.seed);
+            const h = hashKeyBorrowed(key, self.seed);
             const slot = self.findSlot(key, h);
             if (!slot.found) return null;
             assert(slot.index < self.entries.len);
             return &self.entries[slot.index].value;
         }
 
+        pub fn contains(self: *const Self, key: K) bool {
+            const lookup_key = key;
+            return self.containsBorrowed(&lookup_key);
+        }
+
+        pub fn containsBorrowed(self: *const Self, key: *const K) bool {
+            self.assertInvariants();
+            const h = hashKeyBorrowed(key, self.seed);
+            return self.findExistingSlot(key, h) != null;
+        }
+
         pub fn put(self: *Self, key: K, value: V) Error!void {
             self.assertInvariants();
             const before_count = self.count;
-            const h = hashKey(key, self.seed);
-            if (self.findExistingSlot(key, h)) |index| {
+            const h = hashKeyBorrowed(&key, self.seed);
+            if (self.findExistingSlot(&key, h)) |index| {
                 self.entries[index].value = value;
                 assert(self.count == before_count);
                 self.assertInvariants();
                 return;
             }
             try self.ensureInsertCapacity();
-            const slot = self.findSlot(key, h);
+            const slot = self.findSlot(&key, h);
             assert(!slot.found);
             self.insertAt(slot.index, key, value, h);
             assert(self.count == before_count + 1);
             self.assertInvariants();
         }
 
+        /// Returns the existing value pointer when `key` is already present, or
+        /// inserts `default_value` and returns a pointer to the new slot.
+        /// Any later structural mutation invalidates the returned pointer.
+        pub fn getOrPut(self: *Self, key: K, default_value: V) Error!GetOrPutResult {
+            self.assertInvariants();
+            const h = hashKeyBorrowed(&key, self.seed);
+            const slot_before_growth = self.findSlot(&key, h);
+            if (slot_before_growth.found) {
+                assert(slot_before_growth.index < self.entries.len);
+                return .{
+                    .value_ptr = &self.entries[slot_before_growth.index].value,
+                    .found_existing = true,
+                };
+            }
+
+            try self.ensureInsertCapacity();
+            const slot = self.findSlot(&key, h);
+            assert(!slot.found);
+            self.insertAt(slot.index, key, default_value, h);
+            self.assertInvariants();
+            return .{
+                .value_ptr = &self.entries[slot.index].value,
+                .found_existing = false,
+            };
+        }
+
         pub fn putNoClobber(self: *Self, key: K, value: V) (error{AlreadyExists} || Error)!void {
             self.assertInvariants();
             const before_count = self.count;
-            const h = hashKey(key, self.seed);
-            if (self.findExistingSlot(key, h) != null) return error.AlreadyExists;
+            const h = hashKeyBorrowed(&key, self.seed);
+            if (self.findExistingSlot(&key, h) != null) return error.AlreadyExists;
             try self.ensureInsertCapacity();
-            const slot = self.findSlot(key, h);
+            const slot = self.findSlot(&key, h);
             assert(!slot.found);
             self.insertAt(slot.index, key, value, h);
             assert(self.count == before_count + 1);
@@ -320,13 +457,42 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         }
 
         pub fn remove(self: *Self, key: K) Error!V {
+            const lookup_key = key;
+            return self.removeBorrowed(&lookup_key);
+        }
+
+        pub fn removeBorrowed(self: *Self, key: *const K) Error!V {
             self.assertInvariants();
             if (self.entries.len == 0) return error.NotFound;
             const before_count = self.count;
             const before_tombstones = self.tombstones;
-            const h = hashKey(key, self.seed);
+            const h = hashKeyBorrowed(key, self.seed);
             const slot = self.findSlot(key, h);
             if (!slot.found) return error.NotFound;
+
+            const out = self.entries[slot.index].value;
+            self.states[slot.index] = .tombstone;
+            self.count -= 1;
+            self.tombstones += 1;
+            assert(self.count + 1 == before_count);
+            assert(self.tombstones == before_tombstones + 1);
+            self.assertInvariants();
+            return out;
+        }
+
+        pub fn removeOrNull(self: *Self, key: K) ?V {
+            const lookup_key = key;
+            return self.removeOrNullBorrowed(&lookup_key);
+        }
+
+        pub fn removeOrNullBorrowed(self: *Self, key: *const K) ?V {
+            self.assertInvariants();
+            if (self.entries.len == 0) return null;
+            const before_count = self.count;
+            const before_tombstones = self.tombstones;
+            const h = hashKeyBorrowed(key, self.seed);
+            const slot = self.findSlot(key, h);
+            if (!slot.found) return null;
 
             const out = self.entries[slot.index].value;
             self.states[slot.index] = .tombstone;
@@ -426,7 +592,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             while (i < old_len) : (i += 1) {
                 if (old_states[i] != .occupied) continue;
                 const entry = old_entries[i];
-                const slot = self.findSlot(entry.key, entry.hash);
+                const slot = self.findSlot(&entry.key, entry.hash);
                 self.insertAt(slot.index, entry.key, entry.value, entry.hash);
             }
             assert(self.count == old_count);
@@ -442,7 +608,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             found: bool,
         };
 
-        fn findExistingSlot(self: *const Self, key: K, h: u64) ?usize {
+        fn findExistingSlot(self: *const Self, key: *const K, h: u64) ?usize {
             assert(self.entries.len == self.states.len);
             assert(self.entries.len > 0);
             assert(std.math.isPowerOfTwo(self.entries.len));
@@ -454,8 +620,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
                     .empty => return null,
                     .tombstone => {},
                     .occupied => {
-                        const entry = self.entries[idx];
-                        if (entry.hash == h and eqlKey(entry.key, key)) return idx;
+                        if (self.entries[idx].hash == h and eqlKeyBorrowed(&self.entries[idx].key, key)) return idx;
                     },
                 }
                 idx = (idx + 1) & mask;
@@ -463,7 +628,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             return null;
         }
 
-        fn findSlot(self: *const Self, key: K, h: u64) SlotSearch {
+        fn findSlot(self: *const Self, key: *const K, h: u64) SlotSearch {
             assert(self.entries.len == self.states.len);
             assert(self.entries.len > 0);
             assert(std.math.isPowerOfTwo(self.entries.len));
@@ -485,8 +650,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
                         if (first_tombstone == null) first_tombstone = idx;
                     },
                     .occupied => {
-                        const entry = self.entries[idx];
-                        if (entry.hash == h and eqlKey(entry.key, key)) {
+                        if (self.entries[idx].hash == h and eqlKeyBorrowed(&self.entries[idx].key, key)) {
                             return .{ .index = idx, .found = true };
                         }
                     },
@@ -495,7 +659,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             }
             // A full probe with no empty slot and no matching key means every slot is
             // either occupied (by a different key) or a tombstone. If first_tombstone is
-            // set, reuse it. If not, the table is entirely occupied with distinct keys —
+            // set, reuse it. If not, the table is entirely occupied with distinct keys.
             // a state that cannot occur when insertions go through ensureInsertCapacity,
             // because the load-factor guard (count + tombstones + 1 <= capacity * load%)
             // prevents the table from ever being simultaneously full and tombstone-free.
@@ -505,25 +669,55 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
         }
 
         fn hashKey(key: K, seed: u64) u64 {
+            return hashKeyBorrowed(&key, seed);
+        }
+
+        fn hashKeyBorrowed(key: *const K, seed: u64) u64 {
             // Ctx.hash presence and arity are validated at comptime in validateCtx.
             if (comptime @hasDecl(Ctx, "hash")) {
-                return Ctx.hash(key, seed);
+                if (comptime ctxHashTakesBorrowed()) {
+                    return Ctx.hash(key, seed);
+                }
+                return Ctx.hash(key.*, seed);
             }
-            return defaultHash(key, seed);
+            return defaultHashBorrowed(key, seed);
         }
 
         fn eqlKey(a: K, b: K) bool {
+            return eqlKeyBorrowed(&a, &b);
+        }
+
+        fn eqlKeyBorrowed(a: *const K, b: *const K) bool {
             // Ctx.eql presence and arity are validated at comptime in validateCtx.
             if (comptime @hasDecl(Ctx, "eql")) {
-                return Ctx.eql(a, b);
+                if (comptime ctxEqlTakesBorrowed()) {
+                    return Ctx.eql(a, b);
+                }
+                return Ctx.eql(a.*, b.*);
             }
-            return std.meta.eql(a, b);
+            return std.meta.eql(a.*, b.*);
         }
 
         fn defaultHash(key: K, seed: u64) u64 {
+            return defaultHashBorrowed(&key, seed);
+        }
+
+        fn defaultHashBorrowed(key: *const K, seed: u64) u64 {
             var ctx = static_hash.wyhash.Wyhash64.init(seed);
-            ctx.update(std.mem.asBytes(&key));
+            ctx.update(std.mem.asBytes(key));
             return ctx.final();
+        }
+
+        fn ctxHashTakesBorrowed() bool {
+            const hash_info = @typeInfo(@TypeOf(Ctx.hash));
+            const hash_fn = hash_info.@"fn";
+            return hash_fn.params[0].type.? == *const K;
+        }
+
+        fn ctxEqlTakesBorrowed() bool {
+            const eql_info = @typeInfo(@TypeOf(Ctx.eql));
+            const eql_fn = eql_info.@"fn";
+            return eql_fn.params[0].type.? == *const K;
         }
 
         fn nextPow2(n: usize) Error!usize {
@@ -574,7 +768,11 @@ pub fn FlatHashSet(comptime K: type, comptime Ctx: type) type {
         }
 
         pub fn contains(self: *const Self, key: K) bool {
-            return self.map.getConst(key) != null;
+            return self.map.contains(key);
+        }
+
+        pub fn containsBorrowed(self: *const Self, key: *const K) bool {
+            return self.map.containsBorrowed(key);
         }
 
         pub fn insert(self: *Self, key: K) Error!void {
@@ -583,6 +781,18 @@ pub fn FlatHashSet(comptime K: type, comptime Ctx: type) type {
 
         pub fn remove(self: *Self, key: K) Error!void {
             _ = try self.map.remove(key);
+        }
+
+        pub fn removeBorrowed(self: *Self, key: *const K) Error!void {
+            _ = try self.map.removeBorrowed(key);
+        }
+
+        pub fn removeOrNull(self: *Self, key: K) bool {
+            return self.map.removeOrNull(key) != null;
+        }
+
+        pub fn removeOrNullBorrowed(self: *Self, key: *const K) bool {
+            return self.map.removeOrNullBorrowed(key) != null;
         }
 
         pub fn clear(self: *Self) void {
@@ -732,6 +942,40 @@ test "flat hash map with custom Ctx hash and eql" {
     try testing.expectEqual(@as(u32, 99), map.get(1).?.*);
 }
 
+test "flat hash map supports borrowed lookups with pointer-style ctx callbacks" {
+    const Key = struct {
+        bucket: u64,
+        id: u64,
+        tag: u32,
+        pad: u32 = 0,
+    };
+    const PtrCtx = struct {
+        pub fn hash(key: *const Key, seed: u64) u64 {
+            var hasher = static_hash.wyhash.Wyhash64.init(seed);
+            hasher.update(std.mem.asBytes(&key.bucket));
+            hasher.update(std.mem.asBytes(&key.id));
+            hasher.update(std.mem.asBytes(&key.tag));
+            return hasher.final();
+        }
+
+        pub fn eql(a: *const Key, b: *const Key) bool {
+            return a.bucket == b.bucket and a.id == b.id and a.tag == b.tag;
+        }
+    };
+
+    var map = try FlatHashMap(Key, u32, PtrCtx).init(testing.allocator, .{ .budget = null });
+    defer map.deinit();
+
+    try map.put(.{ .bucket = 1, .id = 10, .tag = 3 }, 100);
+    try map.put(.{ .bucket = 2, .id = 20, .tag = 7 }, 200);
+
+    const lookup = Key{ .bucket = 2, .id = 20, .tag = 7 };
+    try testing.expect(map.containsBorrowed(&lookup));
+    try testing.expectEqual(@as(u32, 200), map.getConstBorrowed(&lookup).?.*);
+    try testing.expectEqual(@as(u32, 200), try map.removeBorrowed(&lookup));
+    try testing.expect(!map.containsBorrowed(&lookup));
+}
+
 test "flat hash map clone preserves tombstones and live entries" {
     const Ctx = struct {};
     var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
@@ -750,6 +994,102 @@ test "flat hash map clone preserves tombstones and live entries" {
     try testing.expect(clone.getConst(1) == null);
     try testing.expectEqual(@as(u32, 20), clone.getConst(2).?.*);
     try testing.expectEqual(@as(u32, 30), clone.getConst(3).?.*);
+}
+
+test "flat hash map iterator visits occupied entries and supports value mutation" {
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
+    defer map.deinit();
+
+    try map.putNoClobber(1, 10);
+    try map.putNoClobber(2, 20);
+    try map.putNoClobber(3, 30);
+    _ = try map.remove(2);
+
+    var count: usize = 0;
+    var sum_keys: u32 = 0;
+    var it = map.iterator();
+    while (it.next()) |entry| {
+        sum_keys += entry.key_ptr.*;
+        entry.value_ptr.* += 5;
+        count += 1;
+    }
+
+    try testing.expectEqual(@as(usize, 2), count);
+    try testing.expectEqual(@as(u32, 4), sum_keys);
+    try testing.expectEqual(@as(u32, 15), map.getConst(1).?.*);
+    try testing.expectEqual(@as(u32, 35), map.getConst(3).?.*);
+}
+
+test "flat hash map const iterator skips tombstones and empty slots" {
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
+    defer map.deinit();
+
+    try map.putNoClobber(4, 40);
+    try map.putNoClobber(5, 50);
+    _ = try map.remove(4);
+
+    const const_map: *const FlatHashMap(u32, u32, Ctx) = &map;
+    var count: usize = 0;
+    var it = const_map.iteratorConst();
+    while (it.next()) |entry| {
+        try testing.expectEqual(@as(u32, 5), entry.key_ptr.*);
+        try testing.expectEqual(@as(u32, 50), entry.value_ptr.*);
+        count += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), count);
+}
+
+test "flat hash map getOrPut reports whether insertion happened" {
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
+    defer map.deinit();
+
+    const inserted = try map.getOrPut(8, 80);
+    try testing.expect(!inserted.found_existing);
+    inserted.value_ptr.* += 1;
+
+    const existing = try map.getOrPut(8, 99);
+    try testing.expect(existing.found_existing);
+    try testing.expectEqual(@as(u32, 81), existing.value_ptr.*);
+    try testing.expectEqual(@as(usize, 1), map.len());
+}
+
+test "flat hash map removeOrNull keeps strict remove available" {
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{ .budget = null });
+    defer map.deinit();
+
+    try map.put(1, 10);
+    try testing.expectEqual(@as(?u32, 10), map.removeOrNull(1));
+    try testing.expectEqual(@as(?u32, null), map.removeOrNull(1));
+    try testing.expectError(error.NotFound, map.remove(1));
+}
+
+test "flat hash map clone after clear preserves empty logical state" {
+    const Ctx = struct {};
+    var map = try FlatHashMap(u32, u32, Ctx).init(testing.allocator, .{
+        .initial_capacity = 16,
+        .budget = null,
+    });
+    defer map.deinit();
+
+    try map.putNoClobber(1, 10);
+    try map.putNoClobber(2, 20);
+    map.clear();
+
+    var clone = try map.clone();
+    defer clone.deinit();
+
+    try testing.expectEqual(@as(usize, 0), clone.len());
+    try testing.expectEqual(map.capacity(), clone.capacity());
+    try testing.expect(clone.getConst(1) == null);
+
+    try clone.putNoClobber(3, 30);
+    try testing.expectEqual(@as(usize, 1), clone.len());
+    try testing.expectEqual(@as(u32, 30), clone.getConst(3).?.*);
+    try testing.expectEqual(@as(usize, 0), map.len());
 }
 
 test "flat hash map overwrite does not allocate before proving insertion is needed" {
@@ -778,6 +1118,35 @@ test "flat hash map overwrite does not allocate before proving insertion is need
     try testing.expectEqual(budget_before, budget.used());
     try testing.expectEqual(@as(usize, 5), map.len());
     try testing.expectEqual(@as(u32, 999), map.getConst(2).?.*);
+}
+
+test "flat hash map getOrPut existing key does not allocate before insertion is proven" {
+    const Ctx = struct {};
+    const Map = FlatHashMap(u32, u32, Ctx);
+    const init_capacity = 8;
+    const init_bytes = init_capacity * @sizeOf(Map.Entry) + init_capacity * @sizeOf(SlotState);
+    var budget = try memory.budget.Budget.init(init_bytes);
+
+    var map = try Map.init(testing.allocator, .{
+        .initial_capacity = init_capacity,
+        .budget = &budget,
+    });
+    defer map.deinit();
+
+    var key: u32 = 0;
+    while (key < 5) : (key += 1) {
+        try map.putNoClobber(key, key * 10);
+    }
+    const cap_before = map.capacity();
+    const budget_before = budget.used();
+
+    const result = try map.getOrPut(2, 999);
+
+    try testing.expect(result.found_existing);
+    try testing.expectEqual(cap_before, map.capacity());
+    try testing.expectEqual(budget_before, budget.used());
+    try testing.expectEqual(@as(usize, 5), map.len());
+    try testing.expectEqual(@as(u32, 20), result.value_ptr.*);
 }
 
 test "flat hash map duplicate rejection beats growth failure" {
@@ -842,4 +1211,99 @@ test "flat hash map custom hash supports padded composite keys" {
 
     try map.put(first, 99);
     try testing.expectEqual(@as(u32, 99), map.getConst(second).?.*);
+}
+
+test "flat hash map default-hash risk helper flags union-shaped keys" {
+    const UnionKey = union(enum) {
+        number: u32,
+        pair: struct { left: u32, right: u32 },
+    };
+    const NestedUnionKey = struct {
+        key: UnionKey,
+    };
+
+    try testing.expect(hasDefaultHashRepresentationRisk(UnionKey));
+    try testing.expect(hasDefaultHashRepresentationRisk(?UnionKey));
+    try testing.expect(hasDefaultHashRepresentationRisk(NestedUnionKey));
+    try testing.expect(!hasDefaultHashRepresentationRisk(u32));
+    try testing.expect(!hasDefaultHashRepresentationRisk(struct { left: u32, right: u32 }));
+}
+
+test "flat hash map custom hash supports union-shaped keys" {
+    const Key = union(enum) {
+        number: u32,
+        pair: struct { left: u32, right: u32 },
+    };
+    const UnionCtx = struct {
+        pub fn hash(key: *const Key, seed: u64) u64 {
+            var hasher = static_hash.wyhash.Wyhash64.init(seed);
+            switch (key.*) {
+                .number => |value| {
+                    const tag: u8 = 0;
+                    hasher.update(std.mem.asBytes(&tag));
+                    hasher.update(std.mem.asBytes(&value));
+                },
+                .pair => |pair| {
+                    const tag: u8 = 1;
+                    hasher.update(std.mem.asBytes(&tag));
+                    hasher.update(std.mem.asBytes(&pair.left));
+                    hasher.update(std.mem.asBytes(&pair.right));
+                },
+            }
+            return hasher.final();
+        }
+
+        pub fn eql(a: *const Key, b: *const Key) bool {
+            return switch (a.*) {
+                .number => |value_a| switch (b.*) {
+                    .number => |value_b| value_a == value_b,
+                    else => false,
+                },
+                .pair => |pair_a| switch (b.*) {
+                    .pair => |pair_b| pair_a.left == pair_b.left and pair_a.right == pair_b.right,
+                    else => false,
+                },
+            };
+        }
+    };
+
+    var map = try FlatHashMap(Key, u32, UnionCtx).init(testing.allocator, .{ .budget = null });
+    defer map.deinit();
+
+    try map.put(.{ .number = 7 }, 70);
+    try map.put(.{ .pair = .{ .left = 1, .right = 2 } }, 12);
+
+    try testing.expectEqual(@as(u32, 70), map.getConst(.{ .number = 7 }).?.*);
+    try testing.expectEqual(@as(u32, 12), map.getConst(.{ .pair = .{ .left = 1, .right = 2 } }).?.*);
+}
+
+test "flat hash set supports borrowed contains and remove" {
+    const Key = struct {
+        bucket: u64,
+        id: u64,
+        tag: u32,
+        pad: u32 = 0,
+    };
+    const PtrCtx = struct {
+        pub fn hash(key: *const Key, seed: u64) u64 {
+            var hasher = static_hash.wyhash.Wyhash64.init(seed);
+            hasher.update(std.mem.asBytes(&key.bucket));
+            hasher.update(std.mem.asBytes(&key.id));
+            hasher.update(std.mem.asBytes(&key.tag));
+            return hasher.final();
+        }
+
+        pub fn eql(a: *const Key, b: *const Key) bool {
+            return a.bucket == b.bucket and a.id == b.id and a.tag == b.tag;
+        }
+    };
+
+    var set = try FlatHashSet(Key, PtrCtx).init(testing.allocator, .{ .budget = null });
+    defer set.deinit();
+
+    const entry = Key{ .bucket = 9, .id = 42, .tag = 1 };
+    try set.insert(entry);
+    try testing.expect(set.containsBorrowed(&entry));
+    try set.removeBorrowed(&entry);
+    try testing.expect(!set.containsBorrowed(&entry));
 }

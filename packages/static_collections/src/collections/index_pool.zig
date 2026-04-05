@@ -228,32 +228,22 @@ pub const IndexPool = struct {
         assert(self.generations.len <= std.math.maxInt(u32));
     }
 
-    /// O(n) full validation: walks free stack and occupied array to prove
-    /// the free stack is a valid permutation of exactly the unoccupied slots.
+    /// O(n^2) full validation: walks the free stack and occupied array to
+    /// prove the free stack is a duplicate-free permutation of exactly the
+    /// unoccupied slots.
     /// Called only after mutations (allocate, release) and at init/deinit.
     ///
-    /// This function is read-only — it never mutates live state, so it is
+    /// This function is read-only. It never mutates live state, so it is
     /// safe to call from any context including signal handlers and debuggers.
     fn assertFullInvariants(self: *const IndexPool) void {
         self.assertStructuralInvariants();
+        assert(!self.freeStackHasDuplicates());
 
         const len: u32 = @intCast(self.generations.len);
 
-        // Pass 1: walk the free stack and verify each entry is in-bounds and
-        // points to an unoccupied slot.
-        var free_slot: u32 = 0;
-        while (free_slot < self.free_len) : (free_slot += 1) {
-            const slot_index = self.free_stack[free_slot];
-            assert(slot_index < len);
-            assert(!self.occupied[slot_index]);
-        }
-
-        // Pass 2: count unoccupied slots and assert it matches free_len.
-        // Combined with pass 1, this proves the free stack is a duplicate-free
-        // permutation of exactly the unoccupied slot indices: pass 1 guarantees
-        // every free-stack entry maps to a distinct unoccupied slot (each read
-        // is independent — no mutation), and pass 2 guarantees no unoccupied
-        // slot is missing from the free stack (count match).
+        // Count unoccupied slots and assert it matches free_len. Combined with
+        // the duplicate-free free-stack scan above, this proves the free stack
+        // is a permutation of exactly the unoccupied slot indices.
         var expected_free_count: u32 = 0;
         var slot_index: u32 = 0;
         while (slot_index < len) : (slot_index += 1) {
@@ -264,37 +254,23 @@ pub const IndexPool = struct {
         assert(expected_free_count == self.free_len);
     }
 
-    fn detectsDuplicateFreeStackEntries(self: *IndexPool) bool {
+    fn freeStackHasDuplicates(self: *const IndexPool) bool {
         self.assertStructuralInvariants();
         const len: u32 = @intCast(self.generations.len);
 
         var free_slot: u32 = 0;
         while (free_slot < self.free_len) : (free_slot += 1) {
             const slot_index = self.free_stack[free_slot];
-            if (slot_index >= len) {
-                self.restoreMarkedFreeSlots(free_slot);
-                return true;
+            if (slot_index >= len) return true;
+            if (self.occupied[slot_index]) return true;
+
+            var earlier_free_slot: u32 = 0;
+            while (earlier_free_slot < free_slot) : (earlier_free_slot += 1) {
+                if (self.free_stack[earlier_free_slot] == slot_index) return true;
             }
-            if (self.occupied[slot_index]) {
-                self.restoreMarkedFreeSlots(free_slot);
-                return true;
-            }
-            self.occupied[slot_index] = true;
         }
 
-        self.restoreMarkedFreeSlots(self.free_len);
         return false;
-    }
-
-    fn restoreMarkedFreeSlots(self: *IndexPool, count: u32) void {
-        var free_slot: u32 = 0;
-        const len: u32 = @intCast(self.generations.len);
-        while (free_slot < count) : (free_slot += 1) {
-            const slot_index = self.free_stack[free_slot];
-            if (slot_index >= len) continue;
-            if (!self.occupied[slot_index]) continue;
-            self.occupied[slot_index] = false;
-        }
     }
 
     fn fillFreeStack(free_stack: []u32) void {
@@ -385,7 +361,7 @@ test "index pool duplicate free stack entries are detectable" {
     pool.free_len = 3;
     @memset(pool.occupied, false);
 
-    try testing.expect(pool.detectsDuplicateFreeStackEntries());
+    try testing.expect(pool.freeStackHasDuplicates());
     try testing.expectEqual(@as(u32, 3), pool.freeCount());
     try testing.expect(!pool.occupied[0]);
     try testing.expect(!pool.occupied[1]);

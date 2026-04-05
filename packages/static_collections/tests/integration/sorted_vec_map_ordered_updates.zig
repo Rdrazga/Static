@@ -9,8 +9,15 @@ const static_collections = @import("static_collections");
 const SortedVecMap = static_collections.sorted_vec_map.SortedVecMap(u32, u32, struct {});
 
 fn expectEntry(map: *const SortedVecMap, index: usize, expected_key: u32, expected_value: u32) !void {
-    try testing.expectEqual(expected_key, map.entries.items[index].key);
-    try testing.expectEqual(expected_value, map.entries.items[index].value);
+    var it = map.iteratorConst();
+    var current_index: usize = 0;
+    while (it.next()) |entry| : (current_index += 1) {
+        if (current_index != index) continue;
+        try testing.expectEqual(expected_key, entry.key_ptr.*);
+        try testing.expectEqual(expected_value, entry.value_ptr.*);
+        return;
+    }
+    return error.TestUnexpectedResult;
 }
 
 test "sorted vec map keeps sorted order and overwrites existing keys" {

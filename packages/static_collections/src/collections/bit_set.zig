@@ -164,8 +164,8 @@ pub const BitSet = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator, config: Config) Error!BitSet {
-        if (config.bit_count == 0) return error.InvalidInput;
-        const sum = std.math.add(usize, config.bit_count, wordBits() - 1) catch return error.InvalidInput;
+        if (config.bit_count == 0) return error.InvalidConfig;
+        const sum = std.math.add(usize, config.bit_count, wordBits() - 1) catch return error.Overflow;
         const word_count = sum / wordBits();
         assert(word_count > 0);
 
@@ -437,8 +437,8 @@ test "bit set operations" {
 
 test "bit set rejects zero bit_count" {
     // Goal: reject invalid zero-sized bitsets at construction time.
-    // Method: initialize with bit_count=0 and assert InvalidInput.
-    try testing.expectError(error.InvalidInput, BitSet.init(testing.allocator, .{ .bit_count = 0, .budget = null }));
+    // Method: initialize with bit_count=0 and assert InvalidConfig.
+    try testing.expectError(error.InvalidConfig, BitSet.init(testing.allocator, .{ .bit_count = 0, .budget = null }));
 }
 
 test "bit set out-of-bounds set and clear return InvalidInput" {

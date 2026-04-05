@@ -6,8 +6,9 @@
 //! re-owning sift and storage logic.
 //!
 //! `Ctx` is a comptime comparator context type providing:
-//! - `fn lessThan(ctx: Ctx, a: T, b: T) bool`
-//! - `fn setIndex(ctx: Ctx, item: *T, index: usize) void` — required for
+//! - `fn lessThan(ctx: Ctx, a: T, b: T) bool`, or
+//! - `fn lessThan(ctx: Ctx, a: *const T, b: *const T) bool`
+//! - `fn setIndex(ctx: Ctx, item: *T, index: usize) void` - required for
 //!   correct use of `updateAt` and `removeAt`. Without it, callers have no
 //!   way to track live indices after mutations that move elements.
 //!
@@ -17,7 +18,8 @@
 //! Callers must use `Ctx.setIndex` to maintain a live index for each element,
 //! or find elements by linear scan before each indexed operation.
 //!
-//! When `Ctx == void`, `T` must implement `fn lessThan(a: T, b: T) bool`.
+//! When `Ctx == void`, `T` must implement `fn lessThan(a: T, b: T) bool` or
+//! `fn lessThan(a: *const T, b: *const T) bool`.
 //! The void-context path does not support `updateAt` or `removeAt` with
 //! tracked indices.
 
@@ -41,6 +43,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
     comptime {
         assert(@sizeOf(T) > 0);
         assert(@alignOf(T) > 0);
+        validateLessThanSignature(T, Ctx);
     }
 
     return struct {
@@ -201,7 +204,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             self.items[index] = new_value;
             self.syncIndex(index);
 
-            if (self.lessThanCtx(new_value, old_value)) {
+            if (self.lessThanCtx(&new_value, &old_value)) {
                 self.siftUp(index);
             } else {
                 self.siftDown(index);
@@ -225,7 +228,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
                 self.items[index] = moved_value;
                 self.syncIndex(index);
 
-                if (self.lessThanCtx(moved_value, value)) {
+                if (self.lessThanCtx(&moved_value, &value)) {
                     self.siftUp(index);
                 } else {
                     self.siftDown(index);
@@ -243,7 +246,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             while (i > 0) : (steps += 1) {
                 assert(steps < self.len_value);
                 const parent = (i - 1) / 2;
-                if (!self.lessThanCtx(self.items[i], self.items[parent])) break;
+                if (!self.lessThanCtx(&self.items[i], &self.items[parent])) break;
                 std.mem.swap(T, &self.items[i], &self.items[parent]);
                 self.syncIndex(i);
                 self.syncIndex(parent);
@@ -261,10 +264,10 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
                 const right = left + 1;
                 if (left >= self.len_value) break;
                 var smallest = left;
-                if (right < self.len_value and self.lessThanCtx(self.items[right], self.items[left])) {
+                if (right < self.len_value and self.lessThanCtx(&self.items[right], &self.items[left])) {
                     smallest = right;
                 }
-                if (!self.lessThanCtx(self.items[smallest], self.items[i])) break;
+                if (!self.lessThanCtx(&self.items[smallest], &self.items[i])) break;
                 std.mem.swap(T, &self.items[i], &self.items[smallest]);
                 self.syncIndex(i);
                 self.syncIndex(smallest);
@@ -286,11 +289,17 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             }
         }
 
-        fn lessThanCtx(self: *const Self, a: T, b: T) bool {
+        fn lessThanCtx(self: *const Self, a: *const T, b: *const T) bool {
             if (Ctx == void) {
-                return T.lessThan(a, b);
+                if (comptime itemLessThanTakesBorrowed(T)) {
+                    return T.lessThan(a, b);
+                }
+                return T.lessThan(a.*, b.*);
             } else {
-                return self.ctx.lessThan(a, b);
+                if (comptime ctxLessThanTakesBorrowed(Ctx, T)) {
+                    return self.ctx.lessThan(a, b);
+                }
+                return self.ctx.lessThan(a.*, b.*);
             }
         }
 
@@ -304,8 +313,8 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             var child_index: usize = 1;
             while (child_index < self.len_value) : (child_index += 1) {
                 const parent_index = (child_index - 1) / 2;
-                const child_item = self.items[child_index];
-                const parent_item = self.items[parent_index];
+                const child_item = &self.items[child_index];
+                const parent_item = &self.items[parent_index];
                 assert(!self.lessThanCtx(child_item, parent_item));
                 assert(!self.lessThanCtx(child_item, child_item));
                 assert(!self.lessThanCtx(parent_item, parent_item));
@@ -334,6 +343,71 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
             };
         }
     };
+}
+
+fn validateLessThanSignature(comptime T: type, comptime Ctx: type) void {
+    const BorrowedItem = *const T;
+
+    if (Ctx == void) {
+        if (!@hasDecl(T, "lessThan")) {
+            @compileError("When Ctx == void, T must declare lessThan");
+        }
+
+        const less_info = @typeInfo(@TypeOf(T.lessThan));
+        if (less_info != .@"fn") @compileError("T.lessThan must be a function");
+        const less_fn = less_info.@"fn";
+        if (less_fn.params.len != 2) {
+            @compileError("T.lessThan must have signature `fn(a: T, b: T) bool` or `fn(a: *const T, b: *const T) bool`");
+        }
+
+        const p0 = less_fn.params[0].type orelse @compileError("T.lessThan parameter 0 must have a concrete type");
+        const p1 = less_fn.params[1].type orelse @compileError("T.lessThan parameter 1 must have a concrete type");
+        const ret = less_fn.return_type orelse @compileError("T.lessThan must have a concrete return type");
+        if (ret != bool) @compileError("T.lessThan must return bool");
+
+        const uses_value_items = p0 == T and p1 == T;
+        const uses_borrowed_items = p0 == BorrowedItem and p1 == BorrowedItem;
+        if (!uses_value_items and !uses_borrowed_items) {
+            @compileError("T.lessThan parameters must both be T or both be *const T");
+        }
+        return;
+    }
+
+    if (!@hasDecl(Ctx, "lessThan")) {
+        @compileError("Ctx must declare lessThan");
+    }
+
+    const less_info = @typeInfo(@TypeOf(Ctx.lessThan));
+    if (less_info != .@"fn") @compileError("Ctx.lessThan must be a function");
+    const less_fn = less_info.@"fn";
+    if (less_fn.params.len != 3) {
+        @compileError("Ctx.lessThan must have signature `fn(ctx: Ctx, a: T, b: T) bool` or `fn(ctx: Ctx, a: *const T, b: *const T) bool`");
+    }
+
+    const receiver = less_fn.params[0].type orelse @compileError("Ctx.lessThan receiver must have a concrete type");
+    if (receiver != Ctx) @compileError("Ctx.lessThan receiver must be Ctx");
+    const p1 = less_fn.params[1].type orelse @compileError("Ctx.lessThan parameter 1 must have a concrete type");
+    const p2 = less_fn.params[2].type orelse @compileError("Ctx.lessThan parameter 2 must have a concrete type");
+    const ret = less_fn.return_type orelse @compileError("Ctx.lessThan must have a concrete return type");
+    if (ret != bool) @compileError("Ctx.lessThan must return bool");
+
+    const uses_value_items = p1 == T and p2 == T;
+    const uses_borrowed_items = p1 == BorrowedItem and p2 == BorrowedItem;
+    if (!uses_value_items and !uses_borrowed_items) {
+        @compileError("Ctx.lessThan parameters must both be T or both be *const T");
+    }
+}
+
+fn itemLessThanTakesBorrowed(comptime T: type) bool {
+    const less_info = @typeInfo(@TypeOf(T.lessThan));
+    const less_fn = less_info.@"fn";
+    return less_fn.params[0].type.? == *const T;
+}
+
+fn ctxLessThanTakesBorrowed(comptime Ctx: type, comptime T: type) bool {
+    const less_info = @typeInfo(@TypeOf(Ctx.lessThan));
+    const less_fn = less_info.@"fn";
+    return less_fn.params[1].type.? == *const T;
 }
 
 const TestCmp = struct {
@@ -534,6 +608,51 @@ test "MinHeap supports type-defined comparator when Ctx is void" {
     try testing.expectEqual(@as(u32, 1), heap.popMin().?.value);
     try testing.expectEqual(@as(u32, 4), heap.popMin().?.value);
     try testing.expectEqual(@as(u32, 9), heap.popMin().?.value);
+}
+
+test "MinHeap supports pointer-style context comparators" {
+    const Item = struct {
+        priority: u32,
+        stamp: u32,
+    };
+    const PtrCtx = struct {
+        pub fn lessThan(_: @This(), a: *const Item, b: *const Item) bool {
+            if (a.priority != b.priority) return a.priority < b.priority;
+            return a.stamp < b.stamp;
+        }
+    };
+
+    var heap = try MinHeap(Item, PtrCtx).init(testing.allocator, .{ .capacity = 4, .budget = null }, .{});
+    defer heap.deinit();
+
+    try heap.push(.{ .priority = 2, .stamp = 9 });
+    try heap.push(.{ .priority = 1, .stamp = 7 });
+    try heap.push(.{ .priority = 1, .stamp = 3 });
+
+    try testing.expectEqual(@as(u32, 3), heap.popMin().?.stamp);
+    try testing.expectEqual(@as(u32, 7), heap.popMin().?.stamp);
+    try testing.expectEqual(@as(u32, 9), heap.popMin().?.stamp);
+}
+
+test "MinHeap supports pointer-style type-defined comparators when Ctx is void" {
+    const Entry = struct {
+        value: u32,
+
+        pub fn lessThan(a: *const @This(), b: *const @This()) bool {
+            return a.value < b.value;
+        }
+    };
+
+    var heap = try MinHeap(Entry, void).init(testing.allocator, .{ .capacity = 4, .budget = null }, {});
+    defer heap.deinit();
+
+    try heap.push(.{ .value = 6 });
+    try heap.push(.{ .value = 1 });
+    try heap.push(.{ .value = 4 });
+
+    try testing.expectEqual(@as(u32, 1), heap.popMin().?.value);
+    try testing.expectEqual(@as(u32, 4), heap.popMin().?.value);
+    try testing.expectEqual(@as(u32, 6), heap.popMin().?.value);
 }
 
 test "MinHeap clear invalidates tracked indices with the sentinel" {
