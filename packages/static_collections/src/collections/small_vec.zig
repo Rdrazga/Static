@@ -39,10 +39,10 @@ pub fn SmallVec(comptime T: type, comptime InlineN: usize) type {
         inline_len: usize = 0,
         spill: ?vec_mod.Vec(T) = null,
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config) Self {
+        pub fn init(allocator: std.mem.Allocator, config: Config) Self {
             var self: Self = .{
                 .allocator = allocator,
-                .budget = cfg.budget,
+                .budget = config.budget,
             };
             self.assertInvariants();
             return self;

@@ -147,15 +147,15 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             self.budget_reserved_bytes = new_bytes;
         }
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
-            if (cfg.max_load_percent == 0 or cfg.max_load_percent > 95) return error.InvalidConfig;
+        pub fn init(allocator: std.mem.Allocator, config: Config) Error!Self {
+            if (config.max_load_percent == 0 or config.max_load_percent > 95) return error.InvalidConfig;
 
-            const cap = try nextPow2(@max(cfg.initial_capacity, 8));
+            const cap = try nextPow2(@max(config.initial_capacity, 8));
             assert(cap >= 8);
             assert(std.math.isPowerOfTwo(cap));
 
             const init_bytes = tableBytes(cap) catch return error.Overflow;
-            if (cfg.budget) |budget| {
+            if (config.budget) |budget| {
                 budget.tryReserve(init_bytes) catch |err| switch (err) {
                     error.NoSpaceLeft => return error.NoSpaceLeft,
                     error.InvalidConfig => return error.InvalidConfig,
@@ -164,12 +164,12 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             }
 
             const entries = allocator.alloc(Entry, cap) catch {
-                if (cfg.budget) |budget| budget.release(init_bytes);
+                if (config.budget) |budget| budget.release(init_bytes);
                 return error.OutOfMemory;
             };
             errdefer {
                 allocator.free(entries);
-                if (cfg.budget) |budget| budget.release(init_bytes);
+                if (config.budget) |budget| budget.release(init_bytes);
             }
 
             const states = allocator.alloc(SlotState, cap) catch return error.OutOfMemory;
@@ -178,12 +178,12 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
 
             var self: Self = .{
                 .allocator = allocator,
-                .budget = cfg.budget,
+                .budget = config.budget,
                 .budget_reserved_bytes = init_bytes,
                 .entries = entries,
                 .states = states,
-                .seed = cfg.seed,
-                .max_load_percent = cfg.max_load_percent,
+                .seed = config.seed,
+                .max_load_percent = config.max_load_percent,
             };
             self.assertInvariants();
             return self;
@@ -315,7 +315,7 @@ pub fn FlatHashMap(comptime K: type, comptime V: type, comptime Ctx: type) type 
             self.assertInvariants();
         }
 
-        pub fn remove(self: *Self, key: K) (error{NotFound} || Error)!V {
+        pub fn remove(self: *Self, key: K) Error!V {
             self.assertInvariants();
             if (self.entries.len == 0) return error.NotFound;
             const before_count = self.count;
@@ -552,8 +552,8 @@ pub fn FlatHashSet(comptime K: type, comptime Ctx: type) type {
 
         map: Map,
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Map.Config) Error!Self {
-            return .{ .map = try Map.init(allocator, cfg) };
+        pub fn init(allocator: std.mem.Allocator, config: Map.Config) Error!Self {
+            return .{ .map = try Map.init(allocator, config) };
         }
 
         pub fn clone(self: *const Self) Error!Self {
@@ -577,7 +577,7 @@ pub fn FlatHashSet(comptime K: type, comptime Ctx: type) type {
             try self.map.put(key, {});
         }
 
-        pub fn remove(self: *Self, key: K) (error{NotFound} || Error)!void {
+        pub fn remove(self: *Self, key: K) Error!void {
             _ = try self.map.remove(key);
         }
 

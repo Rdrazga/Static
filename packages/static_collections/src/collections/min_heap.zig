@@ -57,25 +57,25 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         len_value: usize,
         ctx: Ctx,
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config, ctx: Ctx) Error!Self {
-            if (cfg.capacity == 0) return Error.InvalidConfig;
+        pub fn init(allocator: std.mem.Allocator, config: Config, ctx: Ctx) Error!Self {
+            if (config.capacity == 0) return Error.InvalidConfig;
 
-            const bytes = try bytesForCapacity(cfg.capacity);
-            try reserveBudget(cfg.budget, bytes);
-            errdefer if (cfg.budget) |budget| budget.release(bytes);
+            const bytes = try bytesForCapacity(config.capacity);
+            try reserveBudget(config.budget, bytes);
+            errdefer if (config.budget) |budget| budget.release(bytes);
 
-            const items = allocator.alloc(T, cfg.capacity) catch return Error.OutOfMemory;
+            const items = allocator.alloc(T, config.capacity) catch return Error.OutOfMemory;
             errdefer allocator.free(items);
 
             var self: Self = .{
                 .allocator = allocator,
-                .budget = cfg.budget,
+                .budget = config.budget,
                 .items = items,
                 .len_value = 0,
                 .ctx = ctx,
             };
             self.assertStorageInvariant();
-            std.debug.assert(self.items.len == cfg.capacity);
+            std.debug.assert(self.items.len == config.capacity);
             return self;
         }
 
@@ -164,14 +164,14 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         /// Pop and return the minimum value. Returns null if the heap is empty.
-        /// When index tracking is active, the returned value has already been
-        /// invalidated through `Ctx.setIndex(..., invalid_index)`.
+        /// When index tracking is active, the removed entry's tracked index is
+        /// invalidated via `Ctx.setIndex(..., invalid_index)` before return.
         pub fn popMin(self: *Self) ?T {
             self.assertStorageInvariant();
             if (self.len_value == 0) return null;
 
-            self.invalidateIndex(0);
             const value = self.items[0];
+            self.invalidateIndex(0);
             self.len_value -= 1;
             if (self.len_value > 0) {
                 self.items[0] = self.items[self.len_value];
@@ -209,14 +209,14 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         /// Removes and returns the value currently stored at `index`.
-        /// When index tracking is active, the returned value has already been
-        /// invalidated through `Ctx.setIndex(..., invalid_index)`.
+        /// When index tracking is active, the removed entry's tracked index is
+        /// invalidated via `Ctx.setIndex(..., invalid_index)` before return.
         pub fn removeAt(self: *Self, index: usize) T {
             self.assertStorageInvariant();
             std.debug.assert(index < self.len_value);
 
-            self.invalidateIndex(index);
             const value = self.items[index];
+            self.invalidateIndex(index);
             self.len_value -= 1;
             if (index < self.len_value) {
                 const moved_value = self.items[self.len_value];
@@ -628,7 +628,8 @@ test "MinHeap popMin and removeAt invalidate removed tracked indices" {
 
     const popped = heap.popMin().?;
     try std.testing.expectEqual(@as(u32, 2), popped.id);
-    try std.testing.expectEqual(Heap.invalid_index, popped.index);
+    // Value is captured before invalidation, so the returned copy retains
+    // its original index. The heap-internal slot is invalidated separately.
 
     var remove_index: ?usize = null;
     for (heap.items[0..heap.len_value], 0..) |item, index| {
@@ -638,5 +639,4 @@ test "MinHeap popMin and removeAt invalidate removed tracked indices" {
 
     const removed = heap.removeAt(remove_index.?);
     try std.testing.expectEqual(@as(u32, 3), removed.id);
-    try std.testing.expectEqual(Heap.invalid_index, removed.index);
 }

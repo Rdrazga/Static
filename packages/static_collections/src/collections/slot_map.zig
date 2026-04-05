@@ -101,17 +101,17 @@ pub fn SlotMap(comptime T: type) type {
             assert(self.slots.capacity >= candidate);
         }
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
+        pub fn init(allocator: std.mem.Allocator, config: Config) Error!Self {
             var self: Self = .{
                 .allocator = allocator,
-                .budget = cfg.budget,
+                .budget = config.budget,
             };
-            if (cfg.initial_capacity > 0) {
-                try self.ensureBudgetCapacity(cfg.initial_capacity);
-                self.slots.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity) catch {
+            if (config.initial_capacity > 0) {
+                try self.ensureBudgetCapacity(config.initial_capacity);
+                self.slots.ensureTotalCapacityPrecise(allocator, config.initial_capacity) catch {
                     if (self.budget) |budget| {
                         // Safety: initial_capacity is u32; product fits usize.
-                        const bytes = slotBytesForCapacity(cfg.initial_capacity) catch unreachable;
+                        const bytes = slotBytesForCapacity(config.initial_capacity) catch unreachable;
                         budget.release(bytes);
                         self.budget_reserved_capacity = 0;
                     }

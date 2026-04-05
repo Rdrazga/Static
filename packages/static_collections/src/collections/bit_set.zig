@@ -156,14 +156,14 @@ pub const BitSet = struct {
         budget: ?*memory.budget.Budget = null,
     };
 
-    pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!BitSet {
-        if (cfg.bit_count == 0) return error.InvalidInput;
-        const sum = std.math.add(usize, cfg.bit_count, wordBits() - 1) catch return error.InvalidInput;
+    pub fn init(allocator: std.mem.Allocator, config: Config) Error!BitSet {
+        if (config.bit_count == 0) return error.InvalidInput;
+        const sum = std.math.add(usize, config.bit_count, wordBits() - 1) catch return error.InvalidInput;
         const word_count = sum / wordBits();
         assert(word_count > 0);
 
         const alloc_bytes = std.math.mul(usize, word_count, @sizeOf(usize)) catch return error.Overflow;
-        if (cfg.budget) |budget| {
+        if (config.budget) |budget| {
             budget.tryReserve(alloc_bytes) catch |err| switch (err) {
                 error.NoSpaceLeft => return error.NoSpaceLeft,
                 error.InvalidConfig => return error.InvalidConfig,
@@ -172,16 +172,16 @@ pub const BitSet = struct {
         }
 
         const words = allocator.alloc(usize, word_count) catch {
-            if (cfg.budget) |budget| budget.release(alloc_bytes);
+            if (config.budget) |budget| budget.release(alloc_bytes);
             return error.OutOfMemory;
         };
         assert(words.len == word_count);
         @memset(words, 0);
         var self: BitSet = .{
             .allocator = allocator,
-            .budget = cfg.budget,
+            .budget = config.budget,
             .words = words,
-            .bit_count = cfg.bit_count,
+            .bit_count = config.bit_count,
         };
         self.assertInvariants();
         return self;

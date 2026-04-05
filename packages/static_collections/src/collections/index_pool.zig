@@ -40,38 +40,38 @@ pub const IndexPool = struct {
         return std.math.add(usize, sum1, stk_bytes) catch return error.Overflow;
     }
 
-    pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!IndexPool {
-        if (cfg.slots_max == 0) return error.InvalidConfig;
+    pub fn init(allocator: std.mem.Allocator, config: Config) Error!IndexPool {
+        if (config.slots_max == 0) return error.InvalidConfig;
 
-        const alloc_bytes = totalAllocBytes(cfg.slots_max) catch return error.Overflow;
-        if (cfg.budget) |budget| {
+        const alloc_bytes = totalAllocBytes(config.slots_max) catch return error.Overflow;
+        if (config.budget) |budget| {
             budget.tryReserve(alloc_bytes) catch |err| switch (err) {
                 error.NoSpaceLeft => return error.NoSpaceLeft,
                 error.InvalidConfig => return error.InvalidConfig,
                 error.Overflow => return error.Overflow,
             };
         }
-        errdefer if (cfg.budget) |budget| budget.release(alloc_bytes);
+        errdefer if (config.budget) |budget| budget.release(alloc_bytes);
 
-        const generations = allocator.alloc(u32, cfg.slots_max) catch return error.OutOfMemory;
+        const generations = allocator.alloc(u32, config.slots_max) catch return error.OutOfMemory;
         errdefer allocator.free(generations);
         @memset(generations, 1);
 
-        const occupied = allocator.alloc(bool, cfg.slots_max) catch return error.OutOfMemory;
+        const occupied = allocator.alloc(bool, config.slots_max) catch return error.OutOfMemory;
         errdefer allocator.free(occupied);
         @memset(occupied, false);
 
-        const free_stack = allocator.alloc(u32, cfg.slots_max) catch return error.OutOfMemory;
+        const free_stack = allocator.alloc(u32, config.slots_max) catch return error.OutOfMemory;
         errdefer allocator.free(free_stack);
         fillFreeStack(free_stack);
 
         var self: IndexPool = .{
             .allocator = allocator,
-            .budget = cfg.budget,
+            .budget = config.budget,
             .generations = generations,
             .occupied = occupied,
             .free_stack = free_stack,
-            .free_len = cfg.slots_max,
+            .free_len = config.slots_max,
         };
         self.assertFullInvariants();
         return self;
@@ -268,47 +268,51 @@ pub const IndexPool = struct {
         while (free_slot < self.free_len) : (free_slot += 1) {
             const slot_index = self.free_stack[free_slot];
             if (slot_index >= len) {
-                restoreMarkedFreeSlots(self, free_slot);
+                self.restoreMarkedFreeSlots(free_slot);
                 return true;
             }
             if (self.occupied[slot_index]) {
-                restoreMarkedFreeSlots(self, free_slot);
+                self.restoreMarkedFreeSlots(free_slot);
                 return true;
             }
             self.occupied[slot_index] = true;
         }
 
-        restoreMarkedFreeSlots(self, self.free_len);
+        self.restoreMarkedFreeSlots(self.free_len);
         return false;
     }
+
+    fn restoreMarkedFreeSlots(self: *IndexPool, count: u32) void {
+        var free_slot: u32 = 0;
+        const len: u32 = @intCast(self.generations.len);
+        while (free_slot < count) : (free_slot += 1) {
+            const slot_index = self.free_stack[free_slot];
+            if (slot_index >= len) continue;
+            if (!self.occupied[slot_index]) continue;
+            self.occupied[slot_index] = false;
+        }
+    }
+
+    fn fillFreeStack(free_stack: []u32) void {
+        std.debug.assert(free_stack.len <= std.math.maxInt(u32));
+        var index: u32 = 0;
+        const len_u32: u32 = @intCast(free_stack.len);
+        while (index < len_u32) : (index += 1) {
+            // Reverse fill: lowest indices are popped first (LIFO) so
+            // allocation returns slots in ascending order.
+            free_stack[index] = len_u32 - 1 - index;
+        }
+    }
+
+    fn nextGeneration(current: u32) u32 {
+        // Wrapping addition: generation 0 is reserved as the invalid sentinel,
+        // so we skip it when the counter wraps around.
+        var next = current +% 1;
+        if (next == 0) next = 1;
+        std.debug.assert(next != 0);
+        return next;
+    }
 };
-
-fn restoreMarkedFreeSlots(pool: *IndexPool, count: u32) void {
-    var free_slot: u32 = 0;
-    const len: u32 = @intCast(pool.generations.len);
-    while (free_slot < count) : (free_slot += 1) {
-        const slot_index = pool.free_stack[free_slot];
-        if (slot_index >= len) continue;
-        if (!pool.occupied[slot_index]) continue;
-        pool.occupied[slot_index] = false;
-    }
-}
-
-fn fillFreeStack(free_stack: []u32) void {
-    std.debug.assert(free_stack.len <= std.math.maxInt(u32));
-    var index: u32 = 0;
-    const len_u32: u32 = @intCast(free_stack.len);
-    while (index < len_u32) : (index += 1) {
-        free_stack[index] = len_u32 - 1 - index;
-    }
-}
-
-fn nextGeneration(current: u32) u32 {
-    var next = current +% 1;
-    if (next == 0) next = 1;
-    std.debug.assert(next != 0);
-    return next;
-}
 
 test "index pool allocates, validates, and rejects stale handles" {
     var pool = try IndexPool.init(std.testing.allocator, .{ .slots_max = 2 });
@@ -383,5 +387,5 @@ test "index pool duplicate free stack entries are detectable" {
     try std.testing.expect(!pool.occupied[1]);
     try std.testing.expect(!pool.occupied[2]);
 
-    fillFreeStack(pool.free_stack);
+    IndexPool.fillFreeStack(pool.free_stack);
 }

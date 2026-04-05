@@ -36,13 +36,13 @@ pub fn Vec(comptime T: type) type {
         budget_reserved_capacity: u32 = 0,
         storage: std.ArrayListUnmanaged(T) = .{},
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
+        pub fn init(allocator: std.mem.Allocator, config: Config) Error!Self {
             var self: Self = .{
                 .allocator = allocator,
-                .budget = cfg.budget,
+                .budget = config.budget,
             };
-            if (cfg.initial_capacity > 0) {
-                try self.ensureCapacity(cfg.initial_capacity);
+            if (config.initial_capacity > 0) {
+                try self.ensureCapacity(config.initial_capacity);
             }
             self.assertInvariants();
             return self;

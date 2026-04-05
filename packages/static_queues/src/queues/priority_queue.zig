@@ -139,8 +139,8 @@ pub fn PriorityQueue(comptime T: type, comptime Context: type) type {
         }
 
         /// Removes and returns the element currently stored at `index`.
-        /// The returned value has already been invalidated through
-        /// `Context.setIndex(..., invalid_index)` when index tracking is active.
+        /// When index tracking is active, the removed entry's tracked index is
+        /// invalidated via `Context.setIndex(..., invalid_index)` before return.
         pub fn remove(self: *Self, index: usize) T {
             requireTrackedContext();
             return self.heap.removeAt(index);

@@ -13,7 +13,7 @@ fn expectItems(set: *const SparseSet, expected: []const u32) !void {
 
 test "sparse set rejects invalid universe sizes" {
     try std.testing.expectError(
-        error.InvalidInput,
+        error.InvalidConfig,
         SparseSet.init(std.testing.allocator, .{ .universe_size = 0 }),
     );
 }

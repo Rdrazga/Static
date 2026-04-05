@@ -13,9 +13,9 @@ const assert = std.debug.assert;
 
 pub const Error = error{
     OutOfMemory,
-    InvalidInput,
     NoSpaceLeft,
     InvalidConfig,
+    InvalidInput,
     Overflow,
 };
 
@@ -33,12 +33,12 @@ pub const SparseSet = struct {
         budget: ?*memory.budget.Budget = null,
     };
 
-    pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!SparseSet {
-        if (cfg.universe_size == 0) return error.InvalidInput;
-        if (cfg.universe_size > std.math.maxInt(u32)) return error.InvalidInput;
+    pub fn init(allocator: std.mem.Allocator, config: Config) Error!SparseSet {
+        if (config.universe_size == 0) return error.InvalidConfig;
+        if (config.universe_size > std.math.maxInt(u32)) return error.InvalidConfig;
 
-        const sparse_bytes = std.math.mul(usize, cfg.universe_size, @sizeOf(u32)) catch return error.InvalidInput;
-        if (cfg.budget) |budget| {
+        const sparse_bytes = std.math.mul(usize, config.universe_size, @sizeOf(u32)) catch return error.InvalidConfig;
+        if (config.budget) |budget| {
             budget.tryReserve(sparse_bytes) catch |err| switch (err) {
                 error.NoSpaceLeft => return error.NoSpaceLeft,
                 error.InvalidConfig => return error.InvalidConfig,
@@ -46,14 +46,14 @@ pub const SparseSet = struct {
             };
         }
 
-        const sparse = allocator.alloc(u32, cfg.universe_size) catch {
-            if (cfg.budget) |budget| budget.release(sparse_bytes);
+        const sparse = allocator.alloc(u32, config.universe_size) catch {
+            if (config.budget) |budget| budget.release(sparse_bytes);
             return error.OutOfMemory;
         };
         @memset(sparse, invalid);
         var self: SparseSet = .{
             .allocator = allocator,
-            .budget = cfg.budget,
+            .budget = config.budget,
             .budget_reserved_bytes = sparse_bytes,
             .sparse = sparse,
         };
@@ -282,8 +282,8 @@ test "sparse set insert/remove maintains dense mapping" {
 
 test "sparse set rejects zero and out-of-range universe" {
     // Goal: reject invalid universe configuration at initialization.
-    // Method: initialize with zero universe size and assert InvalidInput.
-    try std.testing.expectError(error.InvalidInput, SparseSet.init(std.testing.allocator, .{ .universe_size = 0 }));
+    // Method: initialize with zero universe size and assert InvalidConfig.
+    try std.testing.expectError(error.InvalidConfig, SparseSet.init(std.testing.allocator, .{ .universe_size = 0 }));
 }
 
 test "sparse set insert idempotent" {

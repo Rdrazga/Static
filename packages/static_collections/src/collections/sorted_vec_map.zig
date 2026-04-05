@@ -87,17 +87,17 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             assert(self.entries.capacity >= candidate);
         }
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
+        pub fn init(allocator: std.mem.Allocator, config: Config) Error!Self {
             var self: Self = .{
                 .allocator = allocator,
-                .budget = cfg.budget,
+                .budget = config.budget,
             };
-            if (cfg.initial_capacity > 0) {
-                try self.ensureBudgetCapacity(cfg.initial_capacity);
-                self.entries.ensureTotalCapacityPrecise(allocator, cfg.initial_capacity) catch {
+            if (config.initial_capacity > 0) {
+                try self.ensureBudgetCapacity(config.initial_capacity);
+                self.entries.ensureTotalCapacityPrecise(allocator, config.initial_capacity) catch {
                     if (self.budget) |budget| {
                         // Safety: initial_capacity is u32; product fits usize.
-                        const bytes = entryBytesForCapacity(cfg.initial_capacity) catch unreachable;
+                        const bytes = entryBytesForCapacity(config.initial_capacity) catch unreachable;
                         budget.release(bytes);
                         self.budget_reserved_capacity = 0;
                     }
@@ -253,7 +253,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
             self.assertFullInvariants();
         }
 
-        pub fn remove(self: *Self, key: K) (error{NotFound} || Error)!V {
+        pub fn remove(self: *Self, key: K) Error!V {
             self.assertStructuralInvariants();
             const search = self.findIndex(key);
             if (!search.found) return error.NotFound;

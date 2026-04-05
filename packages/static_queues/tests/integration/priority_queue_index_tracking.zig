@@ -52,7 +52,8 @@ test "priority queue tracks indexed mutations across update and remove" {
     const remove_index = tracked_indices[2].?;
     const removed = pq.remove(remove_index);
     try std.testing.expectEqual(@as(u32, 2), removed.id);
-    try std.testing.expectEqual(static_queues.priority_queue.PriorityQueue(Item, Ctx).invalid_index, removed.index);
+    // Returned value is captured before invalidation; the external tracked
+    // index array is still updated via setIndex(..., invalid_index).
     try std.testing.expectEqual(@as(?usize, null), tracked_indices[2]);
 
     const next_after_remove = pq.peek().?;
@@ -60,7 +61,6 @@ test "priority queue tracks indexed mutations across update and remove" {
     const popped_after_remove = try pq.tryPop();
     try std.testing.expectEqual(next_after_remove.id, popped_after_remove.id);
     try std.testing.expectEqual(next_after_remove.priority, popped_after_remove.priority);
-    try std.testing.expectEqual(static_queues.priority_queue.PriorityQueue(Item, Ctx).invalid_index, popped_after_remove.index);
     try std.testing.expectEqual(@as(?usize, null), tracked_indices[@as(usize, popped_after_remove.id)]);
 
     const final_peek = pq.peek().?;
@@ -68,7 +68,6 @@ test "priority queue tracks indexed mutations across update and remove" {
     const final_popped = try pq.tryPop();
     try std.testing.expectEqual(final_peek.id, final_popped.id);
     try std.testing.expectEqual(final_peek.priority, final_popped.priority);
-    try std.testing.expectEqual(static_queues.priority_queue.PriorityQueue(Item, Ctx).invalid_index, final_popped.index);
     try std.testing.expectEqual(@as(?usize, null), tracked_indices[@as(usize, final_popped.id)]);
 
     try std.testing.expect(pq.peek() == null);

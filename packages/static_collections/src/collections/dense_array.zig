@@ -26,11 +26,11 @@ pub fn DenseArray(comptime T: type) type {
 
         data: vec.Vec(T),
 
-        pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
+        pub fn init(allocator: std.mem.Allocator, config: Config) Error!Self {
             var self: Self = .{
                 .data = try vec.Vec(T).init(allocator, .{
-                    .initial_capacity = cfg.initial_capacity,
-                    .budget = cfg.budget,
+                    .initial_capacity = config.initial_capacity,
+                    .budget = config.budget,
                 }),
             };
             self.assertInvariants();
