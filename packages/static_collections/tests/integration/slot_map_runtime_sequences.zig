@@ -1,3 +1,6 @@
+//! Model-based test: SlotMap insert/remove/lookup consistency with generation-based
+//! handle validation. Verifies that stale handles are rejected after removal and
+//! that live handles always resolve to the correct value.
 const std = @import("std");
 const static_collections = @import("static_collections");
 const static_testing = @import("static_testing");

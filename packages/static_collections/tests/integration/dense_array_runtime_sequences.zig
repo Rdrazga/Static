@@ -1,3 +1,6 @@
+//! Verifies DenseArray append, swap-remove, and budget propagation.
+//! Exercises the append/swap-remove lifecycle and confirms that memory budget
+//! accounting remains consistent through all mutations.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

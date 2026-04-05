@@ -1,3 +1,6 @@
+//! Verifies FixedVec capacity enforcement and element ordering through append/pop sequences.
+//! Fills the fixed-capacity vector to its limit, confirms overflow rejection,
+//! and validates correct element ordering on extraction.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

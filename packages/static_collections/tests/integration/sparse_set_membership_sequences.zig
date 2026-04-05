@@ -1,3 +1,6 @@
+//! Verifies SparseSet membership operations and universe-boundary enforcement.
+//! Tests add/remove/contains cycles across the full universe range and confirms
+//! that out-of-universe indices are rejected.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

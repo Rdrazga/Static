@@ -1,3 +1,6 @@
+//! Verifies MinHeap ordering and index tracking through push/pop/update sequences.
+//! Exercises heap growth, priority updates, and extraction order to confirm
+//! the min-heap invariant holds after every mutation.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

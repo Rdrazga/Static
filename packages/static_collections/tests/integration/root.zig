@@ -1,3 +1,6 @@
+//! Integration test root: forces build-time resolution of all test modules.
+//! Each import triggers comptime analysis of the corresponding test file,
+//! ensuring all integration tests are included in the test binary.
 comptime {
     _ = @import("fixed_vec_capacity_order_sequences.zig");
     _ = @import("small_vec_spill_sequences.zig");

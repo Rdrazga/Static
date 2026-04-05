@@ -1,3 +1,6 @@
+//! Verifies SortedVecMap maintains strict key ordering through put/remove sequences.
+//! Inserts keys in arbitrary order, removes selected entries, and confirms the
+//! remaining keys are always in sorted order.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

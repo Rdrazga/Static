@@ -1,3 +1,6 @@
+//! Model-based test: budget-bounded Vec capacity tracking across append/clear/reset sequences.
+//! Exercises allocation accounting under a memory budget to verify that capacity changes
+//! are correctly reflected in budget charges and that no bytes are leaked.
 const std = @import("std");
 const static_collections = @import("static_collections");
 const static_memory = static_collections.memory;

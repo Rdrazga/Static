@@ -1,3 +1,6 @@
+//! Verifies BitSet word-boundary behavior and out-of-bounds rejection.
+//! Exercises bits at word boundaries (0, 63, 64, 127) to confirm correct
+//! word indexing, and validates that out-of-range indices are rejected.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

@@ -1,3 +1,6 @@
+//! Model-based test: IndexPool allocate/release sequences with stale handle
+//! rejection and generation bumps. Confirms that released indices are recycled
+//! with incremented generations and that stale handles are correctly rejected.
 const std = @import("std");
 const static_collections = @import("static_collections");
 const static_testing = @import("static_testing");

@@ -1,3 +1,6 @@
+//! Verifies SmallVec inline-to-heap spill transitions and item integrity.
+//! Drives a SmallVec past its inline capacity to trigger heap spill, then
+//! confirms all elements survive the transition with correct values.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

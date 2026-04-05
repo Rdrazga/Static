@@ -1,3 +1,6 @@
+//! Verifies FlatHashMap collision handling, tombstone cleanup, and rehash under
+//! forced hash collisions. Uses a custom hash context that maps all keys to the
+//! same bucket, exercising the linear-probing and tombstone reclamation paths.
 const std = @import("std");
 const static_collections = @import("static_collections");
 

@@ -1,3 +1,6 @@
+//! Verifies Handle struct layout, bit-packing, and sentinel values at compile time.
+//! Checks that index and generation fields pack into the expected bit widths
+//! and that sentinel handles are distinct from all valid handles.
 const std = @import("std");
 const static_collections = @import("static_collections");
 
