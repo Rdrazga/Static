@@ -21,7 +21,7 @@ The "simplest" answer does not mean the simplest way to implement, it means the 
 
 ### 2.2 Zero Technical Debt
 
-Always work to do it right the first time, refactors are time intensive, and creating the best solution intially leads to less work in the future.
+Always work to do it right the first time. Refactors are time intensive, and creating the best solution initially leads to less work in the future.
 
 When a showstopper is found -- a potential memcpy latency spike, an exponential algorithm -- it is fixed immediately, not deferred. Make steady, measurable progress to constantly improve
 
@@ -33,7 +33,7 @@ Foundation: [NASA's Power of Ten -- Rules for Developing Safety Critical Code]
 
 ### 3.1 Control Flow
 
-- Use **only very simple, explicit control flow**. No recursion -- all executions that should be bounded must be bounded. Recurssion degrades readability and understandability, as well as creates potential hard to reason over bugs.
+- Use **only very simple, explicit control flow**. No recursion -- all executions that should be bounded must be bounded. Recursion degrades readability and understandability, as well as creating bugs that are hard to reason about.
 - Use **only excellent clean abstractions**, and only when they best model the domain. Good abstractions themselves are built upon these rules, as close to zero cost as possible, maintain clear control flow, and avoid introducing hidden footguns.
 - Consider whether a single `if` also needs a matching `else` to ensure both positive and negative spaces are handled or asserted.
 - **State invariants positively.** When working with lengths and indexes, prefer:

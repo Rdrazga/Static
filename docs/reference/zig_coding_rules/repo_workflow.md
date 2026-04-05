@@ -38,6 +38,13 @@ Rules:
   `scripts/*.zig`.
 - Do not create `utils.zig` or `helpers.zig`. Name files by purpose.
 - Test infrastructure belongs in `src/testing/`. Test cases belong in `tests/`.
+- Package roots under `packages/static_*` should be directly navigable:
+  - keep package-local `README.md` and `AGENTS.md` in the package root;
+  - keep `AGENTS.md` short and map-like;
+  - keep `README.md` aligned with the package's real root surface, tests,
+    examples, and benchmarks;
+  - keep package-local wording aligned with root command semantics and package
+    boundary docs.
 
 ## Planning and design process
 

@@ -6,6 +6,7 @@ Start here when you need to boot, navigate, or extend the repository.
 - `docs/plans/active/README.md` and `docs/plans/active/workspace_operations.md` for the current work queue, priorities, and sequencing.
 - `docs/plans/README.md` for the overall planning system, including active and completed work.
 - `docs/reference/zig_coding_rules.md` for the Zig rules index and task-specific rule links.
+- `packages/static_testing/README.md` and `packages/static_testing/AGENTS.md` for the shared deterministic harness package entry points.
 ## Supported commands
 - `zig build docs-lint`
 - `zig build check`
@@ -56,23 +57,20 @@ Start here when you need to boot, navigate, or extend the repository.
 - `static_spatial`: Spatial indexing, BVH, and uniform-grid structures, with package-level `IncrementalBVH` lifecycle integration coverage plus bounded `testing.model` mutation/query sequences for insert/refit/remove/reinsert/overlap flows, a retained replay/failure roundtrip for inclusive boundary-touching query semantics, and `IncrementalBVH` total-hit query reporting aligned with `BVH`.
 ## Repo shape
 - `packages/` holds the `static_*` libraries separated by concern and dependency layer.
-- Package roots may also carry scoped `README.md` and `AGENTS.md` files when a package needs additional operational guidance; keep those aligned with the root guidance and link them from the relevant package plan.
-- `packages/static_io/README.md`, `packages/static_io/AGENTS.md`, `packages/static_testing/README.md`, `packages/static_testing/AGENTS.md`, `packages/static_ecs/README.md`, and `packages/static_ecs/AGENTS.md` provide package-scoped operational docs already wired into repo navigation.
+- Each `packages/static_*/` root carries scoped `README.md` and `AGENTS.md` entry points; keep them aligned in structure, semantics, and root-command wording.
+- Package-local docs should stay map-like: `AGENTS.md` for fast operational guidance and `README.md` for package purpose, scope, validation, and key paths.
 - Package-owned `tests/` directories hold integration coverage inside the package boundary being validated.
 - `docs/reference/` holds stable rules and contracts.
 - `docs/sketches/` holds exploratory notes that are not yet stable.
-
 ## Change checklist
-
 - Add or update a plan before large implementation work.
 - Extend `zig build harness` when adding new first-class harness workflows.
 - Extend `scripts/docs_lint.zig` when you add a new source-of-truth document or required cross-link.
-
 ## Core Repo Ideologies
-- Every function maintains minimum of 2 assertions, pre and post conditions. Assertions can also be used as stronger documnetation of behavior, and ensuring fail-fast in release=safe or debug modes.
+- Every function should maintain a minimum of 2 assertions covering preconditions and postconditions. Assertions can also serve as stronger documentation of behavior and ensure fail-fast behavior in `ReleaseSafe` or `Debug` modes.
 - Every implementation made should consider data-oriented-design.
-- The packages should remain throughly tested using both zig's std.testing, std.debug if useful, and always consider where and how to properly integrate static_testing simulations, testing helpers, and benchmarking.
-- Napkin-math for cpu, memory, disk, network (and the connections between these) for performance should be conisdered when designing functions.
+- The packages should remain thoroughly tested using Zig's `std.testing`, `std.debug` when useful, and should always consider where and how to integrate `static_testing` simulations, testing helpers, and benchmarking.
+- Napkin math for CPU, memory, disk, network, and the connections between them should be considered when designing functions.
 - Where reasonable, the packages should maintain (or provide a pathway for package consumers to choose if there would be negative side-effects) bounded resource use, zero post-init allocation options, and where allocating carefully avoid and test for memory issues.
 - Clear or traceable code execution, maintainable minimized-tech debt code, clear control flows.
 - Safety and Performance are top priorities (True performance based on DoD), followed by DX, readable, traceable, and understandable code, followed by the code being highly tested and simulated to strive for 0-error code.

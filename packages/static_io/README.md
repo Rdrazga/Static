@@ -48,7 +48,10 @@ Deterministic bounded I/O runtime pieces, backend selection, and buffer-pool int
 - `benchmarks/` holds the canonical shared-workflow benchmark entry points.
 - `examples/` holds bounded usage examples; examples are not the canonical
   regression surface.
-- `docs/plans/active/packages/static_io.md` tracks the package work queue.
+- `docs/plans/completed/static_io_followup_closed_2026-03-23.md` records the
+  closed follow-up posture.
+- `docs/plans/completed/static_io_review_2026-03-20.md` records the package
+  review findings.
 
 ## Benchmark artifacts
 

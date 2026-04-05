@@ -198,11 +198,9 @@ Workspace for the `static_*` Zig packages.
 - `docs/plans/completed/` preserves completed plans and review history.
 - `docs/reference/zig_coding_rules.md` holds the detailed Zig coding contract.
 - `docs/sketches/` holds exploratory design work and pre-plan drafts.
-- `packages/static_io/README.md` and `packages/static_io/AGENTS.md` now provide
-  the first package-scoped operational docs for a downstream `static_testing`
-  adopter.
 - `packages/static_testing/README.md` and `packages/static_testing/AGENTS.md`
-  provide package-scoped usage guidance for the shared deterministic testing
-  package itself.
-- `packages/static_ecs/README.md` and `packages/static_ecs/AGENTS.md` provide
-  the package-scoped entry point for the ECS implementation queue.
+  remain the package-scoped entry point for the shared deterministic testing
+  surface.
+- Every `packages/static_*/` root now carries a package-scoped `README.md` and
+  `AGENTS.md` pair so package purpose, scope, validation, and key paths are
+  discoverable without leaving the package directory.

@@ -189,10 +189,8 @@ Primary repository entry points are:
 - `docs/README.md` for the top-level documentation map.
 - `AGENTS.md` for operational bootstrapping.
 - `README.md` for the command surface.
-- Package-scoped `README.md` / `AGENTS.md` files when a package needs extra
-  operational guidance; `packages/static_io/README.md` and
-  `packages/static_io/AGENTS.md` plus `packages/static_ecs/README.md` and
-  `packages/static_ecs/AGENTS.md` are current package-local examples.
+- Package-scoped `README.md` / `AGENTS.md` files in every
+  `packages/static_*/` root for package-local navigation and workflow context.
 - `docs/plans/README.md` for implementation workflow.
 - `docs/reference/zig_coding_rules.md` for the detailed coding contract.
 
@@ -203,5 +201,5 @@ Primary repository entry points are:
 - Exploratory design sketches: `docs/sketches/`
 - Stable design notes: `docs/design/`
 - Decision records: `docs/decisions/`
-- Package-scoped operational docs live alongside packages when needed, such as
-  `packages/static_io/README.md` and `packages/static_io/AGENTS.md`
+- Package-scoped operational docs live alongside every package root as
+  `README.md` plus `AGENTS.md`

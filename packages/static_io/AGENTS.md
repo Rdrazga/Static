@@ -8,7 +8,9 @@ Start here when you need to review, validate, or extend `static_io`.
 - `tests/integration/root.zig` for the package-level deterministic regression
   surface.
 - `benchmarks/` for canonical benchmark entry points and artifact names.
-- `docs/plans/active/packages/static_io.md` for the current package work queue.
+- `docs/plans/completed/static_io_followup_closed_2026-03-23.md` for the
+  current closure posture.
+- `docs/plans/completed/static_io_review_2026-03-20.md` for the review record.
 - `docs/plans/active/workspace_operations.md` for workspace priority and
   sequencing.
 - `docs/architecture.md` for package boundaries and dependency direction.
@@ -60,7 +62,7 @@ Start here when you need to review, validate, or extend `static_io`.
 
 ## Change checklist
 
-- Update `README.md`, `AGENTS.md`, and `docs/plans/active/packages/static_io.md`
+- Update `README.md`, `AGENTS.md`, and the completed review or closure record
   when package behavior or workflow changes.
 - Extend `tests/integration/root.zig` when you add new first-class package
   integration coverage.

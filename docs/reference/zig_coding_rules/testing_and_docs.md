@@ -43,3 +43,10 @@ Documentation is layered:
   become a plan, decision, or reference document.
 - When tests demonstrate a subtle contract, explain the test goal and method at
   the top of the test.
+- Keep package-root docs aligned across `packages/static_*`:
+  - each package root should carry both `README.md` and `AGENTS.md`;
+  - `AGENTS.md` is the short operational map, not a long package manual;
+  - `README.md` is the package entry point and should stay focused on purpose,
+    scope, validation, and key paths;
+  - package docs should reuse root command semantics and link back to the
+    relevant architecture and plan records.
