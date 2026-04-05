@@ -27,49 +27,45 @@ pub fn FixedVec(comptime T: type, comptime N: usize) type {
         pub const max_capacity: u32 = N;
 
         items_storage: [N]T = undefined,
-        len_value: usize = 0,
+        len_value: u32 = 0,
 
-        pub fn len(self: *const Self) usize {
-            assert(self.len_value <= N);
+        pub fn len(self: *const Self) u32 {
+            assert(self.len_value <= max_capacity);
             return self.len_value;
         }
 
-        pub fn capacity(_: *const Self) usize {
-            // Comptime-known result; assert it matches the type constant.
+        pub fn capacity(_: *const Self) u32 {
             comptime assert(N > 0);
             return max_capacity;
         }
 
         pub fn items(self: *Self) []T {
-            assert(self.len_value <= N);
+            assert(self.len_value <= max_capacity);
             const result = self.items_storage[0..self.len_value];
-            // Postcondition: returned slice length must equal the logical length.
             assert(result.len == self.len_value);
             return result;
         }
 
         pub fn itemsConst(self: *const Self) []const T {
-            assert(self.len_value <= N);
+            assert(self.len_value <= max_capacity);
             const result = self.items_storage[0..self.len_value];
-            // Postcondition: returned slice length must equal the logical length.
             assert(result.len == self.len_value);
             return result;
         }
 
         pub fn append(self: *Self, value: T) error{NoSpaceLeft}!void {
-            assert(self.len_value <= N);
-            if (self.len_value >= N) return error.NoSpaceLeft;
+            assert(self.len_value <= max_capacity);
+            if (self.len_value >= max_capacity) return error.NoSpaceLeft;
             self.items_storage[self.len_value] = value;
             self.len_value += 1;
-            assert(self.len_value <= N);
-            // Postcondition: length advanced by exactly one; never zero after a successful append.
+            assert(self.len_value <= max_capacity);
             assert(self.len_value > 0);
         }
 
         /// Returns an independent copy. FixedVec is stack-allocated,
         /// so this is a simple struct copy.
         pub fn clone(self: *const Self) Self {
-            assert(self.len_value <= N);
+            assert(self.len_value <= max_capacity);
             var result: Self = .{
                 .len_value = self.len_value,
             };
@@ -78,20 +74,19 @@ pub fn FixedVec(comptime T: type, comptime N: usize) type {
         }
 
         pub fn pop(self: *Self) ?T {
-            assert(self.len_value <= N);
+            assert(self.len_value <= max_capacity);
             if (self.len_value == 0) return null;
             self.len_value -= 1;
             const out = self.items_storage[self.len_value];
-            assert(self.len_value <= N);
+            assert(self.len_value <= max_capacity);
             return out;
         }
 
         pub fn clear(self: *Self) void {
-            assert(self.len_value <= N);
+            assert(self.len_value <= max_capacity);
             self.len_value = 0;
             assert(self.len_value == 0);
-            // Postcondition: capacity is unaffected by clear.
-            assert(self.capacity() == N);
+            assert(self.capacity() == max_capacity);
         }
     };
 }
