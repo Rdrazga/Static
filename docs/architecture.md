@@ -102,11 +102,11 @@ Examples:
   command-buffer runtime-sequence review and admitted ECS benchmark review
   workloads covering dense versus fragmented query iteration, initial versus
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
-  command-buffer staged-apply throughput, primitive hot-path microbenchmarks,
-  query scaling across entity and archetype counts, and frame-like sequential
-  ECS passes over one world, and deferred runtime-erased queries, import/export,
-  spatial adapters, and scheduler-facing surfaces remain out of the first
-  package boundary.
+  command-buffer staged-apply throughput plus setup/stage phase attribution,
+  primitive hot-path microbenchmarks, query scaling across entity and
+  archetype counts, and frame-like sequential ECS passes over one world, and
+  deferred runtime-erased queries, import/export, spatial adapters, and
+  scheduler-facing surfaces remain out of the first package boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while
   now using `static_testing` for replay-backed task-graph invariants,
   sequence-sensitive timer-wheel review, shared planning benchmark workflows,

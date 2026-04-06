@@ -165,9 +165,9 @@ Workspace for the `static_*` Zig packages.
   `testing.model` command-buffer sequences, plus admitted ECS benchmark review
   workloads for dense versus fragmented query iteration, initial versus
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
-  command-buffer staged-apply throughput, primitive hot-path microbenchmarks,
-  query scaling across entity and archetype counts, and frame-like multi-pass
-  ECS runs.
+  command-buffer staged-apply throughput plus setup/stage phase attribution,
+  primitive hot-path microbenchmarks, query scaling across entity and
+  archetype counts, and frame-like multi-pass ECS runs.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,

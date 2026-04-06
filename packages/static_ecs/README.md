@@ -43,9 +43,9 @@ World-local typed ECS building blocks for the `static` workspace.
   plus the matching integration harness.
 - The package now owns benchmark review workloads under `zig build bench` for
   chunk-batch iteration, structural churn, command-buffer staged-apply
-  throughput,
-  primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, and frame-like multi-pass ECS runs, with shared
+  throughput plus command-buffer setup/stage phase attribution, primitive
+  hot-path microbenchmarks, query scaling across entity and archetype counts,
+  and frame-like multi-pass ECS runs, with shared
   `static_testing` baseline/history artifacts plus explicit environment-note
   and environment-tag metadata.
 - The root bench surface now builds the imported ECS and `static_testing`
@@ -106,8 +106,8 @@ World-local typed ECS building blocks for the `static` workspace.
   canonical regression harness under the workspace test surface.
 - `benchmarks/` holds the admitted `query_iteration_baselines`,
   `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
-  `micro_hotpaths_baselines`, `query_scale_baselines`, and
-  `frame_pass_baselines` review workloads.
+  `command_buffer_phase_baselines`, `micro_hotpaths_baselines`,
+  `query_scale_baselines`, and `frame_pass_baselines` review workloads.
   `query_iteration_baselines` now owns dense single-archetype, mixed
   optional/exclude, and fragmented multi-archetype scan cases.
   `structural_churn_baselines` now owns initial spawn admission plus
@@ -115,6 +115,9 @@ World-local typed ECS building blocks for the `static` workspace.
   budget so direct reruns stay bounded.
   `command_buffer_staged_apply_baselines` now owns spawn-only, insert-only, and
   mixed spawn/insert/remove stage-plus-apply cases.
+  `command_buffer_phase_baselines` now owns the corresponding setup-only and
+  stage-and-clear attribution cases so staged-apply results can be interpreted
+  without implying true apply-only timing.
   `micro_hotpaths_baselines` now owns primitive hot paths such as const
   component lookup, `hasComponent()`, iterator startup, and one-command bundle
   staging.

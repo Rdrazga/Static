@@ -92,10 +92,11 @@ Start here when you need to review, validate, or extend `static_ecs`.
   including typed insert/remove helpers, fused bundle admission, and
   command-buffer initialization.
 - `benchmarks/`: package-owned benchmark review workloads for chunk iteration,
-  structural churn, command-buffer staged-apply throughput, primitive hot-path
-  microbenchmarks, query scaling, and frame-like multi-pass ECS runs. The
-  current admitted owners are `query_iteration_baselines`,
-  `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
+  structural churn, command-buffer staged-apply throughput plus setup/stage
+  attribution, primitive hot-path microbenchmarks, query scaling, and
+  frame-like multi-pass ECS runs. The current admitted owners are
+  `query_iteration_baselines`, `structural_churn_baselines`,
+  `command_buffer_staged_apply_baselines`, `command_buffer_phase_baselines`,
   `micro_hotpaths_baselines`, `query_scale_baselines`, and
   `frame_pass_baselines`.
   Root benchmark runs now also build the imported ECS and `static_testing`
