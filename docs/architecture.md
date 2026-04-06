@@ -79,17 +79,24 @@ Examples:
   while the root surface keeps the `memory` alias and cuts the `core` and
   `hash` aliases.
 - `static_ecs` keeps world-local ECS storage, bounded identity allocation,
-  typed component-universe admission, `ArchetypeKey`, bounded chunk layout,
-  ECS-owned archetype relocation, typed query/view ownership, and bounded
-  structural command staging package-local while reusing `static_memory` and
-  `static_collections` for the current world-local core; typed insert/remove
-  helpers now own initialized value-component admission, raw value-adding
-  archetype moves are rejected until the caller provides initialization, the
-  exported direct `ArchetypeStore` surface now mirrors `World` on
-  `components_per_archetype_max` validation, rejects occupied-slot aliasing
-  before mutation, has direct deterministic chunk/archetype swap-reindex proof,
-  the package now uses `static_testing` for bounded command-buffer
-  runtime-sequence review, and deferred runtime-erased queries, import/export,
+  typed component-universe admission, compact `ArchetypeKey` metadata,
+  single-backing chunk layout, ECS-owned archetype relocation, typed
+  query/view ownership, and bounded structural command staging package-local
+  while reusing `static_memory` and `static_collections` for the current
+  world-local core; typed insert/remove helpers now own initialized
+  value-component admission, fused bundle routes own final-archetype spawn and
+  insert admission, raw value-adding archetype moves are rejected until the
+  caller provides initialization, the exported direct `ArchetypeStore` surface
+  mirrors `World` on `components_per_archetype_max` validation, rejects
+  occupied-slot aliasing before mutation, uses package-owned archetype and
+  append-path chunk indexes rather than full scans as the primary route, and
+  keeps bounded empty-chunk reuse package-local through `WorldConfig`; borrowed
+  `View` / `ChunkBatch` surfaces fail fast after structural mutation in
+  runtime-safety builds, the package has direct deterministic chunk/archetype
+  swap-reindex proof plus representative compile-contract coverage for its
+  main public generic validators, the package now uses `static_testing` for
+  bounded command-buffer runtime-sequence review and admitted ECS benchmark
+  review workloads, and deferred runtime-erased queries, import/export,
   spatial adapters, and scheduler-facing surfaces remain out of the first
   package boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while

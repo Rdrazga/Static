@@ -101,17 +101,33 @@ Scope note:
 ### Recently completed queue items
 
 1. `static_ecs`
+   The performance and memory reopen is now closed:
+   bundle-oriented mutation is fused around final-archetype admission,
+   `CommandBuffer` now separates metadata from bounded payload bytes, chunk
+   storage uses one backing allocation plus bounded empty-chunk retention,
+   archetype and append-path chunk lookup now use package-owned fast paths,
+   sparse-archetype metadata is compacted, and package-owned ECS benchmark
+   review workloads now run under `zig build bench`:
+   `docs/plans/completed/static_ecs_performance_and_memory_followup_closed_2026-04-05.md`.
+2. `static_ecs`
+   The borrowed-view contract and compile-proof follow-up is now closed:
+   `View` and `ChunkBatch` are explicit borrowed surfaces with fail-fast
+   invalidation under structural mutation in runtime-safety builds, and the
+   package now owns representative compile-contract fixtures for its main public
+   `@compileError` boundaries:
+   `docs/plans/completed/static_ecs_view_contract_and_compile_proof_closed_2026-04-05.md`.
+3. `static_ecs`
    The constructor-cleanup follow-up is now closed:
    `ChunkRecord` append-failure rollback is explicit, `World.init()` now
    releases `EntityPool` on partial-init failure, and direct deterministic
    budget-pressure proof now covers both cleanup paths:
    `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`.
-2. `static_ecs`
+4. `static_ecs`
    The direct `ArchetypeStore` hardening reopen is now closed:
    `components_per_archetype_max` validation matches `World`, same-index direct
    spawn aliasing is rejected before mutation, and direct deterministic proof
    now covers empty-chunk and empty-archetype swap reindexing.
-3. `workspace_validation_followup`
+4. `workspace_validation_followup`
    Root command semantics are now explicit, the `static_queues` lock-free
    stress proof now matches the queue's non-blocking contention contract, the
    `static_sync` cancel-test cleanup no longer leaves live threads behind on
@@ -276,10 +292,11 @@ Scope note:
 - `static_hash_algorithm_portfolio_research` stays below the implementation
   queue as a research sidecar and should not preempt the concrete helper work
   above.
-- `static_ecs` now returns to the completed follow-up baseline at
-  `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`.
-  Keep runtime-erased query, import/export, side-index, and benchmark work
-  closed unless a separate concrete trigger appears.
+- `static_ecs` performance, memory-shape, config-truthfulness, and benchmark-
+  admission work is now closed under
+  `docs/plans/completed/static_ecs_performance_and_memory_followup_closed_2026-04-05.md`.
+  Keep runtime-erased query, import/export, scheduler ownership, and
+  spatial-adapter work closed unless a separate concrete trigger appears.
 - Lower-package outcomes still matter for follow-on ECS work, but they no
   longer block opening the package plan. `static_ecs` v1 should not depend on a
   `DenseArray` relocation helper, a fixed-width repeated-record hash helper, or

@@ -150,18 +150,18 @@ Workspace for the `static_*` Zig packages.
   paths, and `BudgetedAllocator` accounting for budget denial vs parent OOM,
   growth/shrink, `takeDeniedLast()`, and overflow/high-water behavior, with
   `Budget.release()` now failing fast on over-release in all builds.
-- `static_ecs` is now in first-slice implementation as a world-local typed ECS
-  core, currently covering explicit `WorldConfig` bounds, ECS-owned `Entity`
-  identity, bounded `EntityPool` allocation, typed component-universe
-  admission, `ArchetypeKey`, bounded `Chunk` layout, ECS-owned
-  `ArchetypeStore` structural mutation, typed query/view chunk-batch hot
-  paths, a first bounded `CommandBuffer`, and typed `World.insert()` /
-  `World.remove()` helpers, with raw value-adding archetype moves now rejected
-  until the caller provides typed initialization data, direct store configs now
-  mirroring `World` on `components_per_archetype_max` validation, occupied-slot
-  aliasing rejected before mutation, and package-owned direct proof now
-  covering chunk/archetype swap reindexing plus `testing.model` coverage for
-  mixed command-buffer structural sequences.
+- `static_ecs` now serves as a world-local typed ECS core with explicit
+  `WorldConfig` bounds, ECS-owned `Entity` identity, bounded `EntityPool`
+  allocation, typed component-universe admission, compact `ArchetypeKey`
+  metadata, single-backing `Chunk` layout, ECS-owned `ArchetypeStore`
+  structural mutation, typed query/view chunk-batch hot paths, bounded
+  `CommandBuffer` staging with separate entry and payload limits, fused
+  `spawnBundle()` / `insertBundle()` admission, bounded empty-chunk reuse,
+  archetype and append-path chunk fast paths, fail-fast borrowed-view
+  invalidation after structural mutation in runtime-safety builds, and
+  package-owned proof covering swap reindexing, compile-contract fixtures,
+  `testing.model` command-buffer sequences, plus admitted ECS benchmark review
+  workloads for chunk iteration, structural churn, and command-buffer apply.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,
