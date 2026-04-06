@@ -257,6 +257,7 @@ pub const SparseSet = struct {
     /// dense-to-sparse back-reference is consistent. Called only after
     /// mutations (insert, remove) and at init/deinit.
     fn assertFullInvariants(self: *const SparseSet) void {
+        if (!std.debug.runtime_safety) return;
         self.assertStructuralInvariants();
         var i: usize = 0;
         while (i < self.dense.items.len) : (i += 1) {

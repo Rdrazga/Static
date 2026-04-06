@@ -48,7 +48,7 @@ Examples:
   pathological-engine contract for `uintBelow()`.
 - `static_hash` keeps hashing and fingerprint ownership package-local while
   now using `static_testing` for shared benchmark review artifacts across byte,
-  combine, fingerprint, and structural suites.
+  combine, fingerprint, structural, and bounded quality-sample suites.
 - `static_queues` keeps queue-family ordering and handoff ownership
   package-local while now using `static_testing` for shared ring-buffer, SPSC,
   and disruptor throughput benchmark workflows plus package-owned
@@ -57,9 +57,10 @@ Examples:
   ordering, plus bounded `testing.sim.explore` proof for `WaitSet`
   channel-selection rotation and close semantics.
 - `static_memory` keeps allocator and ownership policy package-local while now
-  using `static_testing` for shared pool alloc/free benchmark workflows and
-  package-owned `testing.model` pool, arena, slab, and budgeted-allocator
-  lifecycle/accounting/misuse review, with `Budget.release()` now failing fast
+  using `static_testing` for shared pool and slab alloc/free benchmark
+  workflows and package-owned `testing.model` pool, arena, slab, and
+  budgeted-allocator lifecycle/accounting/misuse review, with slab free
+  routing now ordered by class address and `Budget.release()` now failing fast
   on over-release in all builds.
 - `static_ecs` keeps runtime-safety-heavy invariant walking package-local and
   now short-circuits those scans outside runtime-safety builds so production
@@ -70,7 +71,8 @@ Examples:
   sequence review, a package-owned negative compile-contract harness for the
   main generic `@compileError` boundaries, direct `SlotMap` iterator
   visibility proof including the read-only iterator path, shared
-  `flat_hash_map` benchmark-workflow review, an explicit `Vec`
+  `flat_hash_map` benchmark-workflow review plus the broader
+  `collections_hotpaths` mutation benchmark owner, an explicit `Vec`
   oversized-capacity operating-error contract before allocator or budget side
   effects, `SmallVec` read/reset parity without hiding the one-way spill
   boundary, and public `SortedVecMap` / `FlatHashMap` iterator surfaces that
@@ -107,8 +109,10 @@ Examples:
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
   command-buffer staged-apply throughput plus setup/stage phase attribution,
   primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, frame-like sequential ECS passes over one world, and
-  branch-heavy versus write-heavy frame workload sets, and deferred
+  archetype counts, frame-like sequential ECS passes over one world,
+  branch-heavy versus write-heavy frame workload sets, allocator-strategy
+  comparisons between caller-supplied allocators on typed versus direct
+  encoded bundle admission, and deferred
   runtime-erased queries, import/export, spatial adapters, and
   scheduler-facing surfaces remain out of the first package boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while

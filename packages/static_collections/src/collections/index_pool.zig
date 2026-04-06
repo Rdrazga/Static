@@ -236,6 +236,7 @@ pub const IndexPool = struct {
     /// This function is read-only. It never mutates live state, so it is
     /// safe to call from any context including signal handlers and debuggers.
     fn assertFullInvariants(self: *const IndexPool) void {
+        if (!std.debug.runtime_safety) return;
         self.assertStructuralInvariants();
         assert(!self.freeStackHasDuplicates());
 

@@ -85,6 +85,8 @@ fn addBenchStep(
         import_mod: *std.Build.Module,
         extra_import_name: ?[]const u8 = null,
         extra_import_mod: ?*std.Build.Module = null,
+        extra_import_name_2: ?[]const u8 = null,
+        extra_import_mod_2: ?*std.Build.Module = null,
     }{
         .{
             .name = "spsc_throughput",
@@ -129,6 +131,14 @@ fn addBenchStep(
         .{
             .name = "flat_hash_map_lookup_insert_baselines",
             .src = "packages/static_collections/benchmarks/flat_hash_map_lookup_insert_baselines.zig",
+            .import_name = "static_collections",
+            .import_mod = mods.static_collections,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "collections_hotpaths",
+            .src = "packages/static_collections/benchmarks/collections_hotpaths.zig",
             .import_name = "static_collections",
             .import_mod = mods.static_collections,
             .extra_import_name = "static_testing",
@@ -198,16 +208,30 @@ fn addBenchStep(
             .extra_import_name = "static_testing",
             .extra_import_mod = mods.static_testing,
         },
+        .{
+            .name = "allocator_strategy_baselines",
+            .src = "packages/static_ecs/benchmarks/allocator_strategy_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+            .extra_import_name_2 = "static_memory",
+            .extra_import_mod_2 = mods.static_memory,
+        },
     };
 
     for (benchmarks) |bm| {
         const Import = std.Build.Module.Import;
-        var imports_buffer: [2]Import = undefined;
+        var imports_buffer: [3]Import = undefined;
         imports_buffer[0] = .{ .name = bm.import_name, .module = bm.import_mod };
         var imports_len: usize = 1;
         if (bm.extra_import_name) |extra_import_name| {
             imports_buffer[1] = .{ .name = extra_import_name, .module = bm.extra_import_mod.? };
             imports_len = 2;
+        }
+        if (bm.extra_import_name_2) |extra_import_name_2| {
+            imports_buffer[imports_len] = .{ .name = extra_import_name_2, .module = bm.extra_import_mod_2.? };
+            imports_len += 1;
         }
         const exe = b.addExecutable(.{
             .name = bm.name,
@@ -486,6 +510,8 @@ fn addBenchStep(
         });
         const run = b.addRunArtifact(exe);
         step.dependOn(&run.step);
+        const single_step = b.step(bm.name, b.fmt("Run benchmark {s}", .{bm.name}));
+        single_step.dependOn(&run.step);
     }
 
     const static_sync_benchmarks = [_]struct {

@@ -83,7 +83,8 @@ Workspace for the `static_*` Zig packages.
   benchmark workflows, and an explicit bounded pathological-engine contract for
   `uintBelow()`.
 - `static_hash` now uses shared benchmark-workflow review artifacts for its
-  canonical byte, combine, fingerprint, and structural benchmark suites.
+  canonical byte, combine, fingerprint, structural, and bounded quality-sample
+  benchmark suites.
 - `static_sync` now serves as the first synchronization-heavy downstream proof
   for replay, shared `testing.sim.fixture` wait/wake modeling, temporal
   ordering checks, retained failures, package-owned `testing.model` coverage
@@ -120,8 +121,10 @@ Workspace for the `static_*` Zig packages.
   comparator/hash/equality callback support across the affected map and heap
   surfaces, `SortedVecMap` comparator-signature validation at type
   instantiation, and shared benchmark-workflow adoption for `flat_hash_map`
-  lookup-hit and insert/remove churn review artifacts, while the root surface
-  now keeps only the collection families plus the `memory` alias.
+  lookup-hit and insert/remove churn review artifacts plus the broader
+  `collections_hotpaths` owner for invariant-sensitive mutation paths, while
+  the root surface now keeps only the collection families plus the `memory`
+  alias.
 - `static_meta` now serves as the narrow runtime-registry downstream adopter of
   `static_testing` bounded mutation and lookup sequence review.
 - `static_profile` now has package-level integration coverage for exact mixed
@@ -147,12 +150,13 @@ Workspace for the `static_*` Zig packages.
   `Broadcast` fanout/backpressure ordering, plus bounded `testing.sim.explore`
   coverage for `WaitSet` selection rotation, buffered-before-closed delivery,
   and closed-peer handling.
-- `static_memory` now has shared benchmark-workflow adoption for pool
+- `static_memory` now has shared benchmark-workflow adoption for pool and slab
   alloc/free review artifacts plus package-owned `testing.model` coverage for
   pool lifecycle, arena reset/reuse sequences, slab class routing/reuse/misuse
-  paths, and `BudgetedAllocator` accounting for budget denial vs parent OOM,
-  growth/shrink, `takeDeniedLast()`, and overflow/high-water behavior, with
-  `Budget.release()` now failing fast on over-release in all builds.
+  paths, address-ordered free routing, and `BudgetedAllocator` accounting for
+  budget denial vs parent OOM, growth/shrink, `takeDeniedLast()`, and
+  overflow/high-water behavior, with `Budget.release()` now failing fast on
+  over-release in all builds.
 - `static_ecs` now serves as a world-local typed ECS core with explicit
   `WorldConfig` bounds, ECS-owned `Entity` identity, bounded `EntityPool`
   allocation, typed component-universe admission, compact `ArchetypeKey`
@@ -170,8 +174,9 @@ Workspace for the `static_*` Zig packages.
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
   command-buffer staged-apply throughput plus setup/stage phase attribution,
   primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, frame-like multi-pass ECS runs, and branch-heavy versus
-  write-heavy frame workload sets.
+  archetype counts, frame-like multi-pass ECS runs, branch-heavy versus
+  write-heavy frame workload sets, and allocator-strategy comparisons between
+  caller-supplied allocators on typed versus direct encoded bundle admission.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,

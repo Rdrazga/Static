@@ -255,6 +255,7 @@ pub fn main() !void {
             },
             .comparison_storage = &history_comparisons,
         },
+        .{},
     );
     var out = report_writer.toArrayList();
     defer out.deinit(std.heap.page_allocator);
@@ -267,6 +268,8 @@ fn validateSemanticPreflight(
     padded: PaddedKey,
     slice: SliceKey,
 ) void {
+    if (!std.debug.runtime_safety) return;
+
     assert(static_hash.hashAnySeeded(0x3344_5566_7788_9900, simple) == std.hash.Wyhash.hash(0x3344_5566_7788_9900, std.mem.asBytes(&simple)));
     assert(static_hash.stableHashAny(simple) == static_hash.stable.stableFingerprint64(stable_simple_bytes));
 

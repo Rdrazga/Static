@@ -30,6 +30,7 @@ Command intent:
 - Keep allocator ownership and bounded-resource policy package-local.
 - Prefer direct package tests for allocator-specific invariants; use `static_testing` only when a shared harness is the better fit.
 - Keep `Budget`, `Arena`, `Pool`, `Slab`, `Scratch`, and related wrappers explicit about bounds, reuse, and failure contracts.
+- Keep `Slab` free routing address-ordered and benchmarked alongside pool alloc/free and fallback behavior.
 - Keep benchmark artifacts on the shared `baseline.zon` plus `history.binlog` convention; do not add package-local artifact formats.
 - Keep package docs aligned with the root repo docs and update the package README and this file together when behavior or navigation changes.
 
@@ -39,7 +40,7 @@ Command intent:
 - `src/memory/budget.zig`: byte accounting and `BudgetedAllocator`.
 - `src/memory/arena.zig`: bump arena with reset/reuse semantics.
 - `src/memory/pool.zig`: fixed-size block pool and typed pool helpers.
-- `src/memory/slab.zig`: size-class slab allocation and fallback handling.
+- `src/memory/slab.zig`: size-class slab allocation, address-ordered free routing, and fallback handling.
 - `src/memory/scratch.zig`: scoped scratch allocator built on `Stack`.
 - `src/memory/frame_scope.zig`: explicit stack and scratch rollback guards.
 - `src/memory/stack.zig`: stack allocator primitive used by scratch helpers.
@@ -48,7 +49,7 @@ Command intent:
 - `src/memory/soft_limit_allocator.zig`: soft-limit wrapper with fallback policy.
 - `src/memory/debug_allocator.zig`, `src/memory/profile_hooks.zig`, `src/memory/epoch.zig`, `src/memory/tls_pool.zig`: support and integration helpers.
 - `tests/integration/`: package-owned allocator regression coverage.
-- `benchmarks/`: canonical pool alloc/free review workload.
+- `benchmarks/`: canonical pool alloc/free and slab alloc/free review workload.
 - `examples/`: bounded usage examples only.
 
 ## Change checklist

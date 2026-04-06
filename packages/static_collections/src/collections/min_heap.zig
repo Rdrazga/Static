@@ -309,6 +309,7 @@ pub fn MinHeap(comptime T: type, comptime Ctx: type) type {
         }
 
         fn assertHeapInvariant(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             self.assertStorageInvariant();
             var child_index: usize = 1;
             while (child_index < self.len_value) : (child_index += 1) {

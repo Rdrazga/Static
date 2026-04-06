@@ -326,6 +326,7 @@ pub fn main() !void {
             },
             .comparison_storage = &history_comparisons,
         },
+        .{},
     );
     var out = report_writer.toArrayList();
     defer out.deinit(std.heap.page_allocator);
@@ -333,6 +334,8 @@ pub fn main() !void {
 }
 
 fn validateSemanticBaselines() void {
+    if (!std.debug.runtime_safety) return;
+
     var zero_64: [64]u8 = undefined;
     var incrementing_512: [512]u8 = undefined;
     var random_4096: [4096]u8 = undefined;

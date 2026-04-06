@@ -219,6 +219,7 @@ pub fn main() !void {
             },
             .comparison_storage = &history_comparisons,
         },
+        .{},
     );
     var out = report_writer.toArrayList();
     defer out.deinit(std.heap.page_allocator);
@@ -230,6 +231,8 @@ fn validateSemanticPreflight(
     four_values: []const u64,
     sixteen_values: []const u64,
 ) void {
+    if (!std.debug.runtime_safety) return;
+
     assert(
         static_hash.combineOrdered64(pair) !=
             static_hash.combineOrdered64(.{ .left = pair.right, .right = pair.left }),

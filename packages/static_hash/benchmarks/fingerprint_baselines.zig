@@ -287,6 +287,7 @@ pub fn main() !void {
             },
             .comparison_storage = &history_comparisons,
         },
+        .{},
     );
     var out = report_writer.toArrayList();
     defer out.deinit(std.heap.page_allocator);
@@ -298,6 +299,8 @@ fn validateSemanticPreflight(
     incrementing_payload: []const u8,
     random_payload: []const u8,
 ) void {
+    if (!std.debug.runtime_safety) return;
+
     assert(
         static_hash.fingerprint64(zero_payload) ==
             std.hash.Wyhash.hash(0, zero_payload),

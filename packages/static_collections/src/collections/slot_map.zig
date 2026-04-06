@@ -400,6 +400,7 @@ pub fn SlotMap(comptime T: type) type {
         /// live count, occupied/free consistency, and free-list integrity.
         /// Called only after mutations (insert, remove) and at init/deinit.
         fn assertFullInvariants(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             self.assertStructuralInvariants();
             const slot_count = self.slots.items.len;
 

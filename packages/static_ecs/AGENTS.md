@@ -59,6 +59,10 @@ Start here when you need to review, validate, or extend `static_ecs`.
   `command_buffer_payload_bytes_max` and `empty_chunk_retained_max`, and do not
   reintroduce dead cache or side-index config knobs without implementations in
   the same slice.
+- Keep allocator ownership caller-supplied. Use benchmark evidence before
+  internalizing a `static_memory` allocator policy inside ECS; the allocator
+  strategy benchmark exists to measure that boundary rather than to assume it
+  should collapse.
 - Keep the direct encoded-bundle surface truthful: malformed bytes must fail
   through stable operating errors, misaligned caller slices must not panic, the
   route must stay explicit that payload bytes are same-process bit-valid
@@ -99,12 +103,14 @@ Start here when you need to review, validate, or extend `static_ecs`.
 - `benchmarks/`: package-owned benchmark review workloads for chunk iteration,
   structural churn, command-buffer staged-apply throughput plus setup/stage
   attribution, primitive hot-path microbenchmarks, query scaling, frame-like
-  multi-pass ECS runs, and branch-heavy versus write-heavy frame workload
-  sets. The current admitted owners are
+  multi-pass ECS runs, branch-heavy versus write-heavy frame workload
+  sets, and allocator-strategy comparisons over typed versus direct encoded
+  bundle admission. The current admitted owners are
   `query_iteration_baselines`, `structural_churn_baselines`,
   `command_buffer_staged_apply_baselines`, `command_buffer_phase_baselines`,
   `micro_hotpaths_baselines`, `query_scale_baselines`,
-  `frame_pass_baselines`, and `frame_workload_baselines`.
+  `frame_pass_baselines`, `frame_workload_baselines`, and
+  `allocator_strategy_baselines`.
   Root benchmark runs now also build the imported ECS and `static_testing`
   modules under the same `ReleaseFast` mode recorded in benchmark history, and
   `structural_churn_baselines` uses a reduced iteration budget so direct reruns

@@ -28,6 +28,8 @@ Command intent:
 - Keep hashing, fingerprinting, combiners, stable hashing, and budgeted hashing package-local.
 - Prefer `static_testing` when a change needs replay, fuzz, modeling, or benchmark review support.
 - Keep deterministic examples and benchmark workloads bounded and explicit.
+- Treat benchmark semantic preflights as safety-mode checks: they should remain active in `Debug` and `ReleaseSafe`, but short-circuit in `ReleaseFast` so the review surface matches production-mode timing.
+- Keep `benchmarks/quality_samples.zig` on the shared `baseline.zon` plus bounded `history.binlog` review path rather than stdout-only reporting.
 - Add doc comments when an exported algorithm or contract changes and the behavior is not obvious from the name.
 
 ## Package map

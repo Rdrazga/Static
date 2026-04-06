@@ -48,8 +48,9 @@ World-local typed ECS building blocks for the `static` workspace.
   chunk-batch iteration, structural churn, command-buffer staged-apply
   throughput plus command-buffer setup/stage phase attribution, primitive
   hot-path microbenchmarks, query scaling across entity and archetype counts,
-  frame-like multi-pass ECS runs, and branch-heavy versus write-heavy frame
-  workload sets, with shared
+  frame-like multi-pass ECS runs, branch-heavy versus write-heavy frame
+  workload sets, and allocator-strategy comparisons between caller-supplied
+  allocators on typed versus direct encoded bundle spawn paths, with shared
   `static_testing` baseline/history artifacts plus explicit environment-note
   and environment-tag metadata.
 - The root bench surface now builds the imported ECS and `static_testing`
@@ -112,7 +113,8 @@ World-local typed ECS building blocks for the `static` workspace.
   `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
   `command_buffer_phase_baselines`, `micro_hotpaths_baselines`,
   `query_scale_baselines`, `frame_pass_baselines`, and
-  `frame_workload_baselines` review workloads.
+  `frame_workload_baselines`, and `allocator_strategy_baselines` review
+  workloads.
   `query_iteration_baselines` now owns dense single-archetype, mixed
   optional/exclude, and fragmented multi-archetype scan cases.
   `structural_churn_baselines` now owns initial spawn admission plus
@@ -134,6 +136,10 @@ World-local typed ECS building blocks for the `static` workspace.
   `frame_workload_baselines` now owns branch-heavy and write-heavy frame/system
   mixes so later ECS tuning can separate query/filter pressure from column
   write pressure.
+  `allocator_strategy_baselines` now compares the current allocator-agnostic
+  ECS boundary under `std.heap.page_allocator` versus a caller-supplied
+  `static_memory.slab.Slab`, and contrasts that typed bundle path with the
+  direct encoded route that avoids per-call scratch allocation.
 - `docs/plans/completed/static_ecs_performance_and_memory_followup_closed_2026-04-05.md`
   records the fused bundle, command-buffer, chunk-storage, control-plane,
   metadata, and benchmark-admission closure posture.

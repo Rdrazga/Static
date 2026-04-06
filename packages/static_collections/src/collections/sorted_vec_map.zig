@@ -470,6 +470,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         /// O(n) full validation: verifies strict sorted order of all entries.
         /// Called only after mutations (put, remove) and at init/deinit.
         fn assertFullInvariants(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             self.assertStructuralInvariants();
             const list = self.entries.items;
             if (list.len <= 1) return;

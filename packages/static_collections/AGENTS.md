@@ -36,6 +36,9 @@ Start here when you need to review, validate, or extend `static_collections`.
   package.
 - Keep benchmark review on shared `baseline.zon` plus bounded history
   sidecars; do not introduce package-local artifact formats.
+- When adding collection benchmarks, prefer a single owner per workload
+  family that isolates the hot path under review, and keep semantic setup out
+  of the timed region unless the benchmark explicitly measures setup cost.
 - Update package docs and the relevant plan or reference doc in the same slice
   when behavior, boundaries, or workflow change.
 

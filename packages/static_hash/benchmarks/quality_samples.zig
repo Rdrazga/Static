@@ -6,6 +6,10 @@
 //! - output bit-balance bias; and
 //! - average flipped output bits after a one-bit input perturbation.
 //!
+//! The results are emitted through the shared `static_testing` benchmark
+//! workflow as a reviewable `baseline.zon` plus bounded `history.binlog`
+//! sidecar, while the human-readable stdout summary remains for quick scanning.
+//!
 //! Ideal state for 64-bit outputs:
 //! - zero exact collisions in this bounded sample;
 //! - bucket occupancy close to the sample mean;
@@ -16,10 +20,33 @@ const std = @import("std");
 const assert = std.debug.assert;
 const static_hash = @import("static_hash");
 const builtin = @import("builtin");
+const static_testing = @import("static_testing");
+const support = @import("support.zig");
+
+const bench = static_testing.bench;
+
+const quality_compare_config: bench.baseline.BaselineCompareConfig = .{
+    .thresholds = .{
+        .median_ratio_ppm = 0,
+        .p95_ratio_ppm = 0,
+        .p99_ratio_ppm = 0,
+    },
+};
 
 const sample_count = 4096;
 const avalanche_sample_count = 512;
 const bucket_count = 256;
+const metric_case_count = 25;
+const baseline_document_len = @max(16 * 1024, metric_case_count * 2048);
+const read_source_len = @max(16 * 1024, metric_case_count * 2048);
+const read_parse_len = @max(32 * 1024, metric_case_count * 4096);
+const comparison_capacity = metric_case_count * 2;
+const history_existing_len = @max(64 * 1024, metric_case_count * 16 * 1024);
+const history_record_len = @max(16 * 1024, metric_case_count * 4096);
+const history_frame_len = @max(16 * 1024, metric_case_count * 4096);
+const history_output_len = @max(64 * 1024, metric_case_count * 16 * 1024);
+const history_file_len = @max(64 * 1024, metric_case_count * 16 * 1024);
+const history_names_len = @max(4096, metric_case_count * 1024);
 
 const QualitySummary = struct {
     collisions: usize,
@@ -30,11 +57,14 @@ const QualitySummary = struct {
 };
 
 pub fn main() !void {
-    std.debug.print("== static_hash bounded quality sample ==\n", .{});
-    std.debug.print(
-        "ideal: collisions=0, bucket_mean~{d}, low bias, avg_flip_bits~32\n",
-        .{sample_count / bucket_count},
-    );
+    var threaded_io = std.Io.Threaded.init(std.heap.page_allocator, .{
+        .environ = .empty,
+    });
+    defer threaded_io.deinit();
+
+    const io = threaded_io.io();
+    var output_dir = try support.openOutputDir(io, "quality_samples");
+    defer output_dir.close(io);
 
     const fingerprint64_summary = sampleFingerprint64();
     const fingerprint_v1_summary = sampleFingerprintV1();
@@ -42,11 +72,123 @@ pub fn main() !void {
     const combine_multiset_summary = sampleCombineMultiset();
     const xor_lower_bound_summary = sampleXorLowerBound();
 
+    var case_sample_storage: [metric_case_count]bench.runner.BenchmarkSample = undefined;
+    var case_result_storage: [metric_case_count]bench.runner.BenchmarkCaseResult = undefined;
+    var case_index: usize = 0;
+    appendSummaryCases(
+        "fingerprint64",
+        fingerprint64_summary,
+        &case_index,
+        &case_sample_storage,
+        &case_result_storage,
+    );
+    appendSummaryCases(
+        "fingerprint_v1",
+        fingerprint_v1_summary,
+        &case_index,
+        &case_sample_storage,
+        &case_result_storage,
+    );
+    appendSummaryCases(
+        "combine_ordered",
+        combine_ordered_summary,
+        &case_index,
+        &case_sample_storage,
+        &case_result_storage,
+    );
+    appendSummaryCases(
+        "combine_multiset",
+        combine_multiset_summary,
+        &case_index,
+        &case_sample_storage,
+        &case_result_storage,
+    );
+    appendSummaryCases(
+        "xor_multiset_lower_bound",
+        xor_lower_bound_summary,
+        &case_index,
+        &case_sample_storage,
+        &case_result_storage,
+    );
+    assert(case_index == case_result_storage.len);
+
+    var report_stats_storage: [metric_case_count]bench.stats.BenchmarkStats = undefined;
+    var report_baseline_buffer: [baseline_document_len]u8 = undefined;
+    var report_source_buffer: [read_source_len]u8 = undefined;
+    var report_parse_buffer: [read_parse_len]u8 = undefined;
+    var report_comparison_storage: [comparison_capacity]bench.baseline.BaselineCaseComparison = undefined;
+    var history_existing_buffer: [history_existing_len]u8 = undefined;
+    var history_record_buffer: [history_record_len]u8 = undefined;
+    var history_frame_buffer: [history_frame_len]u8 = undefined;
+    var history_output_buffer: [history_output_len]u8 = undefined;
+    var history_file_buffer: [history_file_len]u8 = undefined;
+    var history_cases: [metric_case_count]bench.stats.BenchmarkStats = undefined;
+    var history_names: [history_names_len]u8 = undefined;
+    var history_tags: [4][]const u8 = undefined;
+    var history_comparisons: [comparison_capacity]bench.baseline.BaselineCaseComparison = undefined;
+
+    const run_result = bench.runner.BenchmarkRunResult{
+        .mode = .smoke,
+        .case_results = &case_result_storage,
+    };
+
+    std.debug.print("== static_hash bounded quality sample ==\n", .{});
+    std.debug.print(
+        "ideal: collisions=0, bucket_mean~{d}, low bias, avg_flip_bits~32\n",
+        .{sample_count / bucket_count},
+    );
     printSummary("fingerprint64", fingerprint64_summary);
     printSummary("fingerprint_v1", fingerprint_v1_summary);
     printSummary("combine_ordered", combine_ordered_summary);
     printSummary("combine_multiset", combine_multiset_summary);
     printSummary("xor_multiset_lower_bound", xor_lower_bound_summary);
+
+    var report_writer: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
+    defer report_writer.deinit();
+    _ = try support.writeReport(
+        &report_writer.writer,
+        run_result,
+        io,
+        output_dir,
+        "quality_samples",
+        .{
+            .stats_storage = &report_stats_storage,
+            .baseline_document_buffer = &report_baseline_buffer,
+            .read_source_buffer = &report_source_buffer,
+            .read_parse_buffer = &report_parse_buffer,
+            .comparison_storage = &report_comparison_storage,
+        },
+        .record_if_missing_then_compare,
+        quality_compare_config,
+        false,
+        .{
+            .sub_path = "history.binlog",
+            .package_name = "static_hash",
+            .environment_note = support.default_environment_note,
+            .environment_tags = &[_][]const u8{ "static_hash", "quality_samples" },
+            .append_buffers = .{
+                .existing_file_buffer = &history_existing_buffer,
+                .record_buffer = &history_record_buffer,
+                .frame_buffer = &history_frame_buffer,
+                .output_file_buffer = &history_output_buffer,
+            },
+            .read_buffers = .{
+                .file_buffer = &history_file_buffer,
+                .case_storage = &history_cases,
+                .string_buffer = &history_names,
+                .tag_storage = &history_tags,
+            },
+            .comparison_storage = &history_comparisons,
+        },
+        .{
+            .include_samples = false,
+            .include_derived_summary = false,
+        },
+    );
+
+    var report_out = report_writer.toArrayList();
+    defer report_out.deinit(std.heap.page_allocator);
+    std.debug.print("{s}", .{report_out.items});
 }
 
 fn sampleFingerprint64() QualitySummary {
@@ -204,6 +346,80 @@ fn printSummary(name: []const u8, summary: QualitySummary) void {
             summary.average_flipped_bits,
         },
     );
+}
+
+fn appendSummaryCases(
+    comptime prefix: []const u8,
+    summary: QualitySummary,
+    case_index: *usize,
+    sample_storage: []bench.runner.BenchmarkSample,
+    case_result_storage: []bench.runner.BenchmarkCaseResult,
+) void {
+    appendMetricCase(
+        comptime std.fmt.comptimePrint("{s}_collisions", .{prefix}),
+        @as(u64, @intCast(summary.collisions)),
+        case_index,
+        sample_storage,
+        case_result_storage,
+    );
+    appendMetricCase(
+        comptime std.fmt.comptimePrint("{s}_bucket_min", .{prefix}),
+        @as(u64, @intCast(summary.bucket_min)),
+        case_index,
+        sample_storage,
+        case_result_storage,
+    );
+    appendMetricCase(
+        comptime std.fmt.comptimePrint("{s}_bucket_max", .{prefix}),
+        @as(u64, @intCast(summary.bucket_max)),
+        case_index,
+        sample_storage,
+        case_result_storage,
+    );
+    appendMetricCase(
+        comptime std.fmt.comptimePrint("{s}_max_bit_bias_x1000", .{prefix}),
+        scaledMetric(summary.max_bit_bias_percent),
+        case_index,
+        sample_storage,
+        case_result_storage,
+    );
+    appendMetricCase(
+        comptime std.fmt.comptimePrint("{s}_avg_flipped_bits_x1000", .{prefix}),
+        scaledMetric(summary.average_flipped_bits),
+        case_index,
+        sample_storage,
+        case_result_storage,
+    );
+}
+
+fn appendMetricCase(
+    comptime name: []const u8,
+    value: u64,
+    case_index: *usize,
+    sample_storage: []bench.runner.BenchmarkSample,
+    case_result_storage: []bench.runner.BenchmarkCaseResult,
+) void {
+    const index = case_index.*;
+    assert(index < sample_storage.len);
+    assert(index < case_result_storage.len);
+
+    sample_storage[index] = .{
+        .elapsed_ns = value,
+        .iteration_count = 1,
+    };
+    case_result_storage[index] = .{
+        .name = name,
+        .warmup_iterations = 0,
+        .measure_iterations = 1,
+        .samples = sample_storage[index .. index + 1],
+        .total_elapsed_ns = value,
+    };
+    case_index.* = index + 1;
+}
+
+fn scaledMetric(value: f64) u64 {
+    assert(value >= 0.0);
+    return @as(u64, @intFromFloat(value * 1000.0));
 }
 
 fn buildByteCase(seed_value: usize, storage: []u8) []const u8 {

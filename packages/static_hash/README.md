@@ -7,7 +7,7 @@ High-performance hashing, fingerprinting, and stable-hash utilities for the `sta
 - The root workspace build is the supported entry point; package-local `zig build` is not the supported validation surface.
 - The package exports fast hash algorithms, checksums, type-aware hashing, combiners, fingerprints, stable hashing, and budgeted hashing controls.
 - Package coverage includes combine invariants, streaming hasher modeling, and replay/fuzz invariants.
-- Canonical benchmark review workloads cover byte hashing, combine, fingerprint, structural hashing, and quality samples.
+- Canonical benchmark review workloads cover byte hashing, combine, fingerprint, structural hashing, and quality samples with shared baseline/history artifacts.
 
 ## Main surfaces
 
@@ -41,7 +41,7 @@ Command intent:
 - `tests/integration/model_streaming_hashers.zig` covers streaming hasher behavior.
 - `tests/integration/replay_fuzz_invariants.zig` covers retained malformed-input and replay cases.
 - `tests/integration/seed_reducer_helpers.zig` supports replay and reduction workflows.
-- `benchmarks/byte_hash_baselines.zig`, `benchmarks/combine_baselines.zig`, `benchmarks/fingerprint_baselines.zig`, `benchmarks/structural_hash_baselines.zig`, and `benchmarks/quality_samples.zig` define the canonical benchmark review surfaces.
+- `benchmarks/byte_hash_baselines.zig`, `benchmarks/combine_baselines.zig`, `benchmarks/fingerprint_baselines.zig`, `benchmarks/structural_hash_baselines.zig`, and `benchmarks/quality_samples.zig` define the canonical benchmark review surfaces. `quality_samples.zig` emits a reviewable `baseline.zon` plus bounded `history.binlog` sidecar through `static_testing`.
 - `benchmarks/support.zig` holds shared benchmark helper code and artifact naming.
 
 ## Benchmark artifacts

@@ -15,7 +15,9 @@ workspace.
   generic rejection boundaries, including invalid comparator/hash signatures
   and the padded-key default-hash gate.
 - Shared benchmark adoption is in place for `flat_hash_map` lookup-hit and
-  insert/remove churn review workloads.
+  insert/remove churn review workloads, and a broader hot-path benchmark owner
+  exists for `IndexPool`, `MinHeap`, `SlotMap`, `SparseSet`, and
+  `SortedVecMap` mutation paths.
 
 ## Main surfaces
 
@@ -70,6 +72,9 @@ workspace.
 - `tests/compile_fail/fixtures/` holds the comptime rejection fixtures.
 - `benchmarks/flat_hash_map_lookup_insert_baselines.zig` is the canonical
   benchmark entry point for the shared lookup/insert-remove review workflow.
+- `benchmarks/collections_hotpaths.zig` covers the mutation hot paths for the
+  handle-based and ordered collection families that previously had only test
+  coverage for ReleaseFast-sensitive invariant cost.
 - `examples/` shows minimal bounded usage of the main collection families.
 
 ## Benchmark artifacts

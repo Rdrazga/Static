@@ -40,25 +40,39 @@ pub fn openOutputDir(
 }
 
 pub fn writeGroupReport(
+    comptime case_capacity: usize,
     run_result: bench.runner.BenchmarkRunResult,
     io: std.Io,
     output_dir: std.Io.Dir,
     environment_note: []const u8,
 ) !void {
-    var stats_storage: [2]bench.stats.BenchmarkStats = undefined;
-    var baseline_document_buffer: [16384]u8 = undefined;
-    var read_source_buffer: [16384]u8 = undefined;
-    var read_parse_buffer: [32768]u8 = undefined;
-    var comparisons: [16]bench.baseline.BaselineCaseComparison = undefined;
-    var history_existing_buffer: [65536]u8 = undefined;
-    var history_record_buffer: [16384]u8 = undefined;
-    var history_frame_buffer: [16384]u8 = undefined;
-    var history_output_buffer: [65536]u8 = undefined;
-    var history_file_buffer: [65536]u8 = undefined;
-    var history_cases: [2]bench.stats.BenchmarkStats = undefined;
-    var history_names: [4096]u8 = undefined;
+    comptime std.debug.assert(case_capacity > 0);
+
+    const baseline_document_len = @max(16 * 1024, case_capacity * 2048);
+    const read_source_len = @max(16 * 1024, case_capacity * 2048);
+    const read_parse_len = @max(32 * 1024, case_capacity * 4096);
+    const comparison_capacity = case_capacity * 2;
+    const history_existing_len = @max(64 * 1024, case_capacity * 16 * 1024);
+    const history_record_len = @max(16 * 1024, case_capacity * 4096);
+    const history_frame_len = @max(16 * 1024, case_capacity * 4096);
+    const history_output_len = @max(64 * 1024, case_capacity * 16 * 1024);
+    const history_file_len = @max(64 * 1024, case_capacity * 16 * 1024);
+    const history_names_len = @max(4096, case_capacity * 1024);
+
+    var stats_storage: [case_capacity]bench.stats.BenchmarkStats = undefined;
+    var baseline_document_buffer: [baseline_document_len]u8 = undefined;
+    var read_source_buffer: [read_source_len]u8 = undefined;
+    var read_parse_buffer: [read_parse_len]u8 = undefined;
+    var comparisons: [comparison_capacity]bench.baseline.BaselineCaseComparison = undefined;
+    var history_existing_buffer: [history_existing_len]u8 = undefined;
+    var history_record_buffer: [history_record_len]u8 = undefined;
+    var history_frame_buffer: [history_frame_len]u8 = undefined;
+    var history_output_buffer: [history_output_len]u8 = undefined;
+    var history_file_buffer: [history_file_len]u8 = undefined;
+    var history_cases: [case_capacity]bench.stats.BenchmarkStats = undefined;
+    var history_names: [history_names_len]u8 = undefined;
     var history_tags: [32][]const u8 = undefined;
-    var history_comparisons: [16]bench.baseline.BaselineCaseComparison = undefined;
+    var history_comparisons: [comparison_capacity]bench.baseline.BaselineCaseComparison = undefined;
     var aw: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
     _ = try bench.workflow.writeTextAndOptionalBaselineReport(&aw.writer, run_result, .{
         .io = io,

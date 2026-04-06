@@ -68,6 +68,7 @@ pub fn writeReport(
     compare_config: bench.baseline.BaselineCompareConfig,
     enforce_gate: bool,
     history: ?HistoryBuffers,
+    report_config: bench.exports.TextReportConfig,
 ) !bench.workflow.WorkflowSummary {
     assert(benchmark_name.len > 0);
     assert(report_buffers.stats_storage.len > 0);
@@ -81,6 +82,7 @@ pub fn writeReport(
         .dir = output_dir,
         .sub_path = "baseline.zon",
         .mode = mode,
+        .report_config = report_config,
         .compare_config = compare_config,
         .enforce_gate = enforce_gate,
         .stats_storage = report_buffers.stats_storage,

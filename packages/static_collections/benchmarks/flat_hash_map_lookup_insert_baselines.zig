@@ -112,6 +112,7 @@ pub fn main() !void {
     );
 
     try support.writeGroupReport(
+        case_storage.len,
         run_result,
         io,
         output_dir,

@@ -6,9 +6,9 @@
 //! done.
 //! Thread safety: not thread-safe. Callers must serialise access externally.
 //! Memory budget: each size class owns a `Pool` whose backing buffer is allocated at init. The
-//! `classes` slice itself is also heap-allocated. When `allow_large_fallback` is enabled, large
-//! allocations bypass the class pools and go directly to the backing allocator; those are not
-//! counted in the capacity report. Slab is 56 bytes on 64-bit targets.
+//! `classes` slice and the address-ordered class index are also heap-allocated. When
+//! `allow_large_fallback` is enabled, large allocations bypass the class pools and go directly to
+//! the backing allocator; those are not counted in the capacity report.
 
 const std = @import("std");
 const assert = std.debug.assert;
@@ -39,6 +39,7 @@ pub const SlabConfig = struct {
 pub const Slab = struct {
     backing_allocator: std.mem.Allocator,
     classes: []Class,
+    class_order_by_addr: []u32,
     allow_large_fallback: bool,
     max_size: u32,
     used_bytes: u64 = 0,
@@ -150,9 +151,18 @@ pub const Slab = struct {
             initialized += 1;
         }
 
+        const class_order_by_addr = backing_allocator.alloc(u32, class_count) catch return error.OutOfMemory;
+        errdefer backing_allocator.free(class_order_by_addr);
+        var order_index: usize = 0;
+        while (order_index < class_count) : (order_index += 1) {
+            class_order_by_addr[order_index] = @intCast(order_index);
+        }
+        sortClassOrderByAddress(classes, class_order_by_addr);
+
         const out: Slab = .{
             .backing_allocator = backing_allocator,
             .classes = classes,
+            .class_order_by_addr = class_order_by_addr,
             .allow_large_fallback = config.allow_large_fallback,
             .max_size = classes[class_count - 1].size,
             .used_bytes = 0,
@@ -168,7 +178,9 @@ pub const Slab = struct {
             class.pool.deinit();
         }
         self.backing_allocator.free(self.classes);
+        self.backing_allocator.free(self.class_order_by_addr);
         self.classes = &[_]Class{};
+        self.class_order_by_addr = &[_]u32{};
         self.max_size = 0;
         self.used_bytes = 0;
         self.high_water_bytes = 0;
@@ -291,8 +303,23 @@ pub const Slab = struct {
         assert(@intFromPtr(ptr) != 0);
         // Precondition: slab must be initialized.
         assert(self.classes.len != 0);
-        for (self.classes) |*class| {
-            if (class.pool.ownsPtr(ptr)) return class;
+        const ptr_addr = @intFromPtr(ptr);
+        var lo: usize = 0;
+        var hi: usize = self.class_order_by_addr.len;
+        while (lo < hi) {
+            const mid = lo + (hi - lo) / 2;
+            const class_index = self.class_order_by_addr[mid];
+            assert(class_index < self.classes.len);
+            const class = &self.classes[class_index];
+            const start = @intFromPtr(class.pool.buffer.ptr);
+            const end = std.math.add(usize, start, class.pool.buffer.len) catch unreachable;
+            if (ptr_addr < start) {
+                hi = mid;
+            } else if (ptr_addr >= end) {
+                lo = mid + 1;
+            } else {
+                return class;
+            }
         }
         return null;
     }
@@ -411,7 +438,9 @@ pub const Slab = struct {
     }
 
     fn assertInvariants(self: *const Slab) void {
+        if (!std.debug.runtime_safety) return;
         assert(self.classes.len != 0);
+        assert(self.class_order_by_addr.len == self.classes.len);
         assert(self.max_size == self.classes[self.classes.len - 1].size);
         assert(self.high_water_bytes >= self.used_bytes);
 
@@ -423,6 +452,40 @@ pub const Slab = struct {
             if (i > 0) assert(class.size > prev);
             prev = class.size;
         }
+
+        var prev_end: usize = 0;
+        for (self.class_order_by_addr, 0..) |class_index, order_index| {
+            assert(class_index < self.classes.len);
+            const class = &self.classes[class_index];
+            const start = @intFromPtr(class.pool.buffer.ptr);
+            const end = std.math.add(usize, start, class.pool.buffer.len) catch unreachable;
+            assert(start != 0);
+            assert(end > start);
+            if (order_index > 0) {
+                assert(prev_end <= start);
+            }
+            prev_end = end;
+        }
+    }
+
+    fn sortClassOrderByAddress(classes: []const Class, class_order_by_addr: []u32) void {
+        assert(classes.len == class_order_by_addr.len);
+        var i: usize = 1;
+        while (i < class_order_by_addr.len) : (i += 1) {
+            const key = class_order_by_addr[i];
+            var j = i;
+            while (j > 0 and classStart(classes[key]) < classStart(classes[class_order_by_addr[j - 1]])) {
+                class_order_by_addr[j] = class_order_by_addr[j - 1];
+                j -= 1;
+            }
+            class_order_by_addr[j] = key;
+        }
+    }
+
+    fn classStart(class: Class) usize {
+        const start = @intFromPtr(class.pool.buffer.ptr);
+        assert(start != 0);
+        return start;
     }
 };
 
@@ -492,4 +555,32 @@ test "slab large-allocation fallback alloc/free" {
 
     try testing.expectError(error.InvalidBlock, slab.free(mem, 16));
     try slab.free(mem, 8);
+}
+
+test "slab frees route across three classes" {
+    // Verifies that pointer ownership is resolved correctly across more than two size classes.
+    const sizes = [_]u32{ 16, 64, 256 };
+    const counts = [_]u32{ 1, 1, 1 };
+
+    var slab = try Slab.init(testing.allocator, .{
+        .class_sizes = &sizes,
+        .class_counts = &counts,
+        .allow_large_fallback = false,
+    });
+    defer slab.deinit();
+
+    const small = try slab.alloc(8, 8);
+    const medium = try slab.alloc(24, 16);
+    const large = try slab.alloc(200, 32);
+    const report_after_alloc = slab.report();
+    try testing.expectEqual(@as(u64, 336), report_after_alloc.used);
+    try testing.expectEqual(@as(u64, 336), report_after_alloc.high_water);
+
+    try slab.free(medium, 16);
+    try slab.free(small, 8);
+    try slab.free(large, 32);
+
+    const report_after_free = slab.report();
+    try testing.expectEqual(@as(u64, 0), report_after_free.used);
+    try testing.expectEqual(@as(u64, 336), report_after_free.high_water);
 }
