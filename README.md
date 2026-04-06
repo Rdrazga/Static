@@ -57,6 +57,9 @@ Workspace for the `static_*` Zig packages.
   partitioning, and bounded campaign-summary/retained-seed triage helpers, plus
   bounded worker-lane host-thread swarm execution with deterministic main-thread
   commit order.
+- `static_ecs` invariant-walk helpers now short-circuit outside
+  runtime-safety builds so `ReleaseFast` benchmarks and production-style ECS
+  hot paths are not dominated by stripped-assert scan overhead.
 - `static_bits` now serves as the first foundation-package downstream adopter
   of `static_testing` replay/fuzz malformed-input coverage and shared
   cursor/varint benchmark workflows.

@@ -820,6 +820,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
         }
 
         fn assertInvariants(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             assert(self.archetypes.len() > 0);
             assert(self.archetypes.len() <= self.config.archetypes_max);
             assert(self.total_chunks <= self.config.chunks_max);

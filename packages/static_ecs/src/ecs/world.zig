@@ -251,6 +251,7 @@ pub fn World(comptime Components: anytype) type {
         }
 
         fn assertInvariants(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             assert(self.entity_pool.capacity() == self.config.entities_max);
             assert(Registry.count() <= self.config.components_per_archetype_max);
             assert(self.archetype_store.activeCount() == self.entity_pool.activeCount());

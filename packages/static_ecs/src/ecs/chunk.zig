@@ -241,6 +241,7 @@ pub fn Chunk(comptime Components: anytype) type {
         }
 
         fn assertInvariants(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             assert(self.rows_capacity > 0);
             assert(self.rows_len <= self.rows_capacity);
             assert(self.storage.len == self.reserved_bytes);

@@ -21,6 +21,9 @@ World-local typed ECS building blocks for the `static` workspace.
 - The current hot-path layer includes typed query descriptors and a zero-copy
   borrowed chunk-batch `View` over matching archetypes, with fail-fast
   invalidation after structural mutation in runtime-safety builds.
+- Heavy internal invariant walks now short-circuit outside runtime-safety
+  builds, so `ReleaseFast` hot paths do not keep paying debug-style scan costs
+  just to reach stripped assertions.
 - The current control-plane layer includes a bounded
   `CommandBuffer(comptime Components)` with separate entry-count and
   payload-byte bounds, rollback-safe bundle staging, deterministic apply order,

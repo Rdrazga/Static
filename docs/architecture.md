@@ -61,6 +61,9 @@ Examples:
   package-owned `testing.model` pool, arena, slab, and budgeted-allocator
   lifecycle/accounting/misuse review, with `Budget.release()` now failing fast
   on over-release in all builds.
+- `static_ecs` keeps runtime-safety-heavy invariant walking package-local and
+  now short-circuits those scans outside runtime-safety builds so production
+  ECS hot paths do not inherit stripped-assert traversal cost.
 - `static_collections` keeps bounded container ownership package-local while
   now using `static_testing` for package-owned `SlotMap`, `IndexPool`, `Vec`,
   `FlatHashMap`, `SortedVecMap`, and `SparseSet` mutation/resource-boundary

@@ -367,6 +367,7 @@ pub fn CommandBuffer(comptime Components: anytype) type {
         }
 
         fn assertInvariants(self: *const Self) void {
+            if (!std.debug.runtime_safety) return;
             assert(self.commands.len() <= self.config.command_buffer_entries_max);
             assert(self.payload_bytes.len() <= self.config.command_buffer_payload_bytes_max);
 

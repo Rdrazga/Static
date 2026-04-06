@@ -198,6 +198,7 @@ pub fn ArchetypeKey(comptime Components: anytype) type {
         }
 
         fn assertInvariants(self: Self) void {
+            if (!std.debug.runtime_safety) return;
             assert(self.ids_len <= component_universe_count_u32);
 
             var counted: u32 = 0;

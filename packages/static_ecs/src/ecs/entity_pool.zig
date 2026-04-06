@@ -75,6 +75,7 @@ pub const EntityPool = struct {
     }
 
     fn assertInvariants(self: *const EntityPool) void {
+        if (!std.debug.runtime_safety) return;
         assert(self.pool.capacity() > 0);
         assert(self.pool.freeCount() <= self.pool.capacity());
     }

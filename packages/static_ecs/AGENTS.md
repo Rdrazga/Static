@@ -85,6 +85,11 @@ Start here when you need to review, validate, or extend `static_ecs`.
 - `src/ecs/query.zig`: typed query descriptor validation and matching.
 - `src/ecs/view.zig`: borrowed typed chunk-batch hot-path iteration with
   fail-fast invalidation after structural mutation in runtime-safety builds.
+- `src/ecs/archetype_store.zig`, `src/ecs/world.zig`, `src/ecs/chunk.zig`,
+  `src/ecs/command_buffer.zig`, `src/ecs/entity_pool.zig`, and
+  `src/ecs/archetype_key.zig`: internal invariant walkers stay active in
+  runtime-safety builds but short-circuit in `ReleaseFast` so production
+  hot paths do not retain debug-style scan overhead.
 - `src/ecs/command_buffer.zig`: bounded structural staging with separate entry
   and payload limits, rollback-safe bundle staging, plus deterministic apply
   order.
