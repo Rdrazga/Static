@@ -26,7 +26,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
     return struct {
         const Self = @This();
 
-        pub const Error = world_config_mod.Error || Chunk.Error || collections.vec.Error || collections.sorted_vec_map.Error || error{
+        pub const Error = world_config_mod.Error || bundle_codec_mod.DecodeError || Chunk.Error || collections.vec.Error || collections.sorted_vec_map.Error || error{
             AlreadyExists,
             ComponentInitRequired,
             EntityOutOfRange,
@@ -468,11 +468,21 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
                     .row_index = 0,
                     .occupied = true,
                 }).?;
-                if (record.chunk.rowCount() < record.chunk.capacity()) return hint;
+                if (record.chunk.rowCount() < record.chunk.capacity()) {
+                    if (record.chunk.rowCount() == 0) {
+                        assert(archetype.retained_empty_chunks > 0);
+                        archetype.retained_empty_chunks -= 1;
+                    }
+                    return hint;
+                }
             }
 
             for (archetype.chunks.items(), 0..) |*chunk_record, chunk_index| {
                 if (chunk_record.chunk.rowCount() < chunk_record.chunk.capacity()) {
+                    if (chunk_record.chunk.rowCount() == 0) {
+                        assert(archetype.retained_empty_chunks > 0);
+                        archetype.retained_empty_chunks -= 1;
+                    }
                     archetype.nonfull_chunk_hint = @intCast(chunk_index);
                     return @intCast(chunk_index);
                 }
@@ -598,7 +608,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             _ = self;
             var key = Key.empty();
             var reader = BundleReader.init(bytes, entry_count);
-            while (reader.next()) |entry| {
+            while (try reader.next()) |entry| {
                 key = try key.withId(entry.component_id);
             }
             return key;
@@ -606,7 +616,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
         fn writeBundlePayloads(self: *Self, location: EntityLocation, bytes: []const u8, entry_count: u32) Error!void {
             var reader = BundleReader.init(bytes, entry_count);
-            while (reader.next()) |entry| {
+            while (try reader.next()) |entry| {
                 try self.writeComponentBytes(location, entry.component_id, entry.payload);
             }
         }

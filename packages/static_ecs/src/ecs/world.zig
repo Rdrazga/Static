@@ -20,7 +20,9 @@ pub fn World(comptime Components: anytype) type {
     return struct {
         const Self = @This();
 
-        pub const Error = world_config_mod.Error || entity_pool_mod.Error || archetype_store_mod.ArchetypeStore(Components).Error;
+        pub const Error = world_config_mod.Error || entity_pool_mod.Error || archetype_store_mod.ArchetypeStore(Components).Error || error{
+            EntityNotAllocated,
+        };
         pub const ComponentRegistry = Registry;
         pub const ArchetypeKey = archetype_key_mod.ArchetypeKey(Components);
         pub const Chunk = chunk_mod.Chunk(Components);
@@ -201,7 +203,7 @@ pub fn World(comptime Components: anytype) type {
         }
 
         pub fn spawnBundleEncoded(self: *Self, entity: entity_mod.Entity, bytes: []const u8, entry_count: u32) Error!void {
-            assert(self.entity_pool.contains(entity));
+            if (!self.entity_pool.contains(entity)) return error.EntityNotAllocated;
             try self.archetype_store.spawnBundleEncoded(entity, bytes, entry_count);
             assert(self.contains(entity));
             self.assertInvariants();

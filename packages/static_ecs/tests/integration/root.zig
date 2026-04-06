@@ -7,4 +7,5 @@ comptime {
     _ = @import("view_invalidation_runtime.zig");
     _ = @import("command_buffer_runtime.zig");
     _ = @import("command_buffer_runtime_sequences.zig");
+    _ = @import("encoded_bundle_runtime.zig");
 }

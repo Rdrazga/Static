@@ -26,6 +26,9 @@ World-local typed ECS building blocks for the `static` workspace.
   payload-byte bounds, fused bundle staging, deterministic apply order, and
   typed `World.insert()` / `World.remove()` helpers so value-component
   additions stay initialized.
+- The direct encoded-bundle world/store routes now reject malformed bytes
+  through stable operating errors, and `World.spawnBundleEncoded()` now keeps
+  entity-pool/store admission truthful in all build modes.
 - Archetype lookup and append-path chunk acquisition now use package-owned fast
   paths instead of full scans as the primary route.
 - The package now also owns a first `static_testing.testing.model` sequence
@@ -61,7 +64,8 @@ World-local typed ECS building blocks for the `static` workspace.
   value-adding archetype moves fenced behind explicit initialization
   requirements.
 - `src/ecs/bundle_codec.zig` owns deterministic encoded bundle layout for fused
-  runtime bundle staging and apply.
+  runtime bundle staging and apply, plus malformed-input rejection for the
+  direct encoded-bundle route.
 - `src/ecs/query.zig` owns typed query descriptors and matching semantics.
 - `src/ecs/view.zig` owns borrowed typed chunk-batch iteration over matching
   archetypes, invalidated by structural mutation.
@@ -84,7 +88,8 @@ World-local typed ECS building blocks for the `static` workspace.
 
 - `tests/integration/root.zig` wires the package-level deterministic
   integration suite, including the package-owned `testing.model` command-buffer
-  sequence proof.
+  sequence proof plus the direct encoded-bundle and empty-chunk-retention
+  regressions.
 - `tests/compile_fail/build.zig` wires the package-owned compile-contract
   fixtures, while `tests/integration/compile_contract_failures.zig` runs the
   canonical regression harness under the workspace test surface.

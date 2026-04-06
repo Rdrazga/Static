@@ -46,6 +46,9 @@ Start here when you need to review, validate, or extend `static_ecs`.
   `command_buffer_payload_bytes_max` and `empty_chunk_retained_max`, and do not
   reintroduce dead cache or side-index config knobs without implementations in
   the same slice.
+- Keep the direct encoded-bundle surface truthful: malformed bytes must fail
+  through stable operating errors, and direct world admission must not
+  desynchronize `EntityPool` from `ArchetypeStore`.
 
 ## Package map
 
@@ -62,7 +65,8 @@ Start here when you need to review, validate, or extend `static_ecs`.
   empty-chunk reuse, and raw value-adding archetype moves rejected until the
   caller supplies typed initialization.
 - `src/ecs/bundle_codec.zig`: deterministic bundle encoding for fused
-  spawn/insert staging and apply.
+  spawn/insert staging and apply, plus malformed-input rejection for the direct
+  encoded-bundle route.
 - `src/ecs/query.zig`: typed query descriptor validation and matching.
 - `src/ecs/view.zig`: borrowed typed chunk-batch hot-path iteration with
   fail-fast invalidation after structural mutation in runtime-safety builds.
@@ -75,7 +79,8 @@ Start here when you need to review, validate, or extend `static_ecs`.
   structural churn, and command-buffer apply throughput.
 - `tests/integration/`: package-level deterministic structural coverage.
   The package now also uses `static_testing.testing.model` here for mixed
-  command-buffer structural sequences.
+  command-buffer structural sequences plus direct encoded-bundle and
+  empty-chunk-retention regressions.
 - `tests/compile_fail/`: package-owned negative compile-contract fixtures for
   the main public generic rejection boundaries.
 
