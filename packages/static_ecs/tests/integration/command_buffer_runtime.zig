@@ -12,9 +12,9 @@ test "command buffer applies hot-path staged structural work after chunk iterati
         .components_per_archetype_max = 4,
         .chunks_max = 8,
         .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     });
     defer world.deinit();

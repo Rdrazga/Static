@@ -8,6 +8,7 @@ const component_registry_mod = @import("component_registry.zig");
 const archetype_key_mod = @import("archetype_key.zig");
 const chunk_mod = @import("chunk.zig");
 const archetype_store_mod = @import("archetype_store.zig");
+const bundle_codec_mod = @import("bundle_codec.zig");
 const query_mod = @import("query.zig");
 const view_mod = @import("view.zig");
 const command_buffer_mod = @import("command_buffer.zig");
@@ -66,6 +67,19 @@ pub fn World(comptime Components: anytype) type {
             errdefer self.entity_pool.release(entity) catch {};
             try self.archetype_store.spawn(entity);
             assert(entity.isValid());
+            assert(self.contains(entity));
+            self.assertInvariants();
+            return entity;
+        }
+
+        pub fn spawnBundle(self: *Self, bundle: anytype) Error!entity_mod.Entity {
+            self.assertInvariants();
+            const entity = try self.entity_pool.allocate();
+            errdefer self.entity_pool.release(entity) catch {};
+            const encoded_len: comptime_int = comptime bundle_codec_mod.encodedBundleSizeForType(Components, @TypeOf(bundle));
+            var encoded_buf: [encoded_len]u8 = undefined;
+            const entry_count = bundle_codec_mod.encodeBundleTuple(Components, bundle, encoded_buf[0..]);
+            try self.spawnBundleEncoded(entity, encoded_buf[0..], entry_count);
             assert(self.contains(entity));
             self.assertInvariants();
             return entity;
@@ -145,6 +159,15 @@ pub fn World(comptime Components: anytype) type {
             self.assertInvariants();
         }
 
+        pub fn insertBundle(self: *Self, entity: entity_mod.Entity, bundle: anytype) Error!void {
+            self.assertInvariants();
+            const encoded_len: comptime_int = comptime bundle_codec_mod.encodedBundleSizeForType(Components, @TypeOf(bundle));
+            var encoded_buf: [encoded_len]u8 = undefined;
+            const entry_count = bundle_codec_mod.encodeBundleTuple(Components, bundle, encoded_buf[0..]);
+            try self.insertBundleEncoded(entity, encoded_buf[0..], entry_count);
+            self.assertInvariants();
+        }
+
         pub fn remove(self: *Self, entity: entity_mod.Entity, comptime T: type) Error!void {
             self.assertInvariants();
             try self.archetype_store.removeComponent(entity, T);
@@ -177,6 +200,30 @@ pub fn World(comptime Components: anytype) type {
             return CommandBuffer.init(allocator, self.config);
         }
 
+        pub fn spawnBundleEncoded(self: *Self, entity: entity_mod.Entity, bytes: []const u8, entry_count: u32) Error!void {
+            assert(self.entity_pool.contains(entity));
+            try self.archetype_store.spawnBundleEncoded(entity, bytes, entry_count);
+            assert(self.contains(entity));
+            self.assertInvariants();
+        }
+
+        pub fn spawnBundleFromEncoded(self: *Self, bytes: []const u8, entry_count: u32) Error!entity_mod.Entity {
+            self.assertInvariants();
+            const entity = try self.entity_pool.allocate();
+            errdefer self.entity_pool.release(entity) catch {};
+            try self.spawnBundleEncoded(entity, bytes, entry_count);
+            assert(self.contains(entity));
+            self.assertInvariants();
+            return entity;
+        }
+
+        pub fn insertBundleEncoded(self: *Self, entity: entity_mod.Entity, bytes: []const u8, entry_count: u32) Error!void {
+            self.assertInvariants();
+            try self.archetype_store.insertBundleEncoded(entity, bytes, entry_count);
+            assert(self.contains(entity));
+            self.assertInvariants();
+        }
+
         fn assertInvariants(self: *const Self) void {
             assert(self.entity_pool.capacity() == self.config.entities_max);
             assert(Registry.count() <= self.config.components_per_archetype_max);
@@ -196,9 +243,9 @@ test "world validates config against the typed component universe" {
         .components_per_archetype_max = 1,
         .chunks_max = 2,
         .chunk_rows_max = 8,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     }));
 }
@@ -214,9 +261,9 @@ test "world spawns, despawns, and reuses entity slots safely" {
         .components_per_archetype_max = 4,
         .chunks_max = 2,
         .chunk_rows_max = 8,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     });
     defer world.deinit();
@@ -249,9 +296,9 @@ test "world keeps stale entities out after archetype mutation and same-slot reus
         .components_per_archetype_max = 4,
         .chunks_max = 4,
         .chunk_rows_max = 8,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     });
     defer world.deinit();
@@ -287,9 +334,9 @@ test "world view iterates typed chunk batches over matching archetypes" {
         .components_per_archetype_max = 4,
         .chunks_max = 8,
         .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     });
     defer world.deinit();
@@ -347,9 +394,9 @@ test "world rejects raw value-component additions through moveToArchetype and su
         .components_per_archetype_max = 4,
         .chunks_max = 4,
         .chunk_rows_max = 8,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     });
     defer world.deinit();
@@ -367,6 +414,43 @@ test "world rejects raw value-component additions through moveToArchetype and su
     try world.remove(entity, Position);
     try testing.expect(!world.hasComponent(entity, Position));
     try testing.expect(world.hasComponent(entity, Tag));
+}
+
+test "world supports fused spawnBundle and insertBundle admission" {
+    const Position = struct { x: f32, y: f32 };
+    const Velocity = struct { x: f32, y: f32 };
+    const Tag = struct {};
+    const TestWorld = World(.{ Position, Velocity, Tag });
+
+    var world = try TestWorld.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 8,
+        .components_per_archetype_max = 4,
+        .chunks_max = 8,
+        .chunk_rows_max = 4,
+        .command_buffer_entries_max = 8,
+        .command_buffer_payload_bytes_max = 512,
+        .empty_chunk_retained_max = 0,
+        .budget = null,
+    });
+    defer world.deinit();
+
+    const spawned = try world.spawnBundle(.{
+        Position{ .x = 1, .y = 2 },
+        Tag{},
+    });
+    try testing.expect(world.hasComponent(spawned, Position));
+    try testing.expect(world.hasComponent(spawned, Tag));
+    try testing.expectEqual(@as(f32, 1), world.componentPtrConst(spawned, Position).?.x);
+
+    const existing = try world.spawn();
+    try world.insertBundle(existing, .{
+        Position{ .x = 10, .y = 20 },
+        Velocity{ .x = 30, .y = 40 },
+    });
+    try testing.expect(world.hasComponent(existing, Position));
+    try testing.expect(world.hasComponent(existing, Velocity));
+    try testing.expectEqual(@as(f32, 30), world.componentPtrConst(existing, Velocity).?.x);
 }
 
 test "world init releases entity-pool reservations when archetype store init fails" {
@@ -389,9 +473,9 @@ test "world init releases entity-pool reservations when archetype store init fai
         .components_per_archetype_max = 2,
         .chunks_max = 2,
         .chunk_rows_max = 4,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 4,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = &budget,
     }));
     try testing.expectEqual(@as(u64, 0), budget.used());

@@ -14,9 +14,9 @@ pub const WorldConfig = struct {
     components_per_archetype_max: u32,
     chunks_max: u32,
     chunk_rows_max: u32,
-    query_cache_entries_max: u32 = 0,
     command_buffer_entries_max: u32,
-    side_index_entries_max: u32 = 0,
+    command_buffer_payload_bytes_max: u32,
+    empty_chunk_retained_max: u32 = 0,
     budget: ?*memory.budget.Budget = null,
 
     pub fn validate(self: WorldConfig) Error!void {
@@ -58,9 +58,9 @@ test "world config accepts explicit bounded values" {
         .components_per_archetype_max = 8,
         .chunks_max = 8,
         .chunk_rows_max = 32,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 64,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 4096,
+        .empty_chunk_retained_max = 2,
         .budget = null,
     };
 
@@ -75,9 +75,8 @@ test "world config rejects zero-bound core surfaces" {
         .components_per_archetype_max = 1,
         .chunks_max = 1,
         .chunk_rows_max = 1,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 1,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 1,
         .budget = null,
     };
 
@@ -91,9 +90,8 @@ test "world config rejects total-row bounds below entity bound" {
         .components_per_archetype_max = 4,
         .chunks_max = 2,
         .chunk_rows_max = 32,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 16,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
         .budget = null,
     };
 

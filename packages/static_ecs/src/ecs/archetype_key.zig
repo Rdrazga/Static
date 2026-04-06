@@ -8,6 +8,8 @@ pub fn ArchetypeKey(comptime Components: anytype) type {
     const Registry = component_registry_mod.ComponentRegistry(Components);
     const component_universe_count_u32 = Registry.count();
     const component_universe_count: usize = component_universe_count_u32;
+    const word_bits: usize = @bitSizeOf(usize);
+    const word_count: usize = if (component_universe_count == 0) 0 else (component_universe_count + word_bits - 1) / word_bits;
 
     return struct {
         const Self = @This();
@@ -19,14 +21,13 @@ pub fn ArchetypeKey(comptime Components: anytype) type {
             UnsortedComponentIds,
         };
 
-        ids_buf: [component_universe_count]component_registry_mod.ComponentTypeId =
-            [_]component_registry_mod.ComponentTypeId{.{ .value = 0 }} ** component_universe_count,
+        words: [word_count]usize = [_]usize{0} ** word_count,
         ids_len: u32 = 0,
 
         pub fn empty() Self {
             const key: Self = .{};
-            assert(key.ids().len == 0);
             assert(key.count() == 0);
+            assert(key.fingerprint64() == 0);
             return key;
         }
 
@@ -56,68 +57,41 @@ pub fn ArchetypeKey(comptime Components: anytype) type {
             return self.ids_len;
         }
 
-        pub fn ids(self: Self) []const component_registry_mod.ComponentTypeId {
-            self.assertInvariants();
-            const len: usize = self.ids_len;
-            return self.ids_buf[0..len];
-        }
-
         pub fn containsId(self: Self, id: component_registry_mod.ComponentTypeId) bool {
             self.assertInvariants();
-            return self.indexOfId(id) != null;
+            if (id.value >= component_universe_count_u32) return false;
+            return self.containsIdUnchecked(id);
         }
 
         pub fn containsType(self: Self, comptime T: type) bool {
             self.assertInvariants();
             const maybe_id = Registry.typeId(T);
             if (maybe_id == null) return false;
-            return self.containsId(maybe_id.?);
+            return self.containsIdUnchecked(maybe_id.?);
         }
 
         pub fn withId(self: Self, id: component_registry_mod.ComponentTypeId) Error!Self {
             self.assertInvariants();
             if (id.value >= component_universe_count_u32) return error.ComponentOutOfRange;
-            if (self.containsId(id)) return self;
+            if (self.containsIdUnchecked(id)) return self;
             if (self.ids_len >= component_universe_count_u32) return error.TooManyComponents;
 
-            var ids_buf: [component_universe_count]component_registry_mod.ComponentTypeId =
-                [_]component_registry_mod.ComponentTypeId{.{ .value = 0 }} ** component_universe_count;
-            var out_len: usize = 0;
-            var inserted = false;
-            for (self.ids()) |existing_id| {
-                if (!inserted and id.value < existing_id.value) {
-                    ids_buf[out_len] = id;
-                    out_len += 1;
-                    inserted = true;
-                }
-                ids_buf[out_len] = existing_id;
-                out_len += 1;
-            }
-            if (!inserted) {
-                ids_buf[out_len] = id;
-                out_len += 1;
-            }
-
-            const key = try Self.fromSortedIds(ids_buf[0..out_len]);
+            var key = self;
+            key.setBit(id, true);
+            key.ids_len += 1;
             key.assertInvariants();
             return key;
         }
 
         pub fn withoutId(self: Self, id: component_registry_mod.ComponentTypeId) Self {
             self.assertInvariants();
-            if (!self.containsId(id)) return self;
+            if (id.value >= component_universe_count_u32) return self;
+            if (!self.containsIdUnchecked(id)) return self;
 
-            var ids_buf: [component_universe_count]component_registry_mod.ComponentTypeId =
-                [_]component_registry_mod.ComponentTypeId{.{ .value = 0 }} ** component_universe_count;
-            var out_len: usize = 0;
-            for (self.ids()) |existing_id| {
-                if (existing_id.value != id.value) {
-                    ids_buf[out_len] = existing_id;
-                    out_len += 1;
-                }
-            }
-
-            const key = Self.fromSortedIds(ids_buf[0..out_len]) catch unreachable;
+            var key = self;
+            key.setBit(id, false);
+            assert(key.ids_len > 0);
+            key.ids_len -= 1;
             key.assertInvariants();
             return key;
         }
@@ -136,20 +110,29 @@ pub fn ArchetypeKey(comptime Components: anytype) type {
             self.assertInvariants();
 
             var fingerprint: u64 = 0;
-            for (self.ids()) |id| {
-                fingerprint = hash.combineOrdered64(.{
-                    .left = fingerprint,
-                    .right = @as(u64, id.value),
-                });
+            var word_index: usize = 0;
+            while (word_index < word_count) : (word_index += 1) {
+                var word = self.words[word_index];
+                while (word != 0) {
+                    const trailing: usize = @ctz(word);
+                    const bit_index = word_index * word_bits + trailing;
+                    if (bit_index >= component_universe_count) break;
+                    fingerprint = hash.combineOrdered64(.{
+                        .left = fingerprint,
+                        .right = @as(u64, @intCast(bit_index)),
+                    });
+                    word &= word - 1;
+                }
             }
 
-            assert(self.ids().len == 0 or fingerprint != 0);
+            assert(self.ids_len == 0 or fingerprint != 0);
             return fingerprint;
         }
 
         fn assignSortedIds(self: *Self, sorted_ids: []const component_registry_mod.ComponentTypeId) Error!void {
             if (sorted_ids.len > component_universe_count) return error.TooManyComponents;
 
+            self.words = [_]usize{0} ** word_count;
             self.ids_len = 0;
             for (sorted_ids, 0..) |id, index| {
                 if (id.value >= component_universe_count_u32) return error.ComponentOutOfRange;
@@ -158,44 +141,83 @@ pub fn ArchetypeKey(comptime Components: anytype) type {
                     if (prev.value == id.value) return error.DuplicateComponent;
                     if (prev.value > id.value) return error.UnsortedComponentIds;
                 }
-                self.ids_buf[index] = id;
+                self.setBit(id, true);
             }
             self.ids_len = @intCast(sorted_ids.len);
         }
 
         fn appendAssumeSorted(self: *Self, id: component_registry_mod.ComponentTypeId) void {
-            const len: usize = self.ids_len;
-            assert(len < component_universe_count);
-            if (len > 0) {
-                const prev = self.ids_buf[len - 1];
-                assert(prev.value < id.value);
-            }
             assert(id.value < component_universe_count_u32);
+            if (self.ids_len > 0) {
+                const last = self.lastId().?;
+                assert(last.value < id.value);
+            }
+            assert(!self.containsIdUnchecked(id));
 
-            self.ids_buf[len] = id;
+            self.setBit(id, true);
             self.ids_len += 1;
             assert(self.ids_len <= component_universe_count_u32);
         }
 
-        fn indexOfId(self: Self, id: component_registry_mod.ComponentTypeId) ?u32 {
-            for (self.ids(), 0..) |candidate, index| {
-                if (candidate.value == id.value) return @intCast(index);
-                if (candidate.value > id.value) return null;
+        fn containsIdUnchecked(self: Self, id: component_registry_mod.ComponentTypeId) bool {
+            const bit_index: usize = id.value;
+            const word_index = bit_index / word_bits;
+            const bit_offset = bit_index % word_bits;
+            return (self.words[word_index] & (@as(usize, 1) << @intCast(bit_offset))) != 0;
+        }
+
+        fn setBit(self: *Self, id: component_registry_mod.ComponentTypeId, present: bool) void {
+            const bit_index: usize = id.value;
+            const word_index = bit_index / word_bits;
+            const bit_offset = bit_index % word_bits;
+            const mask = @as(usize, 1) << @intCast(bit_offset);
+            if (present) {
+                self.words[word_index] |= mask;
+            } else {
+                self.words[word_index] &= ~mask;
+            }
+        }
+
+        fn lastId(self: Self) ?component_registry_mod.ComponentTypeId {
+            if (self.ids_len == 0) return null;
+
+            var word_index: usize = word_count;
+            while (word_index > 0) {
+                word_index -= 1;
+                const word = self.words[word_index];
+                if (word == 0) continue;
+
+                const leading = @clz(word);
+                const highest_bit = word_bits - 1 - @as(usize, leading);
+                const bit_index = word_index * word_bits + highest_bit;
+                if (bit_index < component_universe_count) {
+                    return .{ .value = @intCast(bit_index) };
+                }
             }
             return null;
         }
 
         fn assertInvariants(self: Self) void {
             assert(self.ids_len <= component_universe_count_u32);
-            const len: usize = self.ids_len;
-            const ids_slice = self.ids_buf[0..len];
-            for (ids_slice, 0..) |id, index| {
-                assert(id.value < component_universe_count_u32);
-                if (index > 0) {
-                    const prev = ids_slice[index - 1];
-                    assert(prev.value < id.value);
+
+            var counted: u32 = 0;
+            var previous: ?u32 = null;
+            var word_index: usize = 0;
+            while (word_index < word_count) : (word_index += 1) {
+                var word = self.words[word_index];
+                while (word != 0) {
+                    const trailing: usize = @ctz(word);
+                    const bit_index = word_index * word_bits + trailing;
+                    if (bit_index >= component_universe_count) break;
+                    if (previous) |prev| {
+                        assert(prev < bit_index);
+                    }
+                    previous = @intCast(bit_index);
+                    counted += 1;
+                    word &= word - 1;
                 }
             }
+            assert(counted == self.ids_len);
         }
     };
 }

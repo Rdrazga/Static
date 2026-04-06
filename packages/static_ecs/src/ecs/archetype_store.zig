@@ -8,17 +8,25 @@ const entity_mod = @import("entity.zig");
 const component_registry_mod = @import("component_registry.zig");
 const archetype_key_mod = @import("archetype_key.zig");
 const chunk_mod = @import("chunk.zig");
+const bundle_codec_mod = @import("bundle_codec.zig");
 
 pub fn ArchetypeStore(comptime Components: anytype) type {
     const Registry = component_registry_mod.ComponentRegistry(Components);
     const Key = archetype_key_mod.ArchetypeKey(Components);
     const Chunk = chunk_mod.Chunk(Components);
+    const BundleReader = bundle_codec_mod.Reader(Components);
     const component_universe_count: usize = comptime Registry.count();
+
+    const FingerprintCmp = struct {
+        pub fn less(a: u64, b: u64) bool {
+            return a < b;
+        }
+    };
 
     return struct {
         const Self = @This();
 
-        pub const Error = world_config_mod.Error || Chunk.Error || collections.vec.Error || error{
+        pub const Error = world_config_mod.Error || Chunk.Error || collections.vec.Error || collections.sorted_vec_map.Error || error{
             AlreadyExists,
             ComponentInitRequired,
             EntityOutOfRange,
@@ -33,25 +41,21 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             occupied: bool,
 
             fn invalid() EntityLocation {
-                const location: EntityLocation = .{
+                return .{
                     .archetype_index = invalid_index,
                     .chunk_index = invalid_index,
                     .row_index = invalid_index,
                     .occupied = false,
                 };
-                assert(!location.occupied);
-                assert(location.archetype_index == invalid_index);
-                return location;
             }
         };
 
         const invalid_index = std.math.maxInt(u32);
+        const FingerprintIndex = collections.sorted_vec_map.SortedVecMap(u64, u32, FingerprintCmp);
 
         const ChunkRecord = struct {
             chunk: Chunk,
             entities: []entity_mod.Entity,
-            budget: ?*memory.budget.Budget,
-            entity_reserved_bytes: usize,
 
             fn init(
                 allocator: std.mem.Allocator,
@@ -59,39 +63,16 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
                 rows_capacity: u32,
                 budget: ?*memory.budget.Budget,
             ) Error!ChunkRecord {
-                const entity_reserved_bytes = std.math.mul(usize, rows_capacity, @sizeOf(entity_mod.Entity)) catch
-                    return error.Overflow;
-                if (budget) |tracked_budget| {
-                    try tracked_budget.tryReserve(entity_reserved_bytes);
-                }
-                errdefer if (budget) |tracked_budget| tracked_budget.release(entity_reserved_bytes);
-
-                const entities = allocator.alloc(entity_mod.Entity, rows_capacity) catch return error.OutOfMemory;
-                errdefer allocator.free(entities);
-
-                const chunk = try Chunk.init(allocator, key, rows_capacity, budget);
-                errdefer {
-                    var cleanup_chunk = chunk;
-                    cleanup_chunk.deinit();
-                }
-
-                const record: ChunkRecord = .{
+                var chunk = try Chunk.init(allocator, key, rows_capacity, budget);
+                errdefer chunk.deinit();
+                return .{
                     .chunk = chunk,
-                    .entities = entities,
-                    .budget = budget,
-                    .entity_reserved_bytes = entity_reserved_bytes,
+                    .entities = chunk.entityStorage(),
                 };
-                assert(record.entities.len == rows_capacity);
-                assert(record.chunk.capacity() == rows_capacity);
-                return record;
             }
 
-            fn deinit(self: *ChunkRecord, allocator: std.mem.Allocator) void {
+            fn deinit(self: *ChunkRecord) void {
                 self.chunk.deinit();
-                allocator.free(self.entities);
-                if (self.budget) |tracked_budget| {
-                    tracked_budget.release(self.entity_reserved_bytes);
-                }
                 self.* = undefined;
             }
         };
@@ -100,22 +81,24 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
         const ArchetypeRecord = struct {
             key: Key,
+            fingerprint: u64,
             chunks: ChunkVec,
+            nonfull_chunk_hint: ?u32 = null,
+            retained_empty_chunks: u32 = 0,
 
             fn init(allocator: std.mem.Allocator, key: Key, budget: ?*memory.budget.Budget) Error!ArchetypeRecord {
-                var record: ArchetypeRecord = .{
+                return .{
                     .key = key,
+                    .fingerprint = key.fingerprint64(),
                     .chunks = try ChunkVec.init(allocator, .{
                         .budget = budget,
                     }),
                 };
-                assert(record.chunks.len() == 0);
-                return record;
             }
 
-            fn deinit(self: *ArchetypeRecord, allocator: std.mem.Allocator) void {
+            fn deinit(self: *ArchetypeRecord) void {
                 for (self.chunks.items()) |*chunk_record| {
-                    chunk_record.deinit(allocator);
+                    chunk_record.deinit();
                 }
                 self.chunks.deinit();
                 self.* = undefined;
@@ -127,10 +110,12 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
         allocator: std.mem.Allocator,
         config: world_config_mod.WorldConfig,
         archetypes: ArchetypeVec,
+        archetype_index: FingerprintIndex,
         entity_locations: []EntityLocation,
         locations_reserved_bytes: usize,
         total_chunks: u32,
         active_entities: u32,
+        structural_epoch_value: u64,
 
         pub fn init(allocator: std.mem.Allocator, config: world_config_mod.WorldConfig) Error!Self {
             try config.validate();
@@ -153,21 +138,27 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             });
             errdefer archetypes.deinit();
 
-            const empty_record = try ArchetypeRecord.init(allocator, Key.empty(), config.budget);
-            errdefer {
-                var cleanup_record = empty_record;
-                cleanup_record.deinit(allocator);
-            }
+            var index = try FingerprintIndex.init(allocator, .{
+                .initial_capacity = 1,
+                .budget = config.budget,
+            });
+            errdefer index.deinit();
+
+            var empty_record = try ArchetypeRecord.init(allocator, Key.empty(), config.budget);
+            errdefer empty_record.deinit();
             try archetypes.append(empty_record);
+            try index.put(Key.empty().fingerprint64(), 0);
 
             var self: Self = .{
                 .allocator = allocator,
                 .config = config,
                 .archetypes = archetypes,
+                .archetype_index = index,
                 .entity_locations = entity_locations,
                 .locations_reserved_bytes = locations_reserved_bytes,
                 .total_chunks = 0,
                 .active_entities = 0,
+                .structural_epoch_value = 0,
             };
             self.assertInvariants();
             return self;
@@ -176,9 +167,10 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
         pub fn deinit(self: *Self) void {
             self.assertInvariants();
             for (self.archetypes.items()) |*archetype| {
-                archetype.deinit(self.allocator);
+                archetype.deinit();
             }
             self.archetypes.deinit();
+            self.archetype_index.deinit();
             self.allocator.free(self.entity_locations);
             if (self.config.budget) |budget| {
                 budget.release(self.locations_reserved_bytes);
@@ -188,27 +180,27 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
         pub fn activeCount(self: *const Self) u32 {
             self.assertInvariants();
-            assert(self.active_entities <= self.config.entities_max);
             return self.active_entities;
         }
 
         pub fn archetypeCount(self: *const Self) u32 {
             self.assertInvariants();
-            assert(self.archetypes.len() <= self.config.archetypes_max);
             return @intCast(self.archetypes.len());
         }
 
         pub fn chunkCount(self: *const Self) u32 {
             self.assertInvariants();
-            assert(self.total_chunks <= self.config.chunks_max);
             return self.total_chunks;
+        }
+
+        pub fn structuralEpoch(self: *const Self) u64 {
+            self.assertInvariants();
+            return self.structural_epoch_value;
         }
 
         pub fn contains(self: *const Self, entity: entity_mod.Entity) bool {
             self.assertInvariants();
-            const location = self.locationOf(entity) orelse return false;
-            assert(location.occupied);
-            return true;
+            return self.locationOf(entity) != null;
         }
 
         pub fn locationOf(self: *const Self, entity: entity_mod.Entity) ?EntityLocation {
@@ -216,28 +208,23 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             const location = self.locationRaw(entity) orelse return null;
             if (!location.occupied) return null;
             const chunk_record = self.chunkRecordConst(location) orelse return null;
-            const row_index: usize = location.row_index;
-            if (row_index >= chunk_record.entities.len) return null;
             if (location.row_index >= chunk_record.chunk.rowCount()) return null;
-            if (!std.meta.eql(chunk_record.entities[row_index], entity)) return null;
+            if (!std.meta.eql(chunk_record.entities[location.row_index], entity)) return null;
             return location;
         }
 
         pub fn archetypeKeyOf(self: *const Self, entity: entity_mod.Entity) ?Key {
             self.assertInvariants();
             const location = self.locationOf(entity) orelse return null;
-            const archetype = self.archetypeRecordConst(location.archetype_index).?;
-            return archetype.key;
+            return self.archetypeRecordConst(location.archetype_index).?.key;
         }
 
         pub fn componentPtr(self: *Self, entity: entity_mod.Entity, comptime T: type) ?*T {
             self.assertInvariants();
             const location = self.locationOf(entity) orelse return null;
-            var chunk_record = self.chunkRecord(location).?;
+            const chunk_record = self.chunkRecord(location).?;
             const column = chunk_record.chunk.columnSlice(T) orelse return null;
-            const row_index: usize = location.row_index;
-            assert(row_index < column.len);
-            return &column[row_index];
+            return &column[location.row_index];
         }
 
         pub fn componentPtrConst(self: *const Self, entity: entity_mod.Entity, comptime T: type) ?*const T {
@@ -245,14 +232,11 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             const location = self.locationOf(entity) orelse return null;
             const chunk_record = self.chunkRecordConst(location).?;
             const column = chunk_record.chunk.columnSliceConst(T) orelse return null;
-            const row_index: usize = location.row_index;
-            assert(row_index < column.len);
-            return &column[row_index];
+            return &column[location.row_index];
         }
 
         pub fn hasComponent(self: *const Self, entity: entity_mod.Entity, comptime T: type) bool {
             comptime validateComponentType(T, Registry);
-
             self.assertInvariants();
             const key = self.archetypeKeyOf(entity) orelse return false;
             return key.containsType(T);
@@ -260,18 +244,28 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
         pub fn spawn(self: *Self, entity: entity_mod.Entity) Error!void {
             self.assertInvariants();
-            if (!entity.isValid()) return error.EntityOutOfRange;
-            if (@as(usize, entity.index) >= self.entity_locations.len) return error.EntityOutOfRange;
-            if (self.locationRaw(entity).?.occupied) {
-                if (self.contains(entity)) return error.AlreadyExists;
-                return error.EntitySlotOccupied;
-            }
-            if (self.contains(entity)) return error.AlreadyExists;
+            try self.assertSpawnable(entity);
 
             const location = try self.appendEntityToArchetype(0, entity);
             self.writeLocation(entity, location);
             self.active_entities += 1;
-            assert(self.contains(entity));
+            self.bumpStructuralEpoch();
+            self.assertInvariants();
+        }
+
+        pub fn spawnBundleEncoded(self: *Self, entity: entity_mod.Entity, bytes: []const u8, entry_count: u32) Error!void {
+            self.assertInvariants();
+            try self.assertSpawnable(entity);
+
+            const target_key = try self.keyFromEncodedBundle(bytes, entry_count);
+            const target_archetype_index = try self.ensureArchetype(&target_key);
+            const target_location = try self.appendEntityToArchetype(target_archetype_index, entity);
+            errdefer _ = self.removeEntityAt(target_location, entity) catch {};
+
+            try self.writeBundlePayloads(target_location, bytes, entry_count);
+            self.writeLocation(entity, target_location);
+            self.active_entities += 1;
+            self.bumpStructuralEpoch();
             self.assertInvariants();
         }
 
@@ -280,27 +274,23 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             const location = self.locationOf(entity) orelse return error.EntityNotFound;
             try self.removeEntityAt(location, entity);
             self.clearLocation(entity);
-            assert(self.active_entities > 0);
             self.active_entities -= 1;
-            assert(!self.contains(entity));
+            self.bumpStructuralEpoch();
             self.assertInvariants();
         }
 
         pub fn moveToArchetype(self: *Self, entity: entity_mod.Entity, target_key: Key) Error!void {
             self.assertInvariants();
             const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
-            const source_archetype = self.archetypeRecordConst(source_location.archetype_index).?;
+            const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
             if (target_key.count() > self.config.components_per_archetype_max) return error.InvalidConfig;
-            if (keysEqual(&source_archetype.key, &target_key)) {
-                self.assertInvariants();
-                return;
-            }
-            if (introducesUninitializedColumns(source_archetype.key, target_key)) {
+            if (keysEqual(source_key, target_key)) return;
+            if (introducesUninitializedColumns(Components, source_key, target_key)) {
                 return error.ComponentInitRequired;
             }
 
-            try self.moveEntityToArchetype(entity, target_key);
-            assert(self.contains(entity));
+            _ = try self.moveEntityToArchetype(entity, target_key, null);
+            self.bumpStructuralEpoch();
             self.assertInvariants();
         }
 
@@ -313,13 +303,31 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             if (!self.hasComponent(entity, T)) {
                 const source_key = self.archetypeKeyOf(entity).?;
                 const target_key = try source_key.withType(T);
-                try self.moveEntityToArchetype(entity, target_key);
+                _ = try self.moveEntityToArchetype(entity, target_key, null);
+                self.bumpStructuralEpoch();
             }
 
             if (@sizeOf(T) != 0) {
                 self.componentPtr(entity, T).?.* = value;
             }
-            assert(self.hasComponent(entity, T));
+            self.assertInvariants();
+        }
+
+        pub fn insertBundleEncoded(self: *Self, entity: entity_mod.Entity, bytes: []const u8, entry_count: u32) Error!void {
+            self.assertInvariants();
+            const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
+            const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
+            const bundle_key = try self.keyFromEncodedBundle(bytes, entry_count);
+            const target_key = try mergeKeys(Components, source_key, bundle_key);
+            if (keysEqual(source_key, target_key)) {
+                try self.writeBundlePayloads(source_location, bytes, entry_count);
+            } else {
+                _ = try self.moveEntityToArchetype(entity, target_key, .{
+                    .bytes = bytes,
+                    .entry_count = entry_count,
+                });
+                self.bumpStructuralEpoch();
+            }
             self.assertInvariants();
         }
 
@@ -330,76 +338,71 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             if (!self.contains(entity)) return error.EntityNotFound;
 
             const source_key = self.archetypeKeyOf(entity).?;
-            if (!source_key.containsType(T)) {
-                self.assertInvariants();
-                return;
-            }
+            if (!source_key.containsType(T)) return;
 
             const target_key = source_key.withoutType(T);
-            try self.moveEntityToArchetype(entity, target_key);
-            assert(!self.hasComponent(entity, T));
+            _ = try self.moveEntityToArchetype(entity, target_key, null);
+            self.bumpStructuralEpoch();
             self.assertInvariants();
         }
 
-        fn moveEntityToArchetype(self: *Self, entity: entity_mod.Entity, target_key: Key) Error!void {
+        fn moveEntityToArchetype(
+            self: *Self,
+            entity: entity_mod.Entity,
+            target_key: Key,
+            bundle_write: ?struct {
+                bytes: []const u8,
+                entry_count: u32,
+            },
+        ) Error!EntityLocation {
             const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
-            const source_archetype = self.archetypeRecordConst(source_location.archetype_index).?;
-            if (keysEqual(&source_archetype.key, &target_key)) {
-                return;
-            }
+            const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
+            if (keysEqual(source_key, target_key)) return source_location;
 
             const target_archetype_index = try self.ensureArchetype(&target_key);
             const target_location = try self.appendEntityToArchetype(target_archetype_index, entity);
-            errdefer {
-                _ = self.removeEntityAt(target_location, entity) catch {};
-                self.clearLocation(entity);
-            }
+            errdefer _ = self.removeEntityAt(target_location, entity) catch {};
 
             try self.copySharedColumns(source_location, target_location);
+            if (bundle_write) |write| {
+                try self.writeBundlePayloads(target_location, write.bytes, write.entry_count);
+            }
             self.writeLocation(entity, target_location);
             try self.removeEntityAt(source_location, entity);
-
-            assert(self.contains(entity));
-            const current_key = self.archetypeKeyOf(entity).?;
-            assert(keysEqual(&current_key, &target_key));
+            return target_location;
         }
 
         fn appendEntityToArchetype(self: *Self, archetype_index: u32, entity: entity_mod.Entity) Error!EntityLocation {
-            const chunk_location = try self.ensureChunkWithSpace(archetype_index);
-            var chunk_record = self.chunkRecord(chunk_location).?;
-            const row_index = chunk_record.chunk.rowCount();
-            const row_usize: usize = row_index;
-            assert(row_index < chunk_record.chunk.capacity());
-            try chunk_record.chunk.setRowCount(row_index + 1);
-            chunk_record.entities[row_usize] = entity;
-
-            const location: EntityLocation = .{
+            const chunk_index = try self.ensureChunkWithSpace(archetype_index);
+            const chunk_record = self.chunkRecord(.{
                 .archetype_index = archetype_index,
-                .chunk_index = chunk_location.chunk_index,
+                .chunk_index = chunk_index,
+                .row_index = 0,
+                .occupied = true,
+            }).?;
+            const row_index = chunk_record.chunk.rowCount();
+            try chunk_record.chunk.setRowCount(row_index + 1);
+            chunk_record.entities[row_index] = entity;
+            self.refreshNonfullChunkHint(archetype_index);
+            return .{
+                .archetype_index = archetype_index,
+                .chunk_index = chunk_index,
                 .row_index = row_index,
                 .occupied = true,
             };
-            assert(location.occupied);
-            return location;
         }
 
         fn copySharedColumns(self: *Self, source: EntityLocation, target: EntityLocation) Error!void {
-            const source_archetype = self.archetypeRecordConst(source.archetype_index).?;
-            const target_archetype = self.archetypeRecordConst(target.archetype_index).?;
-            var source_chunk = self.chunkRecord(source).?;
-            var target_chunk = self.chunkRecord(target).?;
+            const source_key = self.archetypeRecordConst(source.archetype_index).?.key;
+            const target_key = self.archetypeRecordConst(target.archetype_index).?.key;
+            const source_chunk = self.chunkRecord(source).?;
+            const target_chunk = self.chunkRecord(target).?;
 
             inline for (0..component_universe_count) |index| {
                 const T = Registry.typeAt(index);
                 const id: component_registry_mod.ComponentTypeId = .{ .value = @intCast(index) };
-                if (@sizeOf(T) != 0 and source_archetype.key.containsId(id) and target_archetype.key.containsId(id)) {
-                    const src_column = source_chunk.chunk.columnSliceConst(T).?;
-                    const dst_column = target_chunk.chunk.columnSlice(T).?;
-                    const source_row: usize = source.row_index;
-                    const target_row: usize = target.row_index;
-                    assert(source_row < src_column.len);
-                    assert(target_row < dst_column.len);
-                    dst_column[target_row] = src_column[source_row];
+                if (@sizeOf(T) != 0 and source_key.containsId(id) and target_key.containsId(id)) {
+                    target_chunk.chunk.columnSlice(T).?[target.row_index] = source_chunk.chunk.columnSliceConst(T).?[source.row_index];
                 }
             }
         }
@@ -407,28 +410,24 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
         fn removeEntityAt(self: *Self, location: EntityLocation, entity: entity_mod.Entity) Error!void {
             const archetype = self.archetypeRecord(location.archetype_index).?;
             const key = archetype.key;
-            var chunk_record = self.chunkRecord(location).?;
+            const chunk_record = self.chunkRecord(location).?;
 
             const rows_before = chunk_record.chunk.rowCount();
             assert(rows_before > 0);
             const last_row = rows_before - 1;
-            const remove_row: usize = location.row_index;
-            const last_row_usize: usize = last_row;
-            assert(remove_row < rows_before);
-            assert(std.meta.eql(chunk_record.entities[remove_row], entity));
+            assert(std.meta.eql(chunk_record.entities[location.row_index], entity));
 
             if (location.row_index != last_row) {
                 inline for (0..component_universe_count) |index| {
                     const T = Registry.typeAt(index);
                     const id: component_registry_mod.ComponentTypeId = .{ .value = @intCast(index) };
                     if (@sizeOf(T) != 0 and key.containsId(id)) {
-                        const column = chunk_record.chunk.columnSlice(T).?;
-                        column[remove_row] = column[last_row_usize];
+                        chunk_record.chunk.columnSlice(T).?[location.row_index] = chunk_record.chunk.columnSlice(T).?[last_row];
                     }
                 }
 
-                const moved_entity = chunk_record.entities[last_row_usize];
-                chunk_record.entities[remove_row] = moved_entity;
+                const moved_entity = chunk_record.entities[last_row];
+                chunk_record.entities[location.row_index] = moved_entity;
                 self.writeLocation(moved_entity, .{
                     .archetype_index = location.archetype_index,
                     .chunk_index = location.chunk_index,
@@ -438,103 +437,115 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             }
 
             try chunk_record.chunk.setRowCount(last_row);
-            if (last_row > 0) {
-                assert(chunk_record.chunk.rowCount() == last_row);
-            }
             if (chunk_record.chunk.rowCount() == 0) {
-                try self.removeChunkIfEmpty(location.archetype_index, location.chunk_index);
+                try self.handleEmptyChunk(location.archetype_index, location.chunk_index);
+            } else {
+                self.refreshNonfullChunkHint(location.archetype_index);
             }
+            try self.removeArchetypeIfInactive(location.archetype_index);
         }
 
         fn ensureArchetype(self: *Self, key: *const Key) Error!u32 {
-            if (self.findArchetypeIndex(key)) |index| return index;
+            if (self.findArchetypeIndex(key.*)) |index| return index;
             if (self.archetypes.len() >= self.config.archetypes_max) return error.NoSpaceLeft;
 
             var record = try ArchetypeRecord.init(self.allocator, key.*, self.config.budget);
-            errdefer record.deinit(self.allocator);
+            errdefer record.deinit();
             try self.archetypes.append(record);
             const archetype_index: u32 = @intCast(self.archetypes.len() - 1);
-            assert(self.archetypeRecordConst(archetype_index) != null);
+            if (!self.archetype_index.contains(record.fingerprint)) {
+                try self.archetype_index.put(record.fingerprint, archetype_index);
+            }
             return archetype_index;
         }
 
-        fn ensureChunkWithSpace(self: *Self, archetype_index: u32) Error!EntityLocation {
+        fn ensureChunkWithSpace(self: *Self, archetype_index: u32) Error!u32 {
             const archetype = self.archetypeRecord(archetype_index).?;
-            for (archetype.chunks.items(), 0..) |*chunk_record, index| {
+            if (archetype.nonfull_chunk_hint) |hint| {
+                const record = self.chunkRecord(.{
+                    .archetype_index = archetype_index,
+                    .chunk_index = hint,
+                    .row_index = 0,
+                    .occupied = true,
+                }).?;
+                if (record.chunk.rowCount() < record.chunk.capacity()) return hint;
+            }
+
+            for (archetype.chunks.items(), 0..) |*chunk_record, chunk_index| {
                 if (chunk_record.chunk.rowCount() < chunk_record.chunk.capacity()) {
-                    return .{
-                        .archetype_index = archetype_index,
-                        .chunk_index = @intCast(index),
-                        .row_index = chunk_record.chunk.rowCount(),
-                        .occupied = true,
-                    };
+                    archetype.nonfull_chunk_hint = @intCast(chunk_index);
+                    return @intCast(chunk_index);
                 }
             }
 
             if (self.total_chunks >= self.config.chunks_max) return error.NoSpaceLeft;
 
-            var record = try ChunkRecord.init(
+            var chunk_record = try ChunkRecord.init(
                 self.allocator,
                 archetype.key,
                 self.config.chunk_rows_max,
                 self.config.budget,
             );
-            errdefer record.deinit(self.allocator);
-            try archetype.chunks.append(record);
+            errdefer chunk_record.deinit();
+            try archetype.chunks.append(chunk_record);
             self.total_chunks += 1;
-
-            const chunk_index: u32 = @intCast(archetype.chunks.len() - 1);
-            return .{
-                .archetype_index = archetype_index,
-                .chunk_index = chunk_index,
-                .row_index = 0,
-                .occupied = true,
-            };
+            archetype.nonfull_chunk_hint = @intCast(archetype.chunks.len() - 1);
+            return @intCast(archetype.chunks.len() - 1);
         }
 
-        fn removeChunkIfEmpty(self: *Self, archetype_index: u32, chunk_index: u32) Error!void {
+        fn handleEmptyChunk(self: *Self, archetype_index: u32, chunk_index: u32) Error!void {
             const archetype = self.archetypeRecord(archetype_index).?;
-            const index: usize = chunk_index;
-            const items = archetype.chunks.items();
-            assert(index < items.len);
-            assert(items[index].chunk.rowCount() == 0);
-
-            var removed_chunk = items[index];
-            const last_index = items.len - 1;
-            if (index != last_index) {
-                items[index] = items[last_index];
+            if (archetype_index != 0 and self.archetypeActiveRows(archetype_index) == 0) {
+                try self.removeChunk(archetype_index, chunk_index);
+                return;
             }
+
+            if (archetype.retained_empty_chunks < self.config.empty_chunk_retained_max) {
+                archetype.retained_empty_chunks += 1;
+                self.refreshNonfullChunkHint(archetype_index);
+                return;
+            }
+
+            try self.removeChunk(archetype_index, chunk_index);
+        }
+
+        fn removeChunk(self: *Self, archetype_index: u32, chunk_index: u32) Error!void {
+            const archetype = self.archetypeRecord(archetype_index).?;
+            const tail_index = archetype.chunks.len() - 1;
+            var removed = archetype.chunks.items()[chunk_index];
+            if (chunk_index != tail_index) {
+                archetype.chunks.items()[chunk_index] = archetype.chunks.items()[tail_index];
+                try self.reindexChunkEntities(archetype_index, chunk_index);
+            }
+
             _ = archetype.chunks.pop();
-            removed_chunk.deinit(self.allocator);
-
-            assert(self.total_chunks > 0);
-            self.total_chunks -= 1;
-
-            if (index != last_index) {
-                try self.reindexChunkEntities(archetype_index, @intCast(index));
+            if (removed.chunk.rowCount() == 0 and archetype.retained_empty_chunks > 0) {
+                archetype.retained_empty_chunks -= 1;
             }
-            try self.removeArchetypeIfEmpty(archetype_index);
+            removed.deinit();
+            self.total_chunks -= 1;
+            self.refreshNonfullChunkHint(archetype_index);
         }
 
-        fn removeArchetypeIfEmpty(self: *Self, archetype_index: u32) Error!void {
+        fn removeArchetypeIfInactive(self: *Self, archetype_index: u32) Error!void {
             if (archetype_index == 0) return;
+            if (self.archetypeActiveRows(archetype_index) != 0) return;
 
-            const archetype = self.archetypeRecord(archetype_index).?;
-            if (archetype.chunks.len() != 0) return;
+            var archetype = self.archetypeRecord(archetype_index).?;
+            while (archetype.chunks.len() > 0) {
+                try self.removeChunk(archetype_index, @intCast(archetype.chunks.len() - 1));
+                archetype = self.archetypeRecord(archetype_index).?;
+            }
 
-            const index: usize = archetype_index;
-            const items = self.archetypes.items();
-            var removed_archetype = items[index];
-            const last_index = items.len - 1;
-            if (index != last_index) {
-                items[index] = items[last_index];
+            const tail_index = self.archetypes.len() - 1;
+            var removed = archetype.*;
+            if (archetype_index != tail_index) {
+                archetype.* = self.archetypes.items()[tail_index];
+                try self.reindexArchetypeEntities(archetype_index);
             }
             _ = self.archetypes.pop();
-            removed_archetype.deinit(self.allocator);
-
-            if (index != last_index) {
-                try self.reindexArchetypeEntities(@intCast(index));
-            }
+            removed.deinit();
+            try self.rebuildArchetypeIndex();
         }
 
         fn reindexArchetypeEntities(self: *Self, archetype_index: u32) Error!void {
@@ -545,7 +556,7 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
         }
 
         fn reindexChunkEntities(self: *Self, archetype_index: u32, chunk_index: u32) Error!void {
-            var chunk_record = self.chunkRecord(.{
+            const chunk_record = self.chunkRecord(.{
                 .archetype_index = archetype_index,
                 .chunk_index = chunk_index,
                 .row_index = 0,
@@ -563,78 +574,134 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             }
         }
 
-        fn findArchetypeIndex(self: *const Self, key: *const Key) ?u32 {
-            const archetypes = self.archetypes.itemsConst();
-            for (archetypes, 0..) |_, index| {
-                const archetype = &archetypes[index];
-                if (keysEqual(&archetype.key, key)) return @intCast(index);
+        fn rebuildArchetypeIndex(self: *Self) Error!void {
+            self.archetype_index.clear();
+            for (self.archetypes.itemsConst(), 0..) |archetype, index| {
+                if (!self.archetype_index.contains(archetype.fingerprint)) {
+                    try self.archetype_index.put(archetype.fingerprint, @intCast(index));
+                }
+            }
+        }
+
+        fn refreshNonfullChunkHint(self: *Self, archetype_index: u32) void {
+            const archetype = self.archetypeRecord(archetype_index).?;
+            archetype.nonfull_chunk_hint = null;
+            for (archetype.chunks.items(), 0..) |*chunk_record, chunk_index| {
+                if (chunk_record.chunk.rowCount() < chunk_record.chunk.capacity()) {
+                    archetype.nonfull_chunk_hint = @intCast(chunk_index);
+                    return;
+                }
+            }
+        }
+
+        fn keyFromEncodedBundle(self: *const Self, bytes: []const u8, entry_count: u32) Error!Key {
+            _ = self;
+            var key = Key.empty();
+            var reader = BundleReader.init(bytes, entry_count);
+            while (reader.next()) |entry| {
+                key = try key.withId(entry.component_id);
+            }
+            return key;
+        }
+
+        fn writeBundlePayloads(self: *Self, location: EntityLocation, bytes: []const u8, entry_count: u32) Error!void {
+            var reader = BundleReader.init(bytes, entry_count);
+            while (reader.next()) |entry| {
+                try self.writeComponentBytes(location, entry.component_id, entry.payload);
+            }
+        }
+
+        fn writeComponentBytes(self: *Self, location: EntityLocation, component_id: component_registry_mod.ComponentTypeId, payload: []const u8) Error!void {
+            const chunk_record = self.chunkRecord(location).?;
+            inline for (0..component_universe_count) |index| {
+                const T = Registry.typeAt(index);
+                if (index == component_id.value) {
+                    if (@sizeOf(T) == 0) {
+                        assert(payload.len == 0);
+                        return;
+                    }
+                    assert(payload.len == @sizeOf(T));
+                    var value: T = undefined;
+                    @memcpy(std.mem.asBytes(&value), payload);
+                    chunk_record.chunk.columnSlice(T).?[location.row_index] = value;
+                    return;
+                }
+            }
+            unreachable;
+        }
+
+        fn findArchetypeIndex(self: *const Self, key: Key) ?u32 {
+            const fingerprint = key.fingerprint64();
+            if (self.archetype_index.getConst(fingerprint)) |index_ptr| {
+                const index = index_ptr.*;
+                const archetype = self.archetypeRecordConst(index) orelse return null;
+                if (keysEqual(archetype.key, key)) return index;
+            }
+            for (self.archetypes.itemsConst(), 0..) |archetype, index| {
+                if (archetype.fingerprint == fingerprint and keysEqual(archetype.key, key)) {
+                    return @intCast(index);
+                }
             }
             return null;
         }
 
-        fn keysEqual(a: *const Key, b: *const Key) bool {
-            inline for (0..component_universe_count) |index| {
-                const id: component_registry_mod.ComponentTypeId = .{ .value = @intCast(index) };
-                if (a.containsId(id) != b.containsId(id)) return false;
+        fn archetypeActiveRows(self: *const Self, archetype_index: u32) u32 {
+            const archetype = self.archetypeRecordConst(archetype_index).?;
+            var total: u32 = 0;
+            for (archetype.chunks.itemsConst()) |chunk_record| {
+                total += chunk_record.chunk.rowCount();
             }
-            return true;
+            return total;
         }
 
-        fn introducesUninitializedColumns(source_key: Key, target_key: Key) bool {
-            inline for (0..component_universe_count) |index| {
-                const T = Registry.typeAt(index);
-                const id: component_registry_mod.ComponentTypeId = .{ .value = @intCast(index) };
-                if (@sizeOf(T) != 0 and !source_key.containsId(id) and target_key.containsId(id)) {
-                    return true;
-                }
+        fn assertSpawnable(self: *const Self, entity: entity_mod.Entity) Error!void {
+            if (!entity.isValid()) return error.EntityOutOfRange;
+            if (entity.index >= self.entity_locations.len) return error.EntityOutOfRange;
+            if (self.locationRaw(entity).?.occupied) {
+                if (self.contains(entity)) return error.AlreadyExists;
+                return error.EntitySlotOccupied;
             }
-            return false;
         }
 
         fn locationRaw(self: *const Self, entity: entity_mod.Entity) ?EntityLocation {
             if (!entity.isValid()) return null;
-            const index: usize = entity.index;
-            if (index >= self.entity_locations.len) return null;
-            return self.entity_locations[index];
+            if (entity.index >= self.entity_locations.len) return null;
+            return self.entity_locations[entity.index];
         }
 
         fn writeLocation(self: *Self, entity: entity_mod.Entity, location: EntityLocation) void {
-            const index: usize = entity.index;
-            assert(index < self.entity_locations.len);
             assert(location.occupied);
-            self.entity_locations[index] = location;
+            self.entity_locations[entity.index] = location;
         }
 
         fn clearLocation(self: *Self, entity: entity_mod.Entity) void {
-            const index: usize = entity.index;
-            assert(index < self.entity_locations.len);
-            self.entity_locations[index] = EntityLocation.invalid();
+            self.entity_locations[entity.index] = EntityLocation.invalid();
         }
 
         fn archetypeRecord(self: *Self, archetype_index: u32) ?*ArchetypeRecord {
-            const index: usize = archetype_index;
-            if (index >= self.archetypes.len()) return null;
-            return &self.archetypes.items()[index];
+            if (archetype_index >= self.archetypes.len()) return null;
+            return &self.archetypes.items()[archetype_index];
         }
 
         fn archetypeRecordConst(self: *const Self, archetype_index: u32) ?*const ArchetypeRecord {
-            const index: usize = archetype_index;
-            if (index >= self.archetypes.len()) return null;
-            return &self.archetypes.itemsConst()[index];
+            if (archetype_index >= self.archetypes.len()) return null;
+            return &self.archetypes.itemsConst()[archetype_index];
         }
 
         fn chunkRecord(self: *Self, location: EntityLocation) ?*ChunkRecord {
             const archetype = self.archetypeRecord(location.archetype_index) orelse return null;
-            const chunk_index: usize = location.chunk_index;
-            if (chunk_index >= archetype.chunks.len()) return null;
-            return &archetype.chunks.items()[chunk_index];
+            if (location.chunk_index >= archetype.chunks.len()) return null;
+            return &archetype.chunks.items()[location.chunk_index];
         }
 
         fn chunkRecordConst(self: *const Self, location: EntityLocation) ?*const ChunkRecord {
             const archetype = self.archetypeRecordConst(location.archetype_index) orelse return null;
-            const chunk_index: usize = location.chunk_index;
-            if (chunk_index >= archetype.chunks.len()) return null;
-            return &archetype.chunks.itemsConst()[chunk_index];
+            if (location.chunk_index >= archetype.chunks.len()) return null;
+            return &archetype.chunks.itemsConst()[location.chunk_index];
+        }
+
+        fn bumpStructuralEpoch(self: *Self) void {
+            self.structural_epoch_value +%= 1;
         }
 
         fn assertInvariants(self: *const Self) void {
@@ -643,24 +710,15 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             assert(self.total_chunks <= self.config.chunks_max);
             assert(self.active_entities <= self.config.entities_max);
             assert(Registry.count() <= self.config.components_per_archetype_max);
-            const empty_key = Key.empty();
-            assert(keysEqual(&self.archetypes.itemsConst()[0].key, &empty_key));
+            assert(keysEqual(self.archetypes.itemsConst()[0].key, Key.empty()));
 
             var occupied_count: u32 = 0;
             for (self.entity_locations, 0..) |location, entity_index| {
                 if (!location.occupied) continue;
                 occupied_count += 1;
-                assert(location.archetype_index < self.archetypes.len());
-
-                const archetype = self.archetypes.itemsConst()[location.archetype_index];
-                assert(location.chunk_index < archetype.chunks.len());
-
-                const chunk_record = archetype.chunks.itemsConst()[location.chunk_index];
+                const chunk_record = self.chunkRecordConst(location).?;
                 assert(location.row_index < chunk_record.chunk.rowCount());
-                assert(location.row_index < chunk_record.chunk.capacity());
-
-                const row_index: usize = location.row_index;
-                const entity = chunk_record.entities[row_index];
+                const entity = chunk_record.entities[location.row_index];
                 assert(entity.index == entity_index);
                 assert(entity.isValid());
             }
@@ -675,333 +733,51 @@ fn validateComponentType(comptime T: type, comptime Registry: type) void {
     }
 }
 
-test "archetype store spawns into the empty archetype and tracks locations" {
-    const Position = struct { x: f32, y: f32 };
-    const Velocity = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position, Velocity });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 4,
-        .chunks_max = 4,
-        .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-    const second: entity_mod.Entity = .{ .index = 1, .generation = 1 };
-
-    try store.spawn(first);
-    try store.spawn(second);
-
-    try testing.expect(store.contains(first));
-    try testing.expect(store.contains(second));
-    try testing.expectEqual(@as(u32, 2), store.activeCount());
-    try testing.expectEqual(@as(u32, 1), store.archetypeCount());
-    try testing.expectEqual(@as(u32, 1), store.chunkCount());
-
-    const first_location = store.locationOf(first).?;
-    const second_location = store.locationOf(second).?;
-    try testing.expectEqual(@as(u32, 0), first_location.row_index);
-    try testing.expectEqual(@as(u32, 1), second_location.row_index);
-    try testing.expectEqual(@as(u32, 0), store.archetypeKeyOf(first).?.count());
+fn keysEqual(a: anytype, b: @TypeOf(a)) bool {
+    return std.meta.eql(a, b);
 }
 
-test "archetype store rejects direct configs that understate the component universe" {
-    const Position = struct { x: f32, y: f32 };
-    const Velocity = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position, Velocity });
-
-    try testing.expectError(error.InvalidConfig, Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 1,
-        .chunks_max = 4,
-        .chunk_rows_max = 4,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    }));
-}
-
-test "archetype store despawn swap-removes rows and updates moved entity locations" {
-    const Position = struct { x: f32, y: f32 };
-    const Velocity = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position, Velocity });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 4,
-        .chunks_max = 4,
-        .chunk_rows_max = 8,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-    const second: entity_mod.Entity = .{ .index = 1, .generation = 1 };
-    const third: entity_mod.Entity = .{ .index = 2, .generation = 1 };
-
-    try store.spawn(first);
-    try store.spawn(second);
-    try store.spawn(third);
-    try store.insertComponent(first, Position, .{ .x = 10, .y = 11 });
-    try store.insertComponent(second, Position, .{ .x = 20, .y = 21 });
-    try store.insertComponent(third, Position, .{ .x = 30, .y = 31 });
-
-    try store.despawn(second);
-
-    try testing.expect(!store.contains(second));
-    try testing.expect(store.contains(first));
-    try testing.expect(store.contains(third));
-    try testing.expectEqual(@as(u32, 2), store.activeCount());
-    try testing.expectEqual(@as(u32, 1), store.locationOf(third).?.row_index);
-    try testing.expectEqual(@as(f32, 30), store.componentPtrConst(third, Position).?.x);
-    try testing.expectEqual(@as(f32, 31), store.componentPtrConst(third, Position).?.y);
-}
-
-test "archetype store rejects same-index direct spawn aliasing before mutation" {
-    const Position = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 2,
-        .chunks_max = 4,
-        .chunk_rows_max = 4,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-    const alias: entity_mod.Entity = .{ .index = 0, .generation = 2 };
-
-    try store.spawn(first);
-    try store.insertComponent(first, Position, .{ .x = 11, .y = 13 });
-
-    try testing.expectError(error.EntitySlotOccupied, store.spawn(alias));
-    try testing.expect(store.contains(first));
-    try testing.expect(!store.contains(alias));
-    try testing.expectEqual(@as(u32, 1), store.activeCount());
-    try testing.expectEqual(@as(f32, 11), store.componentPtrConst(first, Position).?.x);
-    try testing.expectEqual(@as(f32, 13), store.componentPtrConst(first, Position).?.y);
-    try testing.expectEqual(@as(u32, 0), store.locationOf(first).?.row_index);
-}
-
-test "archetype store transitions preserve overlapping columns and reclaim empty archetypes" {
-    const Position = struct { x: f32, y: f32 };
-    const Velocity = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position, Velocity });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 4,
-        .chunks_max = 4,
-        .chunk_rows_max = 4,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const entity: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-
-    try store.spawn(entity);
-    try store.insertComponent(entity, Position, .{ .x = 7, .y = 9 });
-    try store.insertComponent(entity, Velocity, .{ .x = 3, .y = 5 });
-
-    try testing.expectEqual(@as(u32, 2), store.archetypeCount());
-    try testing.expect(store.componentPtr(entity, Velocity) != null);
-    try testing.expectEqual(@as(f32, 7), store.componentPtrConst(entity, Position).?.x);
-    try testing.expectEqual(@as(f32, 9), store.componentPtrConst(entity, Position).?.y);
-    try testing.expectEqual(@as(f32, 3), store.componentPtrConst(entity, Velocity).?.x);
-}
-
-test "archetype store reindexes swapped chunks after draining a non-tail chunk" {
-    const Position = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 2,
-        .chunks_max = 4,
-        .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-    const second: entity_mod.Entity = .{ .index = 1, .generation = 1 };
-    const third: entity_mod.Entity = .{ .index = 2, .generation = 1 };
-
-    try store.spawn(first);
-    try store.spawn(second);
-    try store.spawn(third);
-    try store.insertComponent(first, Position, .{ .x = 10, .y = 11 });
-    try store.insertComponent(second, Position, .{ .x = 20, .y = 21 });
-    try store.insertComponent(third, Position, .{ .x = 30, .y = 31 });
-
-    try testing.expectEqual(@as(u32, 2), store.chunkCount());
-
-    try store.despawn(first);
-    try store.despawn(second);
-
-    try testing.expect(store.contains(third));
-    try testing.expectEqual(@as(u32, 1), store.chunkCount());
-    const third_location = store.locationOf(third).?;
-    try testing.expectEqual(@as(u32, 0), third_location.chunk_index);
-    try testing.expectEqual(@as(u32, 0), third_location.row_index);
-    try testing.expectEqual(@as(f32, 30), store.componentPtrConst(third, Position).?.x);
-    try testing.expectEqual(@as(f32, 31), store.componentPtrConst(third, Position).?.y);
-}
-
-test "archetype store reindexes swapped archetypes after removing an empty middle archetype" {
-    const Position = struct { x: f32, y: f32 };
-    const Velocity = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position, Velocity });
-    const Key = archetype_key_mod.ArchetypeKey(.{ Position, Velocity });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 6,
-        .components_per_archetype_max = 4,
-        .chunks_max = 6,
-        .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const position_entity: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-    const velocity_entity: entity_mod.Entity = .{ .index = 1, .generation = 1 };
-
-    try store.spawn(position_entity);
-    try store.spawn(velocity_entity);
-    try store.insertComponent(position_entity, Position, .{ .x = 4, .y = 8 });
-    try store.insertComponent(velocity_entity, Velocity, .{ .x = 9, .y = 10 });
-
-    try testing.expectEqual(@as(u32, 3), store.archetypeCount());
-    try store.despawn(position_entity);
-
-    try testing.expect(!store.contains(position_entity));
-    try testing.expect(store.contains(velocity_entity));
-    try testing.expectEqual(@as(u32, 2), store.archetypeCount());
-    try testing.expectEqual(@as(u32, 1), store.locationOf(velocity_entity).?.archetype_index);
-    const velocity_key = store.archetypeKeyOf(velocity_entity).?;
-    const expected_velocity_key = Key.fromTypes(.{ Velocity });
-    try testing.expectEqual(expected_velocity_key.count(), velocity_key.count());
-    try testing.expect(velocity_key.containsType(Velocity));
-    try testing.expect(!velocity_key.containsType(Position));
-    try testing.expectEqual(@as(f32, 9), store.componentPtrConst(velocity_entity, Velocity).?.x);
-    try testing.expectEqual(@as(f32, 10), store.componentPtrConst(velocity_entity, Velocity).?.y);
-}
-
-test "archetype store rejects raw value-component additions without initialization and allows tag-only moves" {
-    const Position = struct { x: f32, y: f32 };
-    const Tag = struct {};
-    const Store = ArchetypeStore(.{ Position, Tag });
-    const Key = archetype_key_mod.ArchetypeKey(.{ Position, Tag });
-
-    var store = try Store.init(testing.allocator, .{
-        .entities_max = 8,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 4,
-        .chunks_max = 4,
-        .chunk_rows_max = 4,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    });
-    defer store.deinit();
-
-    const entity: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-    try store.spawn(entity);
-
-    try testing.expectError(error.ComponentInitRequired, store.moveToArchetype(entity, Key.fromTypes(.{ Position })));
-
-    try store.moveToArchetype(entity, Key.fromTypes(.{ Tag }));
-    try testing.expect(store.hasComponent(entity, Tag));
-    try testing.expect(!store.hasComponent(entity, Position));
-}
-
-test "archetype store releases chunk init reservations when chunk vector append fails" {
-    const Position = struct { x: f32, y: f32 };
-    const Store = ArchetypeStore(.{ Position });
-
-    const probe_config: world_config_mod.WorldConfig = .{
-        .entities_max = 4,
-        .archetypes_max = 4,
-        .components_per_archetype_max = 2,
-        .chunks_max = 4,
-        .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
-        .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
-        .budget = null,
-    };
-
-    var probe_budget = try memory.budget.Budget.init(1024);
-    var probe_store = try Store.init(testing.allocator, .{
-        .entities_max = probe_config.entities_max,
-        .archetypes_max = probe_config.archetypes_max,
-        .components_per_archetype_max = probe_config.components_per_archetype_max,
-        .chunks_max = probe_config.chunks_max,
-        .chunk_rows_max = probe_config.chunk_rows_max,
-        .query_cache_entries_max = probe_config.query_cache_entries_max,
-        .command_buffer_entries_max = probe_config.command_buffer_entries_max,
-        .side_index_entries_max = probe_config.side_index_entries_max,
-        .budget = &probe_budget,
-    });
-    const base_used = probe_budget.used();
-    probe_store.deinit();
-    try testing.expectEqual(@as(u64, 0), probe_budget.used());
-
-    const chunk_entity_bytes = try std.math.mul(usize, probe_config.chunk_rows_max, @sizeOf(entity_mod.Entity));
-    const limit_bytes = try std.math.add(usize, @intCast(base_used), chunk_entity_bytes);
-    var budget = try memory.budget.Budget.init(limit_bytes);
-    {
-        var store = try Store.init(testing.allocator, .{
-            .entities_max = probe_config.entities_max,
-            .archetypes_max = probe_config.archetypes_max,
-            .components_per_archetype_max = probe_config.components_per_archetype_max,
-            .chunks_max = probe_config.chunks_max,
-            .chunk_rows_max = probe_config.chunk_rows_max,
-            .query_cache_entries_max = probe_config.query_cache_entries_max,
-            .command_buffer_entries_max = probe_config.command_buffer_entries_max,
-            .side_index_entries_max = probe_config.side_index_entries_max,
-            .budget = &budget,
-        });
-        defer store.deinit();
-
-        const entity: entity_mod.Entity = .{ .index = 0, .generation = 1 };
-        try testing.expectError(error.NoSpaceLeft, store.spawn(entity));
-        try testing.expectEqual(base_used, budget.used());
-        try testing.expectEqual(@as(u32, 0), store.activeCount());
-        try testing.expectEqual(@as(u32, 0), store.chunkCount());
-        try testing.expect(!store.contains(entity));
+fn introducesUninitializedColumns(comptime Components: anytype, source_key: archetype_key_mod.ArchetypeKey(Components), target_key: archetype_key_mod.ArchetypeKey(Components)) bool {
+    const Registry = component_registry_mod.ComponentRegistry(Components);
+    const component_count: usize = comptime Registry.count();
+    inline for (0..component_count) |index| {
+        const T = Registry.typeAt(index);
+        const id: component_registry_mod.ComponentTypeId = .{ .value = @intCast(index) };
+        if (@sizeOf(T) != 0 and !source_key.containsId(id) and target_key.containsId(id)) return true;
     }
-    try testing.expectEqual(@as(u64, 0), budget.used());
+    return false;
+}
+
+fn mergeKeys(comptime Components: anytype, source_key: archetype_key_mod.ArchetypeKey(Components), bundle_key: archetype_key_mod.ArchetypeKey(Components)) !archetype_key_mod.ArchetypeKey(Components) {
+    var merged = source_key;
+    const Registry = component_registry_mod.ComponentRegistry(Components);
+    const component_count: usize = comptime Registry.count();
+    inline for (0..component_count) |index| {
+        const id: component_registry_mod.ComponentTypeId = .{ .value = @intCast(index) };
+        if (bundle_key.containsId(id)) {
+            merged = try merged.withId(id);
+        }
+    }
+    return merged;
+}
+
+test "archetype store restores the empty archetype and structural epoch surface" {
+    const Position = struct { x: f32, y: f32 };
+    const Store = ArchetypeStore(.{ Position });
+
+    var store = try Store.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 2,
+        .command_buffer_entries_max = 8,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 1,
+        .budget = null,
+    });
+    defer store.deinit();
+
+    try testing.expectEqual(@as(u32, 1), store.archetypeCount());
+    try testing.expectEqual(@as(u64, 0), store.structuralEpoch());
 }

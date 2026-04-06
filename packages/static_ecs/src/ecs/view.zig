@@ -18,22 +18,30 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
 
         pub const Query = QueryShape;
 
+        /// Borrowed chunk-batch view into store-owned storage.
+        /// Any structural mutation of the owning world or store invalidates this
+        /// batch and every entity/component slice it yields.
         pub const ChunkBatch = struct {
+            store: *ArchetypeStore,
+            expected_epoch: u64,
             key: Key,
             entities_slice: []const entity_mod.Entity,
             chunk: *Chunk,
 
             pub fn len(self: *const ChunkBatch) usize {
+                self.assertStillValid();
                 assert(self.entities_slice.len == self.chunk.rowCount());
                 return self.entities_slice.len;
             }
 
             pub fn archetypeKey(self: *const ChunkBatch) Key {
+                self.assertStillValid();
                 assert(self.len() == self.entities_slice.len);
                 return self.key;
             }
 
             pub fn entities(self: *const ChunkBatch) []const entity_mod.Entity {
+                self.assertStillValid();
                 assert(self.entities_slice.len == self.chunk.rowCount());
                 return self.entities_slice;
             }
@@ -44,6 +52,7 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
                         @compileError("ChunkBatch.read requires a Read or Write access descriptor for T.");
                     }
                 }
+                self.assertStillValid();
                 const slice = self.chunk.columnSliceConst(T).?;
                 assert(slice.len == self.entities_slice.len);
                 return slice;
@@ -55,6 +64,7 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
                         @compileError("ChunkBatch.write requires a Write access descriptor for T.");
                     }
                 }
+                self.assertStillValid();
                 const slice = self.chunk.columnSlice(T).?;
                 assert(slice.len == self.entities_slice.len);
                 return slice;
@@ -66,6 +76,7 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
                         @compileError("ChunkBatch.optionalRead requires an OptionalRead or OptionalWrite access descriptor for T.");
                     }
                 }
+                self.assertStillValid();
                 const slice = self.chunk.columnSliceConst(T) orelse return null;
                 assert(slice.len == self.entities_slice.len);
                 return slice;
@@ -77,18 +88,30 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
                         @compileError("ChunkBatch.optionalWrite requires an OptionalWrite access descriptor for T.");
                     }
                 }
+                self.assertStillValid();
                 const slice = self.chunk.columnSlice(T) orelse return null;
                 assert(slice.len == self.entities_slice.len);
                 return slice;
             }
+
+            fn assertStillValid(self: *const ChunkBatch) void {
+                if (std.debug.runtime_safety and self.store.structuralEpoch() != self.expected_epoch) {
+                    std.debug.panic("static_ecs.View: ChunkBatch invalidated by structural mutation", .{});
+                }
+            }
         };
 
+        /// Borrowed iterator over matching archetype chunks.
+        /// Any structural mutation of the owning world or store invalidates the
+        /// iterator and any outstanding batches it has yielded.
         pub const Iterator = struct {
             store: *ArchetypeStore,
+            expected_epoch: u64,
             archetype_index: usize = 0,
             chunk_index: usize = 0,
 
             pub fn next(self: *Iterator) ?ChunkBatch {
+                self.assertStillValid();
                 while (self.archetype_index < self.store.archetypes.len()) {
                     const archetype = &self.store.archetypes.items()[self.archetype_index];
                     if (!QueryShape.matches(archetype.key)) {
@@ -106,6 +129,8 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
                         if (row_count == 0) continue;
 
                         return .{
+                            .store = self.store,
+                            .expected_epoch = self.expected_epoch,
                             .key = archetype.key,
                             .entities_slice = chunk_record.entities[0..row_count],
                             .chunk = &chunk_record.chunk,
@@ -117,6 +142,12 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
                 }
 
                 return null;
+            }
+
+            fn assertStillValid(self: *const Iterator) void {
+                if (std.debug.runtime_safety and self.store.structuralEpoch() != self.expected_epoch) {
+                    std.debug.panic("static_ecs.View: Iterator invalidated by structural mutation", .{});
+                }
             }
         };
 
@@ -130,7 +161,10 @@ pub fn View(comptime Components: anytype, comptime Accesses: anytype) type {
 
         pub fn iterator(self: *Self) Iterator {
             assert(@intFromPtr(self.store) != 0);
-            return .{ .store = self.store };
+            return .{
+                .store = self.store,
+                .expected_epoch = self.store.structuralEpoch(),
+            };
         }
     };
 }
@@ -156,9 +190,9 @@ test "view iterates matching chunks and exposes typed slices" {
         .components_per_archetype_max = 4,
         .chunks_max = 8,
         .chunk_rows_max = 2,
-        .query_cache_entries_max = 0,
         .command_buffer_entries_max = 8,
-        .side_index_entries_max = 0,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
         .budget = null,
     });
     defer store.deinit();

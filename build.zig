@@ -390,6 +390,30 @@ fn addBenchStep(
             .extra_import_name = "static_testing",
             .extra_import_mod = mods.static_testing,
         },
+        .{
+            .name = "query_iteration_baselines",
+            .src = "packages/static_ecs/benchmarks/query_iteration_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "structural_churn_baselines",
+            .src = "packages/static_ecs/benchmarks/structural_churn_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "command_buffer_apply_baselines",
+            .src = "packages/static_ecs/benchmarks/command_buffer_apply_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
     };
 
     for (benchmarks) |bm| {
