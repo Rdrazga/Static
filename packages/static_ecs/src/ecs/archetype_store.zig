@@ -52,6 +52,31 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
 
         const invalid_index = std.math.maxInt(u32);
         const FingerprintIndex = collections.sorted_vec_map.SortedVecMap(u64, u32, FingerprintCmp);
+        const transition_cache_capacity: usize = 4;
+
+        const TransitionKind = enum(u8) {
+            add,
+            remove,
+        };
+
+        const TransitionCacheEntry = struct {
+            valid: bool = false,
+            kind: TransitionKind = .add,
+            source_archetype_index: u32 = invalid_index,
+            component_id: component_registry_mod.ComponentTypeId = .{ .value = 0 },
+            target_archetype_index: u32 = invalid_index,
+            target_key: Key = Key.empty(),
+        };
+
+        const BundleWrite = struct {
+            bytes: []const u8,
+            entry_count: u32,
+        };
+
+        const TransitionResult = struct {
+            target_key: Key,
+            target_archetype_index: u32,
+        };
 
         const ChunkRecord = struct {
             chunk: Chunk,
@@ -116,6 +141,8 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
         total_chunks: u32,
         active_entities: u32,
         structural_epoch_value: u64,
+        transition_cache: [transition_cache_capacity]TransitionCacheEntry = [_]TransitionCacheEntry{.{}} ** transition_cache_capacity,
+        transition_cache_next_slot: usize = 0,
 
         pub fn init(allocator: std.mem.Allocator, config: world_config_mod.WorldConfig) Error!Self {
             try config.validate();
@@ -289,7 +316,8 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
                 return error.ComponentInitRequired;
             }
 
-            _ = try self.moveEntityToArchetype(entity, target_key, null);
+            const target_archetype_index = try self.ensureArchetype(&target_key);
+            _ = try self.moveEntityToKnownArchetype(entity, target_key, target_archetype_index, null);
             self.bumpStructuralEpoch();
             self.assertInvariants();
         }
@@ -298,12 +326,13 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             comptime validateComponentType(T, Registry);
 
             self.assertInvariants();
-            if (!self.contains(entity)) return error.EntityNotFound;
+            const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
+            const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
+            const component_id = Registry.typeId(T).?;
 
-            if (!self.hasComponent(entity, T)) {
-                const source_key = self.archetypeKeyOf(entity).?;
-                const target_key = try source_key.withType(T);
-                _ = try self.moveEntityToArchetype(entity, target_key, null);
+            if (!source_key.containsId(component_id)) {
+                const transition = try self.ensureSingleComponentTransition(source_location.archetype_index, component_id, .add);
+                _ = try self.moveEntityToKnownArchetype(entity, transition.target_key, transition.target_archetype_index, null);
                 self.bumpStructuralEpoch();
             }
 
@@ -335,13 +364,14 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             comptime validateComponentType(T, Registry);
 
             self.assertInvariants();
-            if (!self.contains(entity)) return error.EntityNotFound;
+            const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
+            const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
+            const component_id = Registry.typeId(T).?;
 
-            const source_key = self.archetypeKeyOf(entity).?;
-            if (!source_key.containsType(T)) return;
+            if (!source_key.containsId(component_id)) return;
 
-            const target_key = source_key.withoutType(T);
-            _ = try self.moveEntityToArchetype(entity, target_key, null);
+            const transition = try self.ensureSingleComponentTransition(source_location.archetype_index, component_id, .remove);
+            _ = try self.moveEntityToKnownArchetype(entity, transition.target_key, transition.target_archetype_index, null);
             self.bumpStructuralEpoch();
             self.assertInvariants();
         }
@@ -350,16 +380,27 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             self: *Self,
             entity: entity_mod.Entity,
             target_key: Key,
-            bundle_write: ?struct {
-                bytes: []const u8,
-                entry_count: u32,
-            },
+            bundle_write: ?BundleWrite,
         ) Error!EntityLocation {
             const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
             const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
             if (keysEqual(source_key, target_key)) return source_location;
 
             const target_archetype_index = try self.ensureArchetype(&target_key);
+            return self.moveEntityToKnownArchetype(entity, target_key, target_archetype_index, bundle_write);
+        }
+
+        fn moveEntityToKnownArchetype(
+            self: *Self,
+            entity: entity_mod.Entity,
+            target_key: Key,
+            target_archetype_index: u32,
+            bundle_write: ?BundleWrite,
+        ) Error!EntityLocation {
+            const source_location = self.locationOf(entity) orelse return error.EntityNotFound;
+            const source_key = self.archetypeRecordConst(source_location.archetype_index).?.key;
+            if (keysEqual(source_key, target_key)) return source_location;
+
             const target_location = try self.appendEntityToArchetype(target_archetype_index, entity);
             errdefer _ = self.removeEntityAt(target_location, entity) catch {};
 
@@ -370,6 +411,70 @@ pub fn ArchetypeStore(comptime Components: anytype) type {
             self.writeLocation(entity, target_location);
             try self.removeEntityAt(source_location, entity);
             return target_location;
+        }
+
+        fn ensureSingleComponentTransition(
+            self: *Self,
+            source_archetype_index: u32,
+            component_id: component_registry_mod.ComponentTypeId,
+            kind: TransitionKind,
+        ) Error!TransitionResult {
+            if (self.cachedTransition(source_archetype_index, component_id, kind)) |cached| {
+                return cached;
+            }
+
+            const source_key = self.archetypeRecordConst(source_archetype_index).?.key;
+            const target_key = switch (kind) {
+                .add => try source_key.withId(component_id),
+                .remove => source_key.withoutId(component_id),
+            };
+            const target_archetype_index = try self.ensureArchetype(&target_key);
+            self.rememberTransition(source_archetype_index, component_id, kind, target_key, target_archetype_index);
+            return .{
+                .target_key = target_key,
+                .target_archetype_index = target_archetype_index,
+            };
+        }
+
+        fn cachedTransition(
+            self: *const Self,
+            source_archetype_index: u32,
+            component_id: component_registry_mod.ComponentTypeId,
+            kind: TransitionKind,
+        ) ?TransitionResult {
+            for (self.transition_cache) |entry| {
+                if (!entry.valid) continue;
+                if (entry.kind != kind) continue;
+                if (entry.source_archetype_index != source_archetype_index) continue;
+                if (entry.component_id.value != component_id.value) continue;
+
+                const target_archetype = self.archetypeRecordConst(entry.target_archetype_index) orelse continue;
+                if (!keysEqual(target_archetype.key, entry.target_key)) continue;
+                return .{
+                    .target_key = entry.target_key,
+                    .target_archetype_index = entry.target_archetype_index,
+                };
+            }
+            return null;
+        }
+
+        fn rememberTransition(
+            self: *Self,
+            source_archetype_index: u32,
+            component_id: component_registry_mod.ComponentTypeId,
+            kind: TransitionKind,
+            target_key: Key,
+            target_archetype_index: u32,
+        ) void {
+            self.transition_cache[self.transition_cache_next_slot] = .{
+                .valid = true,
+                .kind = kind,
+                .source_archetype_index = source_archetype_index,
+                .component_id = component_id,
+                .target_archetype_index = target_archetype_index,
+                .target_key = target_key,
+            };
+            self.transition_cache_next_slot = (self.transition_cache_next_slot + 1) % transition_cache_capacity;
         }
 
         fn appendEntityToArchetype(self: *Self, archetype_index: u32, entity: entity_mod.Entity) Error!EntityLocation {
@@ -790,4 +895,44 @@ test "archetype store restores the empty archetype and structural epoch surface"
 
     try testing.expectEqual(@as(u32, 1), store.archetypeCount());
     try testing.expectEqual(@as(u64, 0), store.structuralEpoch());
+}
+
+test "archetype store scalar transition cache tolerates stale target indexes after archetype removal" {
+    const Position = struct { x: f32, y: f32 };
+    const Velocity = struct { x: f32, y: f32 };
+    const Health = struct { value: i32 };
+    const Store = ArchetypeStore(.{ Position, Velocity, Health });
+
+    var store = try Store.init(testing.allocator, .{
+        .entities_max = 8,
+        .archetypes_max = 8,
+        .components_per_archetype_max = 4,
+        .chunks_max = 8,
+        .chunk_rows_max = 2,
+        .command_buffer_entries_max = 8,
+        .command_buffer_payload_bytes_max = 256,
+        .empty_chunk_retained_max = 0,
+        .budget = null,
+    });
+    defer store.deinit();
+
+    const first: entity_mod.Entity = .{ .index = 0, .generation = 1 };
+    const second: entity_mod.Entity = .{ .index = 1, .generation = 1 };
+    const third: entity_mod.Entity = .{ .index = 2, .generation = 1 };
+
+    try store.spawn(first);
+    try store.spawn(second);
+    try store.spawn(third);
+    try store.insertComponent(first, Position, .{ .x = 1, .y = 2 });
+    try store.insertComponent(second, Position, .{ .x = 3, .y = 4 });
+    try store.insertComponent(third, Position, .{ .x = 5, .y = 6 });
+
+    try store.insertComponent(first, Velocity, .{ .x = 10, .y = 20 });
+    try store.insertComponent(third, Health, .{ .value = 99 });
+    try store.removeComponent(first, Velocity);
+
+    try store.insertComponent(second, Velocity, .{ .x = 30, .y = 40 });
+    try testing.expect(store.hasComponent(second, Velocity));
+    try testing.expectEqual(@as(f32, 30), store.componentPtrConst(second, Velocity).?.x);
+    try testing.expect(store.hasComponent(third, Health));
 }
