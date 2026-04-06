@@ -238,10 +238,8 @@ pub fn CommandBuffer(comptime Components: anytype) type {
 
             try self.payload_bytes.ensureCapacity(payload_end);
             const len_before = self.payload_bytes.len();
-            var fill_len = len_before;
-            while (fill_len < payload_end) : (fill_len += 1) {
-                self.payload_bytes.append(0) catch unreachable;
-            }
+            self.payload_bytes.storage.items.len = payload_end;
+            @memset(self.payload_bytes.items()[len_before..payload_end], 0);
             const entry_count = bundle_codec_mod.encodeBundleTuple(
                 Components,
                 bundle,
