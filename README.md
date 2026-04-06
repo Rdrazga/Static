@@ -157,11 +157,17 @@ Workspace for the `static_*` Zig packages.
   structural mutation, typed query/view chunk-batch hot paths, bounded
   `CommandBuffer` staging with separate entry and payload limits, fused
   `spawnBundle()` / `insertBundle()` admission, bounded empty-chunk reuse,
-  archetype and append-path chunk fast paths, fail-fast borrowed-view
+  archetype and append-path chunk fast paths, direct encoded-bundle structural
+  validation that now tolerates misaligned caller slices while keeping payload
+  bytes in a same-process bit-valid staging boundary, fail-fast borrowed-view
   invalidation after structural mutation in runtime-safety builds, and
   package-owned proof covering swap reindexing, compile-contract fixtures,
   `testing.model` command-buffer sequences, plus admitted ECS benchmark review
-  workloads for chunk iteration, structural churn, and command-buffer apply.
+  workloads for dense versus fragmented query iteration, initial versus
+  live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
+  command-buffer staged-apply throughput, primitive hot-path microbenchmarks,
+  query scaling across entity and archetype counts, and frame-like multi-pass
+  ECS runs.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,

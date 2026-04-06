@@ -28,6 +28,7 @@ planning or follow-on design decisions.
 - `dense_array_end_state_2026-04-02.md`
 - `static_ecs_package_readiness_review_2026-04-04.md`
 - `static_ecs_package_sketch_2026-04-02.md`
+- `static_ecs_production_benchmark_backlog_2026-04-05.md`
 - `static_ecs_shape_and_ownership_sketch_2026-04-04.md`
 - `static_gpu_package_sketch_2026-04-02.md`
 - `static_hash_algorithm_portfolio_additions_2026-03-17.md`

@@ -98,16 +98,40 @@ Scope note:
    - validate findings against the actual tree before editing;
    - apply bounded factual fixes rather than style churn;
    - close with `zig build docs-lint`.
+
 ### Recently completed queue items
 
 1. `static_ecs`
+   The benchmark truthfulness follow-up is now closed: root bench wiring now
+   compiles the imported ECS and `static_testing` modules under the same
+   `ReleaseFast` mode benchmark history records, the command-buffer owner is
+   explicitly staged-apply throughput instead of apply-only, and
+   `structural_churn_baselines` now uses a reduced rerun budget while keeping
+   the scalar-versus-bundle signal:
+   `docs/plans/completed/static_ecs_benchmark_truthfulness_followup_closed_2026-04-05.md`.
+2. `static_ecs`
+   The admitted ECS benchmark matrix expansion is now closed: the package now
+   owns microbenchmarks for primitive hot paths, query-scale workloads across
+   entity and archetype counts, frame-like sequential ECS pass runs, a
+   long-form production benchmark backlog sketch, and direct named benchmark
+   build steps for the admitted ECS owners:
+   `docs/plans/completed/static_ecs_benchmark_matrix_expansion_closed_2026-04-05.md`.
+3. `static_ecs`
+   The encoded-bundle portability and command-buffer staging reopen is now
+   closed: direct encoded-bundle validation now tolerates misaligned caller
+   slices, the public route now documents payload bytes as same-process
+   bit-valid staging input, failed bundle staging rolls payload usage back, and
+   the typed bundle helpers plus command-buffer staging no longer materialize
+   stack scratch sized by encoded bundle bytes:
+   `docs/plans/completed/static_ecs_bundle_portability_and_command_buffer_followup_closed_2026-04-05.md`.
+4. `static_ecs`
    The direct-surface hardening reopen is now closed: malformed encoded bundles
    fail through stable operating errors, `World.spawnBundleEncoded()` now
    rejects non-owned entities without desynchronizing `EntityPool` from
    `ArchetypeStore`, and empty-chunk retention accounting now survives
    retained-chunk reuse:
    `docs/plans/completed/static_ecs_direct_surface_hardening_closed_2026-04-05.md`.
-2. `static_ecs`
+5. `static_ecs`
    The performance and memory reopen is now closed:
    bundle-oriented mutation is fused around final-archetype admission,
    `CommandBuffer` now separates metadata from bounded payload bytes, chunk
@@ -116,103 +140,103 @@ Scope note:
    sparse-archetype metadata is compacted, and package-owned ECS benchmark
    review workloads now run under `zig build bench`:
    `docs/plans/completed/static_ecs_performance_and_memory_followup_closed_2026-04-05.md`.
-3. `static_ecs`
+6. `static_ecs`
    The borrowed-view contract and compile-proof follow-up is now closed:
    `View` and `ChunkBatch` are explicit borrowed surfaces with fail-fast
    invalidation under structural mutation in runtime-safety builds, and the
    package now owns representative compile-contract fixtures for its main public
    `@compileError` boundaries:
    `docs/plans/completed/static_ecs_view_contract_and_compile_proof_closed_2026-04-05.md`.
-4. `static_ecs`
+7. `static_ecs`
    The constructor-cleanup follow-up is now closed:
    `ChunkRecord` append-failure rollback is explicit, `World.init()` now
    releases `EntityPool` on partial-init failure, and direct deterministic
    budget-pressure proof now covers both cleanup paths:
    `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md`.
-5. `static_ecs`
+8. `static_ecs`
    The direct `ArchetypeStore` hardening reopen is now closed:
    `components_per_archetype_max` validation matches `World`, same-index direct
    spawn aliasing is rejected before mutation, and direct deterministic proof
    now covers empty-chunk and empty-archetype swap reindexing.
-6. `workspace_validation_followup`
+9. `workspace_validation_followup`
    Root command semantics are now explicit, the `static_queues` lock-free
    stress proof now matches the queue's non-blocking contention contract, the
    `static_sync` cancel-test cleanup no longer leaves live threads behind on
    failure paths, `zig build harness` now stays success-only, and `zig build
    bench` remains explicitly review-only by default.
-7. `static_memory`
+10. `static_memory`
    `Budget.release()` now fails fast on over-release in all builds, with direct
    negative coverage proving the panic path.
-8. `static_rng`
+11. `static_rng`
    `uintBelow()` now keeps an explicit bounded hard-stop contract, backed by a
    pathological-engine proof.
-9. `static_spatial`
+12. `static_spatial`
    `IncrementalBVH` query reporting now matches `BVH` total-hit semantics, with
    truncation behavior locked down in direct coverage.
-10. `static_scheduling`
+13. `static_scheduling`
    The stale `static_queues` dependency/import wiring has been removed from the
    package and root build graphs.
-11. `static_profile`
+14. `static_profile`
    The public `static_core` alias has been removed, the package boundary stays
    narrow, and the package follow-up now lives under `docs/plans/completed/`.
-12. `static_collections`
+15. `static_collections`
    The `IndexPool` / `SlotMap` free-structure invariant-hardening slice is
    complete, including fail-fast post-mutation checks and multi-node stale
    handle rejection after reuse.
-13. `static_hash`
+16. `static_hash`
    The streaming `testing.model` slice now covers early finalize plus
    finish-time fallback finalization without inventing unsupported misuse
    semantics.
-14. `static_sync`
+17. `static_sync`
    The exported-surface proof map is complete and the primitive-specific gap
    queue is now closed, so the package follow-up lives under
    `docs/plans/completed/`.
-15. `static_queues`
+18. `static_queues`
    The exported-family proof map, root review, helper audit, and package-owned
    deterministic `SpscChannel` coordination queue are complete, so the package
    follow-up now lives under `docs/plans/completed/`.
-16. `static_memory`
+19. `static_memory`
    The exported-surface proof map, duplication review, benchmark-admission
    decision, and shared-harness extraction review are complete, so the package
    follow-up now lives under `docs/plans/completed/`.
-17. `static_scheduling`
+20. `static_scheduling`
    The exported-surface proof map, deterministic gap queue, canonical
    benchmarks, boundary/root review, and shared-harness extraction review are
    complete, so the package follow-up now lives under `docs/plans/completed/`.
-18. `static_rng`
+21. `static_rng`
     The root export review, cross-architecture portability notes, and
     generator-versus-sampling boundary review are complete, so the package
     follow-up now lives under `docs/plans/completed/`.
-19. `static_hash`
+22. `static_hash`
     The sequence-harness extraction decision, root-surface contract review, and
     quality-sample telemetry decision are complete, so the package follow-up now
     lives under `docs/plans/completed/` while algorithm-portfolio research stays
     separate.
-20. `static_collections`
+23. `static_collections`
    The root-surface review is now implemented, the `SmallVec` spill and
    `FlatHashMap.clone` regressions are fixed, the `SlotMap` iterator contract
    is explicit and directly proved, and the first shared benchmark owner
    (`flat_hash_map_lookup_insert_baselines`) is admitted, so the package
    follow-up now lives under `docs/plans/completed/`.
-21. `static_collections`
+24. `static_collections`
    The reopened validation queue is now closed: `FlatHashMap` overwrite and
    duplicate-reject paths no longer allocate before proving insertion,
    `IndexPool` full invariants again prove free-stack uniqueness, and the
    `MinHeap` / `PriorityQueue` clear plus clone contracts are now explicit and
    directly proved.
-22. `static_collections`
+25. `static_collections`
     The validated review-fix slice is now closed: `MinHeap` invalidates removed
     tracked indices on `popMin` / `removeAt`, `Vec` split mutable versus const
     item access, `FlatHashMap` now rejects padded default-hash key types unless
     callers provide a custom hash, and `SmallVec.ensureCapacity` reports
     oversized requests as `error.Overflow`.
-23. `static_collections`
+26. `static_collections`
     The reopened alias/clone/invariant slice is now closed:
     `Vec.appendSliceAssumeCapacity` documents and supports self-alias overlap,
     `FlatHashMap.clone` no longer reads empty-entry storage, and
     `IndexPool.assertFullInvariants` again proves duplicate-free free-stack
     state through a read-only duplicate scan.
-24. `static_collections`
+27. `static_collections`
     The reopened API-contract and ergonomics follow-up is now closed:
     `Vec` oversized-capacity requests fail as stable `Overflow` operating
     errors before allocator or budget side effects, constructor/runtime error
@@ -221,26 +245,26 @@ Scope note:
     public read/reset/iteration parity, and the map plus heap families now
     support additive borrowed lookup helpers with dual by-value or `*const`
     callback signatures where planned.
-25. `static_collections`
+28. `static_collections`
     The bounded map helper follow-up is now closed: `SortedVecMap` and
     `FlatHashMap` both expose aligned `getOrPut` plus `removeOrNull` helper
     surfaces, `FlatHashMap` keeps the existing-key `getOrPut` path free of
     premature growth work, and the package intentionally stops short of a full
     occupied/vacant entry API.
-26. `static_collections`
+29. `static_collections`
     The post-review fix slice is now closed: `SmallVec` accepts the valid
     empty-spilled `shrinkToFit()` state without breaking its one-way spill
     boundary, `FlatHashMap` extends the default-hash safety gate from padding
     risk to the broader raw-representation families it can detect at comptime,
     and the `Handle.invalid()` docs now match the real API.
-27. `static_collections`
+30. `static_collections`
     The testing-surface hardening slice is now closed: the package owns a
     bounded compile-fail harness for the main generic `@compileError`
     validators, `FlatHashMap`, `SortedVecMap`, and `SparseSet` now have
     deterministic `testing.model` runtime-sequence coverage, and
     `SortedVecMap` comparator-signature validation now fires at type
     instantiation to match the new proof surface.
-28. `static_ecs`
+31. `static_ecs`
     The first world-local typed ECS implementation slice is now closed: the
     package owns explicit `WorldConfig` bounds, entity identity, typed
     component-universe admission, `ArchetypeKey`, bounded `Chunk`,
@@ -250,6 +274,14 @@ Scope note:
     Benchmark posture is recorded as deferred until one chunk-iteration or
     structural-churn workload is stable enough to admit as a canonical shared
     benchmark owner.
+32. `static_ecs`
+    The benchmark review and expansion reopen is now closed: the admitted ECS
+    benchmark owners now distinguish dense versus fragmented query iteration,
+    initial versus live-entity structural churn, and spawn-heavy versus
+    insert-heavy versus mixed command-buffer apply while staying on the shared
+    `static_testing.bench.workflow` path with bounded environment-tag
+    metadata:
+    `docs/plans/completed/static_ecs_benchmark_review_and_expansion_closed_2026-04-05.md`.
 
 ### Archived monitor-only follow-up
 

@@ -39,264 +39,8 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(bool, "enable_tracing", opts.enable_tracing);
     build_options.addOption([]const u8, "static_package", "static_workspace");
     const build_options_mod = build_options.createModule();
-
-    const static_core_mod = b.addModule("static_core", .{
-        .root_source_file = b.path("packages/static_core/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-        },
-    });
-
-    const static_bits_mod = b.addModule("static_bits", .{
-        .root_source_file = b.path("packages/static_bits/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-        },
-    });
-
-    const static_hash_mod = b.addModule("static_hash", .{
-        .root_source_file = b.path("packages/static_hash/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            // static_core and static_bits were phantom deps: no @import in source.
-            .{ .name = "static_build_options", .module = build_options_mod },
-        },
-    });
-
-    const static_sync_mod = b.addModule("static_sync", .{
-        .root_source_file = b.path("packages/static_sync/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-        },
-    });
-
-    const static_memory_mod = b.addModule("static_memory", .{
-        .root_source_file = b.path("packages/static_memory/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_sync", .module = static_sync_mod },
-        },
-    });
-
-    const static_collections_mod = b.addModule("static_collections", .{
-        .root_source_file = b.path("packages/static_collections/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_memory", .module = static_memory_mod },
-            .{ .name = "static_hash", .module = static_hash_mod },
-        },
-    });
-
-    const static_ecs_mod = b.addModule("static_ecs", .{
-        .root_source_file = b.path("packages/static_ecs/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_memory", .module = static_memory_mod },
-            .{ .name = "static_collections", .module = static_collections_mod },
-            .{ .name = "static_hash", .module = static_hash_mod },
-        },
-    });
-
-    const static_serial_mod = b.addModule("static_serial", .{
-        .root_source_file = b.path("packages/static_serial/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_bits", .module = static_bits_mod },
-            .{ .name = "static_hash", .module = static_hash_mod },
-        },
-    });
-
-    const static_net_mod = b.addModule("static_net", .{
-        .root_source_file = b.path("packages/static_net/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_bits", .module = static_bits_mod },
-            .{ .name = "static_serial", .module = static_serial_mod },
-        },
-    });
-
-    const static_net_native_mod = b.addModule("static_net_native", .{
-        .root_source_file = b.path("packages/static_net_native/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_net", .module = static_net_mod },
-        },
-    });
-
-    const static_queues_mod = b.addModule("static_queues", .{
-        .root_source_file = b.path("packages/static_queues/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_memory", .module = static_memory_mod },
-            .{ .name = "static_collections", .module = static_collections_mod },
-            .{ .name = "static_sync", .module = static_sync_mod },
-        },
-    });
-
-    const static_io_mod = b.addModule("static_io", .{
-        .root_source_file = b.path("packages/static_io/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_memory", .module = static_memory_mod },
-            .{ .name = "static_queues", .module = static_queues_mod },
-            .{ .name = "static_collections", .module = static_collections_mod },
-            .{ .name = "static_net", .module = static_net_mod },
-            .{ .name = "static_net_native", .module = static_net_native_mod },
-            .{ .name = "static_sync", .module = static_sync_mod },
-        },
-    });
-
-    const static_scheduling_mod = b.addModule("static_scheduling", .{
-        .root_source_file = b.path("packages/static_scheduling/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_sync", .module = static_sync_mod },
-            .{ .name = "static_collections", .module = static_collections_mod },
-        },
-    });
-
-    const static_profile_mod = b.addModule("static_profile", .{
-        .root_source_file = b.path("packages/static_profile/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-        },
-    });
-
-    const static_simd_mod = b.addModule("static_simd", .{
-        .root_source_file = b.path("packages/static_simd/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            // static_core was a phantom dep: no @import("static_core") in source.
-            .{ .name = "static_build_options", .module = build_options_mod },
-        },
-    });
-
-    const static_meta_mod = b.addModule("static_meta", .{
-        .root_source_file = b.path("packages/static_meta/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_hash", .module = static_hash_mod },
-        },
-    });
-
-    const static_rng_mod = b.addModule("static_rng", .{
-        .root_source_file = b.path("packages/static_rng/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-        },
-    });
-
-    const static_string_mod = b.addModule("static_string", .{
-        .root_source_file = b.path("packages/static_string/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_hash", .module = static_hash_mod },
-        },
-    });
-
-    const static_spatial_mod = b.addModule("static_spatial", .{
-        .root_source_file = b.path("packages/static_spatial/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-        },
-    });
-
-    const static_math_mod = b.addModule("static_math", .{
-        .root_source_file = b.path("packages/static_math/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-        },
-    });
-
-    const static_testing_mod = b.addModule("static_testing", .{
-        .root_source_file = b.path("packages/static_testing/src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "static_build_options", .module = build_options_mod },
-            .{ .name = "static_core", .module = static_core_mod },
-            .{ .name = "static_rng", .module = static_rng_mod },
-            .{ .name = "static_profile", .module = static_profile_mod },
-            .{ .name = "static_queues", .module = static_queues_mod },
-            .{ .name = "static_scheduling", .module = static_scheduling_mod },
-            .{ .name = "static_bits", .module = static_bits_mod },
-            .{ .name = "static_serial", .module = static_serial_mod },
-        },
-    });
-
-    const mods: Modules = .{
-        .static_core = static_core_mod,
-        .static_bits = static_bits_mod,
-        .static_hash = static_hash_mod,
-        .static_memory = static_memory_mod,
-        .static_sync = static_sync_mod,
-        .static_collections = static_collections_mod,
-        .static_ecs = static_ecs_mod,
-        .static_serial = static_serial_mod,
-        .static_net = static_net_mod,
-        .static_net_native = static_net_native_mod,
-        .static_queues = static_queues_mod,
-        .static_io = static_io_mod,
-        .static_scheduling = static_scheduling_mod,
-        .static_profile = static_profile_mod,
-        .static_simd = static_simd_mod,
-        .static_meta = static_meta_mod,
-        .static_rng = static_rng_mod,
-        .static_string = static_string_mod,
-        .static_spatial = static_spatial_mod,
-        .static_math = static_math_mod,
-        .static_testing = static_testing_mod,
-    };
+    const mods = createWorkspaceModules(b, target, optimize, build_options_mod, true);
+    const bench_mods = createWorkspaceModules(b, target, .ReleaseFast, build_options_mod, false);
 
     const docs_lint_step = addDocsLintStep(b);
     const tests_step = addAllTestsStep(b, mods);
@@ -305,7 +49,7 @@ pub fn build(b: *std.Build) void {
     const examples_step = addAllExamplesStep(b, target, optimize, mods);
     // Benchmark step: benchmarks always compile at ReleaseFast because the
     // measurement is meaningless in Debug mode (assertions dominate runtime).
-    const bench_step = addBenchStep(b, target, mods);
+    const bench_step = addBenchStep(b, target, bench_mods);
     // test-release step: runs all unit tests under ReleaseSafe to catch
     // optimisation-mode differences (wrapping arithmetic, assert stripping, etc.).
     const test_release_step = addTestReleaseStep(b, mods);
@@ -407,8 +151,32 @@ fn addBenchStep(
             .extra_import_mod = mods.static_testing,
         },
         .{
-            .name = "command_buffer_apply_baselines",
+            .name = "command_buffer_staged_apply_baselines",
             .src = "packages/static_ecs/benchmarks/command_buffer_apply_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "micro_hotpaths_baselines",
+            .src = "packages/static_ecs/benchmarks/micro_hotpaths_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "query_scale_baselines",
+            .src = "packages/static_ecs/benchmarks/query_scale_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
+            .name = "frame_pass_baselines",
+            .src = "packages/static_ecs/benchmarks/frame_pass_baselines.zig",
             .import_name = "static_ecs",
             .import_mod = mods.static_ecs,
             .extra_import_name = "static_testing",
@@ -436,6 +204,8 @@ fn addBenchStep(
         });
         const run = b.addRunArtifact(exe);
         step.dependOn(&run.step);
+        const single_step = b.step(bm.name, b.fmt("Run benchmark {s}", .{bm.name}));
+        single_step.dependOn(&run.step);
     }
 
     const static_io_benchmarks = [_]struct {
@@ -974,6 +744,280 @@ const Modules = struct {
     static_math: *std.Build.Module,
     static_testing: *std.Build.Module,
 };
+
+fn createWorkspaceModules(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    build_options_mod: *std.Build.Module,
+    register_named_modules: bool,
+) Modules {
+    const static_core_mod = makeWorkspaceModule(b, "static_core", .{
+        .root_source_file = b.path("packages/static_core/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+        },
+    }, register_named_modules);
+
+    const static_bits_mod = makeWorkspaceModule(b, "static_bits", .{
+        .root_source_file = b.path("packages/static_bits/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+        },
+    }, register_named_modules);
+
+    const static_hash_mod = makeWorkspaceModule(b, "static_hash", .{
+        .root_source_file = b.path("packages/static_hash/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+        },
+    }, register_named_modules);
+
+    const static_sync_mod = makeWorkspaceModule(b, "static_sync", .{
+        .root_source_file = b.path("packages/static_sync/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+        },
+    }, register_named_modules);
+
+    const static_memory_mod = makeWorkspaceModule(b, "static_memory", .{
+        .root_source_file = b.path("packages/static_memory/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_sync", .module = static_sync_mod },
+        },
+    }, register_named_modules);
+
+    const static_collections_mod = makeWorkspaceModule(b, "static_collections", .{
+        .root_source_file = b.path("packages/static_collections/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_memory", .module = static_memory_mod },
+            .{ .name = "static_hash", .module = static_hash_mod },
+        },
+    }, register_named_modules);
+
+    const static_ecs_mod = makeWorkspaceModule(b, "static_ecs", .{
+        .root_source_file = b.path("packages/static_ecs/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_memory", .module = static_memory_mod },
+            .{ .name = "static_collections", .module = static_collections_mod },
+            .{ .name = "static_hash", .module = static_hash_mod },
+        },
+    }, register_named_modules);
+
+    const static_serial_mod = makeWorkspaceModule(b, "static_serial", .{
+        .root_source_file = b.path("packages/static_serial/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_bits", .module = static_bits_mod },
+            .{ .name = "static_hash", .module = static_hash_mod },
+        },
+    }, register_named_modules);
+
+    const static_net_mod = makeWorkspaceModule(b, "static_net", .{
+        .root_source_file = b.path("packages/static_net/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_bits", .module = static_bits_mod },
+            .{ .name = "static_serial", .module = static_serial_mod },
+        },
+    }, register_named_modules);
+
+    const static_net_native_mod = makeWorkspaceModule(b, "static_net_native", .{
+        .root_source_file = b.path("packages/static_net_native/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_net", .module = static_net_mod },
+        },
+    }, register_named_modules);
+
+    const static_queues_mod = makeWorkspaceModule(b, "static_queues", .{
+        .root_source_file = b.path("packages/static_queues/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_memory", .module = static_memory_mod },
+            .{ .name = "static_collections", .module = static_collections_mod },
+            .{ .name = "static_sync", .module = static_sync_mod },
+        },
+    }, register_named_modules);
+
+    const static_io_mod = makeWorkspaceModule(b, "static_io", .{
+        .root_source_file = b.path("packages/static_io/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_memory", .module = static_memory_mod },
+            .{ .name = "static_queues", .module = static_queues_mod },
+            .{ .name = "static_collections", .module = static_collections_mod },
+            .{ .name = "static_net", .module = static_net_mod },
+            .{ .name = "static_net_native", .module = static_net_native_mod },
+            .{ .name = "static_sync", .module = static_sync_mod },
+        },
+    }, register_named_modules);
+
+    const static_scheduling_mod = makeWorkspaceModule(b, "static_scheduling", .{
+        .root_source_file = b.path("packages/static_scheduling/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_sync", .module = static_sync_mod },
+            .{ .name = "static_collections", .module = static_collections_mod },
+        },
+    }, register_named_modules);
+
+    const static_profile_mod = makeWorkspaceModule(b, "static_profile", .{
+        .root_source_file = b.path("packages/static_profile/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+        },
+    }, register_named_modules);
+
+    const static_simd_mod = makeWorkspaceModule(b, "static_simd", .{
+        .root_source_file = b.path("packages/static_simd/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+        },
+    }, register_named_modules);
+
+    const static_meta_mod = makeWorkspaceModule(b, "static_meta", .{
+        .root_source_file = b.path("packages/static_meta/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_hash", .module = static_hash_mod },
+        },
+    }, register_named_modules);
+
+    const static_rng_mod = makeWorkspaceModule(b, "static_rng", .{
+        .root_source_file = b.path("packages/static_rng/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+        },
+    }, register_named_modules);
+
+    const static_string_mod = makeWorkspaceModule(b, "static_string", .{
+        .root_source_file = b.path("packages/static_string/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_hash", .module = static_hash_mod },
+        },
+    }, register_named_modules);
+
+    const static_spatial_mod = makeWorkspaceModule(b, "static_spatial", .{
+        .root_source_file = b.path("packages/static_spatial/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+        },
+    }, register_named_modules);
+
+    const static_math_mod = makeWorkspaceModule(b, "static_math", .{
+        .root_source_file = b.path("packages/static_math/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+        },
+    }, register_named_modules);
+
+    const static_testing_mod = makeWorkspaceModule(b, "static_testing", .{
+        .root_source_file = b.path("packages/static_testing/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "static_build_options", .module = build_options_mod },
+            .{ .name = "static_core", .module = static_core_mod },
+            .{ .name = "static_rng", .module = static_rng_mod },
+            .{ .name = "static_profile", .module = static_profile_mod },
+            .{ .name = "static_queues", .module = static_queues_mod },
+            .{ .name = "static_scheduling", .module = static_scheduling_mod },
+            .{ .name = "static_bits", .module = static_bits_mod },
+            .{ .name = "static_serial", .module = static_serial_mod },
+        },
+    }, register_named_modules);
+
+    return .{
+        .static_core = static_core_mod,
+        .static_bits = static_bits_mod,
+        .static_hash = static_hash_mod,
+        .static_memory = static_memory_mod,
+        .static_sync = static_sync_mod,
+        .static_collections = static_collections_mod,
+        .static_ecs = static_ecs_mod,
+        .static_serial = static_serial_mod,
+        .static_net = static_net_mod,
+        .static_net_native = static_net_native_mod,
+        .static_queues = static_queues_mod,
+        .static_io = static_io_mod,
+        .static_scheduling = static_scheduling_mod,
+        .static_profile = static_profile_mod,
+        .static_simd = static_simd_mod,
+        .static_meta = static_meta_mod,
+        .static_rng = static_rng_mod,
+        .static_string = static_string_mod,
+        .static_spatial = static_spatial_mod,
+        .static_math = static_math_mod,
+        .static_testing = static_testing_mod,
+    };
+}
+
+fn makeWorkspaceModule(
+    b: *std.Build,
+    name: []const u8,
+    options: std.Build.Module.CreateOptions,
+    register_named_module: bool,
+) *std.Build.Module {
+    if (register_named_module) return b.addModule(name, options);
+    return b.createModule(options);
+}
 
 fn addAllTestsStep(b: *std.Build, mods: Modules) *std.Build.Step {
     const step = b.step("test", "Run all unit tests");

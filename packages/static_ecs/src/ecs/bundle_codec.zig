@@ -54,17 +54,20 @@ pub fn encodeBundleTuple(comptime Components: anytype, bundle: anytype, out: []u
         const maybe_value = tupleValueOfType(bundle, T);
         if (maybe_value) |value| {
             offset = std.mem.alignForward(usize, offset, @alignOf(EncodedBundleEntryHeader));
-            const header_ptr: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&out[offset]));
-            header_ptr.* = .{
+            var header: EncodedBundleEntryHeader = .{
                 .component_id = .{ .value = @intCast(index) },
                 .payload_size = @intCast(@sizeOf(T)),
             };
+            @memcpy(
+                out[offset .. offset + @sizeOf(EncodedBundleEntryHeader)],
+                std.mem.asBytes(&header),
+            );
             offset += @sizeOf(EncodedBundleEntryHeader);
 
             if (@sizeOf(T) != 0) {
                 offset = std.mem.alignForward(usize, offset, @alignOf(T));
-                const payload_ptr: *T = @ptrCast(@alignCast(&out[offset]));
-                payload_ptr.* = value;
+                const payload_bytes = std.mem.asBytes(&value);
+                @memcpy(out[offset .. offset + payload_bytes.len], payload_bytes);
                 offset += @sizeOf(T);
             }
             encoded_count += 1;
@@ -107,8 +110,11 @@ pub fn Reader(comptime Components: anytype) type {
             if (offset > self.bytes.len or @sizeOf(EncodedBundleEntryHeader) > self.bytes.len - offset) {
                 return error.MalformedBundle;
             }
-            const header_ptr: *const EncodedBundleEntryHeader = @ptrCast(@alignCast(&self.bytes[offset]));
-            const header = header_ptr.*;
+            var header: EncodedBundleEntryHeader = undefined;
+            @memcpy(
+                std.mem.asBytes(&header),
+                self.bytes[offset .. offset + @sizeOf(EncodedBundleEntryHeader)],
+            );
             offset += @sizeOf(EncodedBundleEntryHeader);
 
             const payload_size = payloadSizeForId(Registry, header.component_id) orelse return error.ComponentOutOfRange;
@@ -209,17 +215,19 @@ fn payloadAlignmentForId(comptime Registry: type, id: component_registry_mod.Com
 test "bundle reader preserves well-formed encoded entries" {
     const Position = struct { x: f32, y: f32 };
     const Tag = struct {};
-
-    var encoded: [encodedBundleSize(.{ Position, Tag }, .{
+    const encoded_len: comptime_int = comptime encodedBundleSize(.{ Position, Tag }, .{
         Position{ .x = 1, .y = 2 },
         Tag{},
-    })]u8 = undefined;
+    });
+
+    var encoded_storage: [encoded_len + 1]u8 = undefined;
+    const encoded = encoded_storage[1 .. 1 + encoded_len];
     const entry_count = encodeBundleTuple(.{ Position, Tag }, .{
         Position{ .x = 1, .y = 2 },
         Tag{},
-    }, encoded[0..]);
+    }, encoded);
 
-    var reader = Reader(.{ Position, Tag }).init(encoded[0..], entry_count);
+    var reader = Reader(.{ Position, Tag }).init(encoded, entry_count);
     const first = (try reader.next()).?;
     try testing.expectEqual(@as(u32, 0), first.component_id.value);
     try testing.expectEqual(@as(usize, @sizeOf(Position)), first.payload.len);
@@ -245,14 +253,16 @@ test "bundle reader rejects malformed encoded entries" {
     try testing.expectError(error.MalformedBundle, truncated_payload_reader.next());
 
     var invalid_id = valid;
-    const invalid_header: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&invalid_id[0]));
+    var invalid_header = readHeader(invalid_id[0..], 0);
     invalid_header.component_id = .{ .value = 2 };
+    writeHeader(invalid_id[0..], 0, invalid_header);
     var invalid_id_reader = ReaderShape.init(invalid_id[0..], valid_count);
     try testing.expectError(error.ComponentOutOfRange, invalid_id_reader.next());
 
     var invalid_size = valid;
-    const invalid_size_header: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&invalid_size[0]));
+    var invalid_size_header = readHeader(invalid_size[0..], 0);
     invalid_size_header.payload_size += 1;
+    writeHeader(invalid_size[0..], 0, invalid_size_header);
     var invalid_size_reader = ReaderShape.init(invalid_size[0..], valid_count);
     try testing.expectError(error.MalformedBundle, invalid_size_reader.next());
 
@@ -294,8 +304,7 @@ fn writeTestEntry(
     payload_alignment: usize,
 ) usize {
     var offset = std.mem.alignForward(usize, start_offset, @alignOf(EncodedBundleEntryHeader));
-    const header_ptr: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&out[offset]));
-    header_ptr.* = header;
+    writeHeader(out, offset, header);
     offset += @sizeOf(EncodedBundleEntryHeader);
 
     if (payload.len != 0) {
@@ -305,4 +314,21 @@ fn writeTestEntry(
     }
 
     return offset;
+}
+
+fn readHeader(bytes: []const u8, offset: usize) EncodedBundleEntryHeader {
+    var header: EncodedBundleEntryHeader = undefined;
+    @memcpy(
+        std.mem.asBytes(&header),
+        bytes[offset .. offset + @sizeOf(EncodedBundleEntryHeader)],
+    );
+    return header;
+}
+
+fn writeHeader(out: []u8, offset: usize, header: EncodedBundleEntryHeader) void {
+    var header_copy = header;
+    @memcpy(
+        out[offset .. offset + @sizeOf(EncodedBundleEntryHeader)],
+        std.mem.asBytes(&header_copy),
+    );
 }

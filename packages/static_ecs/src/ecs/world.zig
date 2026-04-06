@@ -78,10 +78,9 @@ pub fn World(comptime Components: anytype) type {
             self.assertInvariants();
             const entity = try self.entity_pool.allocate();
             errdefer self.entity_pool.release(entity) catch {};
-            const encoded_len: comptime_int = comptime bundle_codec_mod.encodedBundleSizeForType(Components, @TypeOf(bundle));
-            var encoded_buf: [encoded_len]u8 = undefined;
-            const entry_count = bundle_codec_mod.encodeBundleTuple(Components, bundle, encoded_buf[0..]);
-            try self.spawnBundleEncoded(entity, encoded_buf[0..], entry_count);
+            const encoded = try self.encodeBundleAlloc(bundle);
+            defer self.freeEncodedBundleScratch(encoded.bytes);
+            try self.spawnBundleEncoded(entity, encoded.bytes, encoded.entry_count);
             assert(self.contains(entity));
             self.assertInvariants();
             return entity;
@@ -163,10 +162,9 @@ pub fn World(comptime Components: anytype) type {
 
         pub fn insertBundle(self: *Self, entity: entity_mod.Entity, bundle: anytype) Error!void {
             self.assertInvariants();
-            const encoded_len: comptime_int = comptime bundle_codec_mod.encodedBundleSizeForType(Components, @TypeOf(bundle));
-            var encoded_buf: [encoded_len]u8 = undefined;
-            const entry_count = bundle_codec_mod.encodeBundleTuple(Components, bundle, encoded_buf[0..]);
-            try self.insertBundleEncoded(entity, encoded_buf[0..], entry_count);
+            const encoded = try self.encodeBundleAlloc(bundle);
+            defer self.freeEncodedBundleScratch(encoded.bytes);
+            try self.insertBundleEncoded(entity, encoded.bytes, encoded.entry_count);
             self.assertInvariants();
         }
 
@@ -224,6 +222,32 @@ pub fn World(comptime Components: anytype) type {
             try self.archetype_store.insertBundleEncoded(entity, bytes, entry_count);
             assert(self.contains(entity));
             self.assertInvariants();
+        }
+
+        fn encodeBundleAlloc(self: *Self, bundle: anytype) Error!struct {
+            bytes: []u8,
+            entry_count: u32,
+        } {
+            const encoded_len: comptime_int = comptime bundle_codec_mod.encodedBundleSizeForType(Components, @TypeOf(bundle));
+            if (encoded_len == 0) {
+                return .{
+                    .bytes = &.{},
+                    .entry_count = 0,
+                };
+            }
+
+            const bytes = self.archetype_store.allocator.alloc(u8, encoded_len) catch return error.OutOfMemory;
+            errdefer self.archetype_store.allocator.free(bytes);
+            const entry_count = bundle_codec_mod.encodeBundleTuple(Components, bundle, bytes);
+            return .{
+                .bytes = bytes,
+                .entry_count = entry_count,
+            };
+        }
+
+        fn freeEncodedBundleScratch(self: *Self, bytes: []const u8) void {
+            if (bytes.len == 0) return;
+            self.archetype_store.allocator.free(@constCast(bytes));
         }
 
         fn assertInvariants(self: *const Self) void {
@@ -481,4 +505,48 @@ test "world init releases entity-pool reservations when archetype store init fai
         .budget = &budget,
     }));
     try testing.expectEqual(@as(u64, 0), budget.used());
+}
+
+test "world bundle routes accept large bounded bundle payloads" {
+    const Large = struct { bytes: [16 * 1024]u8 };
+    const Tag = struct {};
+    const TestWorld = World(.{ Large, Tag });
+
+    var first_value: Large = .{ .bytes = [_]u8{0} ** (16 * 1024) };
+    first_value.bytes[0] = 7;
+    first_value.bytes[first_value.bytes.len - 1] = 9;
+
+    var second_value: Large = .{ .bytes = [_]u8{1} ** (16 * 1024) };
+    second_value.bytes[0] = 3;
+    second_value.bytes[second_value.bytes.len - 1] = 5;
+
+    var world = try TestWorld.init(testing.allocator, .{
+        .entities_max = 4,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 2,
+        .command_buffer_entries_max = 4,
+        .command_buffer_payload_bytes_max = 64 * 1024,
+        .empty_chunk_retained_max = 0,
+        .budget = null,
+    });
+    defer world.deinit();
+
+    const spawned = try world.spawnBundle(.{
+        first_value,
+        Tag{},
+    });
+    try testing.expect(world.hasComponent(spawned, Large));
+    try testing.expectEqual(@as(u8, 7), world.componentPtrConst(spawned, Large).?.bytes[0]);
+    try testing.expectEqual(@as(u8, 9), world.componentPtrConst(spawned, Large).?.bytes[first_value.bytes.len - 1]);
+
+    const existing = try world.spawn();
+    try world.insertBundle(existing, .{
+        second_value,
+        Tag{},
+    });
+    try testing.expect(world.hasComponent(existing, Large));
+    try testing.expectEqual(@as(u8, 3), world.componentPtrConst(existing, Large).?.bytes[0]);
+    try testing.expectEqual(@as(u8, 5), world.componentPtrConst(existing, Large).?.bytes[second_value.bytes.len - 1]);
 }

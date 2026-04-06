@@ -126,6 +126,9 @@ pub fn CommandBuffer(comptime Components: anytype) type {
         pub fn stageSpawnBundle(self: *Self, bundle: anytype) Error!void {
             _ = tupleFields(@TypeOf(bundle), "CommandBuffer.stageSpawnBundle expects a comptime tuple of component values.");
             self.assertInvariants();
+            if (self.commands.len() >= self.config.command_buffer_entries_max) return error.NoSpaceLeft;
+            const payload_len_before = self.payload_bytes.len();
+            errdefer self.truncatePayloadBytes(payload_len_before);
             const encoded = try self.appendEncodedBundle(bundle);
             if (encoded.entry_count == 0) return self.stageSpawn();
 
@@ -154,6 +157,9 @@ pub fn CommandBuffer(comptime Components: anytype) type {
             _ = tupleFields(@TypeOf(bundle), "CommandBuffer.stageInsertBundle expects a comptime tuple of component values.");
             self.assertInvariants();
             assert(entity.isValid());
+            if (self.commands.len() >= self.config.command_buffer_entries_max) return error.NoSpaceLeft;
+            const payload_len_before = self.payload_bytes.len();
+            errdefer self.truncatePayloadBytes(payload_len_before);
             const encoded = try self.appendEncodedBundle(bundle);
             if (encoded.entry_count == 0) return;
 
@@ -231,10 +237,16 @@ pub fn CommandBuffer(comptime Components: anytype) type {
             if (payload_end > self.config.command_buffer_payload_bytes_max) return error.NoSpaceLeft;
 
             try self.payload_bytes.ensureCapacity(payload_end);
-
-            var encoded_buf: [encoded_len]u8 = undefined;
-            const entry_count = bundle_codec_mod.encodeBundleTuple(Components, bundle, encoded_buf[0..]);
-            self.payload_bytes.appendSliceAssumeCapacity(encoded_buf[0..]);
+            const len_before = self.payload_bytes.len();
+            var fill_len = len_before;
+            while (fill_len < payload_end) : (fill_len += 1) {
+                self.payload_bytes.append(0) catch unreachable;
+            }
+            const entry_count = bundle_codec_mod.encodeBundleTuple(
+                Components,
+                bundle,
+                self.payload_bytes.items()[len_before..payload_end],
+            );
             return .{
                 .payload_offset = payload_offset,
                 .payload_len = payload_len,
@@ -350,6 +362,12 @@ pub fn CommandBuffer(comptime Components: anytype) type {
             self.pending_spawns = spawn_count;
         }
 
+        fn truncatePayloadBytes(self: *Self, target_len: usize) void {
+            while (self.payload_bytes.len() > target_len) {
+                _ = self.payload_bytes.pop();
+            }
+        }
+
         fn assertInvariants(self: *const Self) void {
             assert(self.commands.len() <= self.config.command_buffer_entries_max);
             assert(self.payload_bytes.len() <= self.config.command_buffer_payload_bytes_max);
@@ -462,4 +480,62 @@ test "command buffer applies bundle spawns and inserts in order" {
     try testing.expect(world.hasComponent(existing, Velocity));
     try testing.expect(world.hasComponent(spawned[0], Position));
     try testing.expect(world.hasComponent(spawned[0], Tag));
+}
+
+test "command buffer failed spawn bundle staging rolls payload bytes back" {
+    const Position = struct { x: f32, y: f32 };
+    const Buffer = CommandBuffer(.{Position});
+
+    var buffer = try Buffer.init(testing.allocator, .{
+        .entities_max = 4,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 2,
+        .command_buffer_entries_max = 1,
+        .command_buffer_payload_bytes_max = 128,
+        .empty_chunk_retained_max = 0,
+        .budget = null,
+    });
+    defer buffer.deinit();
+
+    try buffer.stageDespawn(.{ .index = 0, .generation = 1 });
+    try testing.expectEqual(@as(usize, 0), buffer.payload_bytes.len());
+
+    try testing.expectError(error.NoSpaceLeft, buffer.stageSpawnBundle(.{
+        Position{ .x = 1, .y = 2 },
+    }));
+    try testing.expectEqual(@as(u32, 1), buffer.len());
+    try testing.expectEqual(@as(u32, 0), buffer.pendingSpawnCount());
+    try testing.expectEqual(@as(usize, 0), buffer.payload_bytes.len());
+}
+
+test "command buffer failed insert bundle staging preserves existing payload bytes" {
+    const Position = struct { x: f32, y: f32 };
+    const Buffer = CommandBuffer(.{Position});
+
+    var buffer = try Buffer.init(testing.allocator, .{
+        .entities_max = 4,
+        .archetypes_max = 4,
+        .components_per_archetype_max = 2,
+        .chunks_max = 4,
+        .chunk_rows_max = 2,
+        .command_buffer_entries_max = 1,
+        .command_buffer_payload_bytes_max = 128,
+        .empty_chunk_retained_max = 0,
+        .budget = null,
+    });
+    defer buffer.deinit();
+
+    try buffer.stageSpawnBundle(.{
+        Position{ .x = 1, .y = 2 },
+    });
+    const payload_len_before = buffer.payload_bytes.len();
+
+    try testing.expectError(error.NoSpaceLeft, buffer.stageInsertBundle(.{ .index = 0, .generation = 1 }, .{
+        Position{ .x = 3, .y = 4 },
+    }));
+    try testing.expectEqual(@as(u32, 1), buffer.len());
+    try testing.expectEqual(@as(u32, 1), buffer.pendingSpawnCount());
+    try testing.expectEqual(payload_len_before, buffer.payload_bytes.len());
 }

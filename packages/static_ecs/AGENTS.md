@@ -15,6 +15,19 @@ Start here when you need to review, validate, or extend `static_ecs`.
   closure posture.
 - `docs/plans/completed/static_ecs_cleanup_followup_closed_2026-04-05.md` for the
   last closed cleanup follow-up and its reopen triggers.
+- `docs/plans/completed/static_ecs_bundle_portability_and_command_buffer_followup_closed_2026-04-05.md`
+  for the current direct encoded-bundle portability, rollback, and contract
+  closure posture.
+- `docs/plans/completed/static_ecs_benchmark_review_and_expansion_closed_2026-04-05.md`
+  for the current benchmark-shape and workflow-metadata closure posture.
+- `docs/plans/completed/static_ecs_benchmark_matrix_expansion_closed_2026-04-05.md`
+  for the current microbenchmark, query-scale, and frame-pass benchmark
+  closure posture.
+- `docs/plans/completed/static_ecs_benchmark_truthfulness_followup_closed_2026-04-05.md`
+  for the current release-mode truthfulness, command-buffer owner naming, and
+  structural-churn rerun-budget closure posture.
+- `docs/sketches/static_ecs_production_benchmark_backlog_2026-04-05.md` for the
+  long-form production-grade ECS benchmark backlog.
 - `docs/plans/active/workspace_operations.md` for workspace priority and
   sequencing.
 - `docs/architecture.md` for package boundaries and dependency direction.
@@ -47,8 +60,10 @@ Start here when you need to review, validate, or extend `static_ecs`.
   reintroduce dead cache or side-index config knobs without implementations in
   the same slice.
 - Keep the direct encoded-bundle surface truthful: malformed bytes must fail
-  through stable operating errors, and direct world admission must not
-  desynchronize `EntityPool` from `ArchetypeStore`.
+  through stable operating errors, misaligned caller slices must not panic, the
+  route must stay explicit that payload bytes are same-process bit-valid
+  staging input rather than general value validation, and direct world
+  admission must not desynchronize `EntityPool` from `ArchetypeStore`.
 
 ## Package map
 
@@ -65,18 +80,28 @@ Start here when you need to review, validate, or extend `static_ecs`.
   empty-chunk reuse, and raw value-adding archetype moves rejected until the
   caller supplies typed initialization.
 - `src/ecs/bundle_codec.zig`: deterministic bundle encoding for fused
-  spawn/insert staging and apply, plus malformed-input rejection for the direct
-  encoded-bundle route.
+  spawn/insert staging and apply, plus malformed-input rejection,
+  misaligned-slice tolerance, and the direct encoded-bundle staging boundary.
 - `src/ecs/query.zig`: typed query descriptor validation and matching.
 - `src/ecs/view.zig`: borrowed typed chunk-batch hot-path iteration with
   fail-fast invalidation after structural mutation in runtime-safety builds.
 - `src/ecs/command_buffer.zig`: bounded structural staging with separate entry
-  and payload limits plus deterministic apply order.
+  and payload limits, rollback-safe bundle staging, plus deterministic apply
+  order.
 - `src/ecs/world.zig`: world-local typed ECS shell over the structural store,
   including typed insert/remove helpers, fused bundle admission, and
   command-buffer initialization.
 - `benchmarks/`: package-owned benchmark review workloads for chunk iteration,
-  structural churn, and command-buffer apply throughput.
+  structural churn, command-buffer staged-apply throughput, primitive hot-path
+  microbenchmarks, query scaling, and frame-like multi-pass ECS runs. The
+  current admitted owners are `query_iteration_baselines`,
+  `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
+  `micro_hotpaths_baselines`, `query_scale_baselines`, and
+  `frame_pass_baselines`.
+  Root benchmark runs now also build the imported ECS and `static_testing`
+  modules under the same `ReleaseFast` mode recorded in benchmark history, and
+  `structural_churn_baselines` uses a reduced iteration budget so direct reruns
+  stay practical on this machine.
 - `tests/integration/`: package-level deterministic structural coverage.
   The package now also uses `static_testing.testing.model` here for mixed
   command-buffer structural sequences plus direct encoded-bundle and

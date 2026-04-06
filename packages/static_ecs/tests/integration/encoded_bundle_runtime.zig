@@ -28,24 +28,24 @@ test "world encoded bundle surfaces accept well-formed payloads" {
     });
     defer world.deinit();
 
-    var spawn_storage: [32]u8 = undefined;
+    var spawn_storage: [33]u8 = undefined;
     const spawn_entry_count: u32 = 2;
-    const spawn_len = buildPositionTagBundle(spawn_storage[0..], Position{ .x = 1, .y = 2 });
-    const spawn_bytes = spawn_storage[0..spawn_len];
+    const spawn_len = buildPositionTagBundle(spawn_storage[1..], Position{ .x = 1, .y = 2 });
+    const spawn_bytes = spawn_storage[1 .. 1 + spawn_len];
     const spawned = try world.spawnBundleFromEncoded(spawn_bytes[0..], spawn_entry_count);
     try testing.expect(world.hasComponent(spawned, Position));
     try testing.expect(world.hasComponent(spawned, Tag));
     try testing.expectEqual(@as(f32, 1), world.componentPtrConst(spawned, Position).?.x);
 
     const existing = try world.spawn();
-    var insert_storage: [32]u8 = undefined;
+    var insert_storage: [33]u8 = undefined;
     const insert_entry_count: u32 = 2;
     const insert_len = buildPositionVelocityBundle(
-        insert_storage[0..],
+        insert_storage[1..],
         Position{ .x = 10, .y = 20 },
         Velocity{ .x = 30, .y = 40 },
     );
-    const insert_bytes = insert_storage[0..insert_len];
+    const insert_bytes = insert_storage[1 .. 1 + insert_len];
     try world.insertBundleEncoded(existing, insert_bytes[0..], insert_entry_count);
     try testing.expect(world.hasComponent(existing, Position));
     try testing.expect(world.hasComponent(existing, Velocity));
@@ -81,14 +81,16 @@ test "world encoded bundle surfaces reject malformed payloads without mutating s
 
     var invalid_id_storage = valid_storage;
     const invalid_id_bytes = invalid_id_storage[0..valid_len];
-    const invalid_id_header: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&invalid_id_bytes[0]));
+    var invalid_id_header = readHeader(invalid_id_bytes[0..], 0);
     invalid_id_header.component_id = .{ .value = 2 };
+    writeHeader(invalid_id_bytes[0..], 0, invalid_id_header);
     try expectSpawnBundleError(&world, invalid_id_bytes[0..], valid_entry_count, error.ComponentOutOfRange);
 
     var invalid_size_storage = valid_storage;
     const invalid_size_bytes = invalid_size_storage[0..valid_len];
-    const invalid_size_header: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&invalid_size_bytes[0]));
+    var invalid_size_header = readHeader(invalid_size_bytes[0..], 0);
     invalid_size_header.payload_size += 1;
+    writeHeader(invalid_size_bytes[0..], 0, invalid_size_header);
     try expectSpawnBundleError(&world, invalid_size_bytes[0..], valid_entry_count, error.MalformedBundle);
 
     var duplicate_bytes: [24]u8 = undefined;
@@ -207,8 +209,7 @@ fn writeTestEntry(
     payload_alignment: usize,
 ) usize {
     var offset = std.mem.alignForward(usize, start_offset, @alignOf(EncodedBundleEntryHeader));
-    const header_ptr: *EncodedBundleEntryHeader = @ptrCast(@alignCast(&out[offset]));
-    header_ptr.* = header;
+    writeHeader(out, offset, header);
     offset += @sizeOf(EncodedBundleEntryHeader);
 
     if (payload.len != 0) {
@@ -228,6 +229,23 @@ fn buildSingleEntryBundle(out: []u8, component_id: u32, value: anytype) usize {
     }, payload, @alignOf(@TypeOf(value)));
     assert(end <= out.len);
     return end;
+}
+
+fn readHeader(bytes: []const u8, offset: usize) EncodedBundleEntryHeader {
+    var header: EncodedBundleEntryHeader = undefined;
+    @memcpy(
+        std.mem.asBytes(&header),
+        bytes[offset .. offset + @sizeOf(EncodedBundleEntryHeader)],
+    );
+    return header;
+}
+
+fn writeHeader(out: []u8, offset: usize, header: EncodedBundleEntryHeader) void {
+    var header_copy = header;
+    @memcpy(
+        out[offset .. offset + @sizeOf(EncodedBundleEntryHeader)],
+        std.mem.asBytes(&header_copy),
+    );
 }
 
 fn buildPositionTagBundle(out: []u8, position: anytype) usize {

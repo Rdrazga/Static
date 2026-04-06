@@ -94,9 +94,17 @@ Examples:
   `View` / `ChunkBatch` surfaces fail fast after structural mutation in
   runtime-safety builds, the package has direct deterministic chunk/archetype
   swap-reindex proof plus representative compile-contract coverage for its
-  main public generic validators, the package now uses `static_testing` for
-  bounded command-buffer runtime-sequence review and admitted ECS benchmark
-  review workloads, and deferred runtime-erased queries, import/export,
+  main public generic validators, the direct encoded-bundle route now validates
+  malformed structure over arbitrary caller byte-slice alignment while keeping
+  component payload bytes on an explicit same-process bit-valid staging
+  boundary, command-buffer bundle staging now rolls payload usage back on
+  failed command admission, the package now uses `static_testing` for bounded
+  command-buffer runtime-sequence review and admitted ECS benchmark review
+  workloads covering dense versus fragmented query iteration, initial versus
+  live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
+  command-buffer staged-apply throughput, primitive hot-path microbenchmarks,
+  query scaling across entity and archetype counts, and frame-like sequential
+  ECS passes over one world, and deferred runtime-erased queries, import/export,
   spatial adapters, and scheduler-facing surfaces remain out of the first
   package boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while
