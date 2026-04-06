@@ -108,9 +108,10 @@ Examples:
   workloads covering dense versus fragmented query iteration, initial versus
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
   command-buffer staged-apply throughput plus setup/stage/apply-only
-  attribution,
-  primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, frame-like sequential ECS passes over one world,
+  attribution, primitive hot-path microbenchmarks, query scaling across entity
+  and archetype counts, dense first-match versus sparse late-match versus
+  zero-match query-startup attribution, frame-like sequential ECS passes over
+  one world,
   branch-heavy versus write-heavy frame workload sets, allocator-strategy
   comparisons between caller-supplied allocators on typed versus direct
   encoded bundle admission, and deferred

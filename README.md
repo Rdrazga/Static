@@ -174,11 +174,12 @@ Workspace for the `static_*` Zig packages.
   workloads for dense versus fragmented query iteration, initial versus
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
   command-buffer staged-apply throughput plus setup/stage/apply-only
-  attribution,
-  primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, frame-like multi-pass ECS runs, branch-heavy versus
-  write-heavy frame workload sets, and allocator-strategy comparisons between
-  caller-supplied allocators on typed versus direct encoded bundle admission.
+  attribution, primitive hot-path microbenchmarks, query scaling across entity
+  and archetype counts, dense first-match versus sparse late-match versus
+  zero-match query-startup attribution, frame-like multi-pass ECS runs,
+  branch-heavy versus write-heavy frame workload sets, and allocator-strategy
+  comparisons between caller-supplied allocators on typed versus direct
+  encoded bundle admission.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,

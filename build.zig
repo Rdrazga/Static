@@ -201,6 +201,14 @@ fn addBenchStep(
             .extra_import_mod = mods.static_testing,
         },
         .{
+            .name = "query_startup_baselines",
+            .src = "packages/static_ecs/benchmarks/query_startup_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
             .name = "frame_pass_baselines",
             .src = "packages/static_ecs/benchmarks/frame_pass_baselines.zig",
             .import_name = "static_ecs",

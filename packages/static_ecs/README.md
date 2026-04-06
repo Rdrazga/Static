@@ -113,6 +113,7 @@ World-local typed ECS building blocks for the `static` workspace.
   `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
   `command_buffer_phase_baselines`, `command_buffer_apply_only_baselines`,
   `micro_hotpaths_baselines`, `query_scale_baselines`,
+  `query_startup_baselines`,
   `frame_pass_baselines`, and `frame_workload_baselines`, and
   `allocator_strategy_baselines` review workloads.
   `query_iteration_baselines` now owns dense single-archetype, mixed
@@ -133,6 +134,9 @@ World-local typed ECS building blocks for the `static` workspace.
   staging.
   `query_scale_baselines` now owns dense and fragmented query scaling cases
   across varying entity and archetype counts under one stable query family.
+  `query_startup_baselines` now isolates first-batch iterator startup across
+  dense first-match, sparse late-match, and zero-match query shapes so later
+  query-planning work can separate startup cost from full-scan throughput.
   `frame_pass_baselines` now owns sequential ECS frame-like pass mixes that
   vary pass count, entity count, and archetype fragmentation without implying a
   package-native scheduler API.
