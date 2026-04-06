@@ -45,7 +45,8 @@ World-local typed ECS building blocks for the `static` workspace.
   chunk-batch iteration, structural churn, command-buffer staged-apply
   throughput plus command-buffer setup/stage phase attribution, primitive
   hot-path microbenchmarks, query scaling across entity and archetype counts,
-  and frame-like multi-pass ECS runs, with shared
+  frame-like multi-pass ECS runs, and branch-heavy versus write-heavy frame
+  workload sets, with shared
   `static_testing` baseline/history artifacts plus explicit environment-note
   and environment-tag metadata.
 - The root bench surface now builds the imported ECS and `static_testing`
@@ -107,7 +108,8 @@ World-local typed ECS building blocks for the `static` workspace.
 - `benchmarks/` holds the admitted `query_iteration_baselines`,
   `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
   `command_buffer_phase_baselines`, `micro_hotpaths_baselines`,
-  `query_scale_baselines`, and `frame_pass_baselines` review workloads.
+  `query_scale_baselines`, `frame_pass_baselines`, and
+  `frame_workload_baselines` review workloads.
   `query_iteration_baselines` now owns dense single-archetype, mixed
   optional/exclude, and fragmented multi-archetype scan cases.
   `structural_churn_baselines` now owns initial spawn admission plus
@@ -126,6 +128,9 @@ World-local typed ECS building blocks for the `static` workspace.
   `frame_pass_baselines` now owns sequential ECS frame-like pass mixes that
   vary pass count, entity count, and archetype fragmentation without implying a
   package-native scheduler API.
+  `frame_workload_baselines` now owns branch-heavy and write-heavy frame/system
+  mixes so later ECS tuning can separate query/filter pressure from column
+  write pressure.
 - `docs/plans/completed/static_ecs_performance_and_memory_followup_closed_2026-04-05.md`
   records the fused bundle, command-buffer, chunk-storage, control-plane,
   metadata, and benchmark-admission closure posture.

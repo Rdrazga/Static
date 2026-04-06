@@ -190,6 +190,14 @@ fn addBenchStep(
             .extra_import_name = "static_testing",
             .extra_import_mod = mods.static_testing,
         },
+        .{
+            .name = "frame_workload_baselines",
+            .src = "packages/static_ecs/benchmarks/frame_workload_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
     };
 
     for (benchmarks) |bm| {

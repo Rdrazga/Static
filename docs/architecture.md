@@ -104,8 +104,9 @@ Examples:
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
   command-buffer staged-apply throughput plus setup/stage phase attribution,
   primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, and frame-like sequential ECS passes over one world, and
-  deferred runtime-erased queries, import/export, spatial adapters, and
+  archetype counts, frame-like sequential ECS passes over one world, and
+  branch-heavy versus write-heavy frame workload sets, and deferred
+  runtime-erased queries, import/export, spatial adapters, and
   scheduler-facing surfaces remain out of the first package boundary.
 - `static_scheduling` keeps scheduler coordination policy package-local while
   now using `static_testing` for replay-backed task-graph invariants,

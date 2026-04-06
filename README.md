@@ -167,7 +167,8 @@ Workspace for the `static_*` Zig packages.
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
   command-buffer staged-apply throughput plus setup/stage phase attribution,
   primitive hot-path microbenchmarks, query scaling across entity and
-  archetype counts, and frame-like multi-pass ECS runs.
+  archetype counts, frame-like multi-pass ECS runs, and branch-heavy versus
+  write-heavy frame workload sets.
 - Active implementation work lives in `docs/plans/active/`, and that tree is
   kept to concrete in-flight work only.
 - Active plans use ordered SMART tasks: each open step names the exact surface,
