@@ -107,7 +107,8 @@ Examples:
   command-buffer runtime-sequence review and admitted ECS benchmark review
   workloads covering dense versus fragmented query iteration, initial versus
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
-  command-buffer staged-apply throughput plus setup/stage phase attribution,
+  command-buffer staged-apply throughput plus setup/stage/apply-only
+  attribution,
   primitive hot-path microbenchmarks, query scaling across entity and
   archetype counts, frame-like sequential ECS passes over one world,
   branch-heavy versus write-heavy frame workload sets, allocator-strategy
@@ -157,7 +158,8 @@ Examples:
   model
   examples, simulation fixtures, bounded `testing.sim.explore` portfolio and
   PCT-style schedule exploration, benchmark-baseline review workflows with
-  canonical `ZON` baseline documents, bounded binary benchmark-history and
+  benchmark-case prepare hooks for deterministic per-sample setup outside the
+  timer, canonical `ZON` baseline documents, bounded binary benchmark-history and
   exploration artifacts, shared benchmark text reports with derived `ns/op`,
   `ops/s`, and tail-latency summaries plus caller-supplied environment notes,
   bounded caller-owned environment tags for compatibility filtering, canonical

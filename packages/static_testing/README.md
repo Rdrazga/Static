@@ -97,6 +97,9 @@ review.
 - Keep review on the shared `baseline.zon` plus bounded binary history sidecars
   instead of package-local benchmark formats.
 - Put environment notes and compatibility tags under caller control.
+- When setup must stay outside the timer, use `testing.bench.case` prepare
+  hooks so warmup/sample reset and staging remain deterministic without
+  polluting measured work.
 
 ## Reaching VOPR-like functionality
 

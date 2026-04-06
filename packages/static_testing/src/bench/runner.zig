@@ -50,6 +50,7 @@ pub fn runCase(
     var total_elapsed_ns: u64 = 0;
     var sample_index: usize = 0;
     while (sample_index < config.sample_count) : (sample_index += 1) {
+        benchmark_case.prepare(.measure, @intCast(sample_index));
         try timer.start();
         runIterations(benchmark_case.*, config.measure_iterations);
         const elapsed_ns = try timer.stop();
@@ -124,6 +125,7 @@ fn validateCaseInputs(
 fn runWarmups(benchmark_case: case_mod.BenchmarkCase, warmup_iterations: u32) void {
     var warmup_index: u32 = 0;
     while (warmup_index < warmup_iterations) : (warmup_index += 1) {
+        benchmark_case.prepare(.warmup, warmup_index);
         benchmark_case.run();
     }
 }
@@ -198,6 +200,57 @@ test "runCase excludes warmups from sample count and preserves call totals" {
 
     try testing.expectEqual(@as(usize, 4), result.samples.len);
     try testing.expectEqual(expected_calls, call_count);
+}
+
+test "runCase invokes prepare for each warmup and sample" {
+    const Context = struct {
+        const Self = @This();
+
+        prepare_warmup_count: u32 = 0,
+        prepare_measure_count: u32 = 0,
+        run_count: u32 = 0,
+
+        fn prepare(ctx: *anyopaque, phase: case_mod.BenchmarkRunPhase, run_index: u32) void {
+            const context: *Self = @ptrCast(@alignCast(ctx));
+            switch (phase) {
+                .warmup => {
+                    assert(run_index == context.prepare_warmup_count);
+                    context.prepare_warmup_count += 1;
+                },
+                .measure => {
+                    assert(run_index == context.prepare_measure_count);
+                    context.prepare_measure_count += 1;
+                },
+            }
+        }
+
+        fn run(ctx: *anyopaque) void {
+            const context: *Self = @ptrCast(@alignCast(ctx));
+            context.run_count += 1;
+        }
+    };
+
+    var context = Context{};
+    const benchmark_case = case_mod.BenchmarkCase.init(.{
+        .name = "prepared_case",
+        .context = &context,
+        .run_fn = Context.run,
+        .prepare_context = &context,
+        .prepare_fn = Context.prepare,
+    });
+    const config = config_mod.BenchmarkConfig{
+        .mode = .smoke,
+        .warmup_iterations = 2,
+        .measure_iterations = 3,
+        .sample_count = 4,
+    };
+    var samples: [4]BenchmarkSample = undefined;
+
+    _ = try runCase(&benchmark_case, config, &samples);
+
+    try testing.expectEqual(@as(u32, 2), context.prepare_warmup_count);
+    try testing.expectEqual(@as(u32, 4), context.prepare_measure_count);
+    try testing.expectEqual(@as(u32, 14), context.run_count);
 }
 
 test "runGroup preserves group order and sample allocation" {

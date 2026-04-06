@@ -177,6 +177,14 @@ fn addBenchStep(
             .extra_import_mod = mods.static_testing,
         },
         .{
+            .name = "command_buffer_apply_only_baselines",
+            .src = "packages/static_ecs/benchmarks/command_buffer_apply_only_baselines.zig",
+            .import_name = "static_ecs",
+            .import_mod = mods.static_ecs,
+            .extra_import_name = "static_testing",
+            .extra_import_mod = mods.static_testing,
+        },
+        .{
             .name = "micro_hotpaths_baselines",
             .src = "packages/static_ecs/benchmarks/micro_hotpaths_baselines.zig",
             .import_name = "static_ecs",

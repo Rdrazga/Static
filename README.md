@@ -16,7 +16,8 @@ Workspace for the `static_*` Zig packages.
   bounded binary benchmark-history and exploration sidecars, canonical
   benchmark text reports with derived `ns/op`, `ops/s`, and tail-latency
   summaries, caller-supplied benchmark environment notes and bounded
-  compatibility tags,
+  compatibility tags, and benchmark-case prepare hooks for deterministic
+  per-sample setup outside the timer,
   `manifest.zon` / `violations.zon` plus optional `trace.zon` /
   `trace_events.binlog` failure-bundle sidecars, optional typed `actions.zon`
   model sidecars, optional typed retained pending-reason metadata in
@@ -172,7 +173,8 @@ Workspace for the `static_*` Zig packages.
   `testing.model` command-buffer sequences, plus admitted ECS benchmark review
   workloads for dense versus fragmented query iteration, initial versus
   live-entity structural churn, spawn-heavy versus insert-heavy versus mixed
-  command-buffer staged-apply throughput plus setup/stage phase attribution,
+  command-buffer staged-apply throughput plus setup/stage/apply-only
+  attribution,
   primitive hot-path microbenchmarks, query scaling across entity and
   archetype counts, frame-like multi-pass ECS runs, branch-heavy versus
   write-heavy frame workload sets, and allocator-strategy comparisons between

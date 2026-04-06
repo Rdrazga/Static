@@ -46,13 +46,13 @@ World-local typed ECS building blocks for the `static` workspace.
   plus the matching integration harness.
 - The package now owns benchmark review workloads under `zig build bench` for
   chunk-batch iteration, structural churn, command-buffer staged-apply
-  throughput plus command-buffer setup/stage phase attribution, primitive
-  hot-path microbenchmarks, query scaling across entity and archetype counts,
-  frame-like multi-pass ECS runs, branch-heavy versus write-heavy frame
-  workload sets, and allocator-strategy comparisons between caller-supplied
-  allocators on typed versus direct encoded bundle spawn paths, with shared
-  `static_testing` baseline/history artifacts plus explicit environment-note
-  and environment-tag metadata.
+  throughput plus command-buffer setup/stage phase attribution and apply-only
+  timing, primitive hot-path microbenchmarks, query scaling across entity and
+  archetype counts, frame-like multi-pass ECS runs, branch-heavy versus
+  write-heavy frame workload sets, and allocator-strategy comparisons between
+  caller-supplied allocators on typed versus direct encoded bundle spawn
+  paths, with shared `static_testing` baseline/history artifacts plus explicit
+  environment-note and environment-tag metadata.
 - The root bench surface now builds the imported ECS and `static_testing`
   modules under the same `ReleaseFast` mode the benchmark history records, so
   benchmark metadata and absolute timings are again aligned.
@@ -111,10 +111,10 @@ World-local typed ECS building blocks for the `static` workspace.
   canonical regression harness under the workspace test surface.
 - `benchmarks/` holds the admitted `query_iteration_baselines`,
   `structural_churn_baselines`, `command_buffer_staged_apply_baselines`,
-  `command_buffer_phase_baselines`, `micro_hotpaths_baselines`,
-  `query_scale_baselines`, `frame_pass_baselines`, and
-  `frame_workload_baselines`, and `allocator_strategy_baselines` review
-  workloads.
+  `command_buffer_phase_baselines`, `command_buffer_apply_only_baselines`,
+  `micro_hotpaths_baselines`, `query_scale_baselines`,
+  `frame_pass_baselines`, and `frame_workload_baselines`, and
+  `allocator_strategy_baselines` review workloads.
   `query_iteration_baselines` now owns dense single-archetype, mixed
   optional/exclude, and fragmented multi-archetype scan cases.
   `structural_churn_baselines` now owns initial spawn admission plus
@@ -125,6 +125,9 @@ World-local typed ECS building blocks for the `static` workspace.
   `command_buffer_phase_baselines` now owns the corresponding setup-only and
   stage-and-clear attribution cases so staged-apply results can be interpreted
   without implying true apply-only timing.
+  `command_buffer_apply_only_baselines` now uses the shared benchmark
+  prepare-hook surface to stage a fresh world and command buffer outside the
+  timer for each sample so the reported cases isolate `apply()` itself.
   `micro_hotpaths_baselines` now owns primitive hot paths such as const
   component lookup, `hasComponent()`, iterator startup, and one-command bundle
   staging.

@@ -18,6 +18,20 @@ pub const Parameter = struct {
     value: ParameterValue,
 };
 
+/// Distinguishes untimed warmup preparation from timed measurement preparation.
+pub const BenchmarkRunPhase = enum(u8) {
+    warmup = 1,
+    measure = 2,
+};
+
+/// Optional infallible setup hook invoked before a warmup iteration or
+/// measurement sample begins.
+pub const BenchmarkPrepareFn = *const fn (
+    context: *anyopaque,
+    phase: BenchmarkRunPhase,
+    run_index: u32,
+) void;
+
 /// Timed benchmark callback for in-process hot loops.
 ///
 /// This surface is intentionally infallible: benchmark targets are expected to
@@ -32,6 +46,8 @@ pub const BenchmarkCaseOptions = struct {
     parameters: []const Parameter = &.{},
     context: *anyopaque,
     run_fn: BenchmarkCaseFn,
+    prepare_context: ?*anyopaque = null,
+    prepare_fn: ?BenchmarkPrepareFn = null,
 };
 
 /// In-process benchmark case plus static metadata.
@@ -41,6 +57,8 @@ pub const BenchmarkCase = struct {
     parameters: []const Parameter,
     context: *anyopaque,
     run_fn: BenchmarkCaseFn,
+    prepare_context: ?*anyopaque,
+    prepare_fn: ?BenchmarkPrepareFn,
 
     /// Construct one benchmark case from caller-provided metadata and callback.
     pub fn init(options: BenchmarkCaseOptions) BenchmarkCase {
@@ -54,7 +72,19 @@ pub const BenchmarkCase = struct {
             .parameters = options.parameters,
             .context = options.context,
             .run_fn = options.run_fn,
+            .prepare_context = options.prepare_context,
+            .prepare_fn = options.prepare_fn,
         };
+    }
+
+    /// Invoke deterministic pre-run setup outside the timed callback.
+    pub fn prepare(self: BenchmarkCase, phase: BenchmarkRunPhase, run_index: u32) void {
+        if (self.prepare_fn) |prepare_fn| {
+            assert(self.prepare_context != null);
+            prepare_fn(self.prepare_context.?, phase, run_index);
+        } else {
+            assert(self.prepare_context == null);
+        }
     }
 
     /// Run the benchmark callback once.
@@ -100,6 +130,7 @@ fn assertValidTags(tags: []const []const u8) void {
 
 test "benchmark case preserves metadata and callback" {
     var context_value: u32 = 0;
+    var prepare_count: u32 = 0;
     const tags = [_][]const u8{"smoke"};
     const parameters = [_]Parameter{
         .{ .key = "size", .value = .{ .u64 = 64 } },
@@ -109,6 +140,13 @@ test "benchmark case preserves metadata and callback" {
             const value: *u32 = @ptrCast(@alignCast(ctx));
             value.* += 1;
         }
+
+        fn prepare(ctx: *anyopaque, phase: BenchmarkRunPhase, run_index: u32) void {
+            _ = phase;
+            _ = run_index;
+            const count: *u32 = @ptrCast(@alignCast(ctx));
+            count.* += 1;
+        }
     };
 
     const benchmark_case = BenchmarkCase.init(.{
@@ -117,13 +155,17 @@ test "benchmark case preserves metadata and callback" {
         .parameters = &parameters,
         .context = &context_value,
         .run_fn = Context.run,
+        .prepare_context = &prepare_count,
+        .prepare_fn = Context.prepare,
     });
+    benchmark_case.prepare(.warmup, 0);
     benchmark_case.run();
 
     try testing.expectEqualStrings("increment", benchmark_case.name);
     try testing.expectEqual(@as(usize, 1), benchmark_case.tags.len);
     try testing.expectEqual(@as(usize, 1), benchmark_case.parameters.len);
     try testing.expectEqual(@as(u32, 1), context_value);
+    try testing.expectEqual(@as(u32, 1), prepare_count);
 }
 
 test "blackBox returns the preserved value" {

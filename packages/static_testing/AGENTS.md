@@ -86,6 +86,9 @@ Command intent:
   do not promote every deterministic test into swarm form.
 - Keep benchmark workloads stable and caller-tunable, then review them through
   shared `baseline.zon` and history artifacts.
+- Use `testing.bench.case` prepare hooks when a benchmark needs deterministic
+  per-sample setup outside the timer instead of folding reset or staging cost
+  into the measured callback.
 - Promote new shared policy only when it is reusable across packages, bounded,
   and clearly better than caller-side implementation.
 
