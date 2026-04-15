@@ -343,7 +343,7 @@ const LinuxIoUringBackend = struct {
 
     fn completeImmediate(self: *LinuxIoUringBackend, op: types.Operation, completion: types.Completion) backend.SubmitError!types.OperationId {
         const slot_index = try self.allocSlot();
-        var slot = &self.slots[slot_index];
+        const slot = &self.slots[slot_index];
         assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);

@@ -10,6 +10,8 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const core = @import("static_core");
+const time = core.time_compat;
+const backoff = @import("backoff.zig");
 
 pub const RegisterError = error{
     Cancelled,
@@ -87,7 +89,9 @@ pub const CancelRegistration = struct {
         const ptr_value: usize = @intFromPtr(self);
         var index: usize = 0;
         while (index < token.state.registrations.len) : (index += 1) {
-            const swapped = token.state.registrations[index].cmpxchgStrong(0, ptr_value, .acq_rel, .acquire);
+            const slot = &token.state.registrations[index];
+            if (slot.load(.acquire) != 0) continue;
+            const swapped = slot.cmpxchgStrong(0, ptr_value, .acq_rel, .acquire);
             if (swapped == null) {
                 self.slot_index = @intCast(index);
                 break;
@@ -110,8 +114,9 @@ pub const CancelRegistration = struct {
             return error.Cancelled;
         }
 
+        var wait_backoff = backoff.Backoff{};
         while (!self.fired.load(.acquire)) {
-            std.atomic.spinLoopHint();
+            wait_backoff.step();
         }
         self.state = null;
         self.slot_index = invalid_slot;
@@ -132,8 +137,9 @@ pub const CancelRegistration = struct {
             return;
         }
 
+        var wait_backoff = backoff.Backoff{};
         while (!self.fired.load(.acquire)) {
-            std.atomic.spinLoopHint();
+            wait_backoff.step();
         }
 
         self.state = null;
@@ -515,19 +521,19 @@ test "register after cancellation returns Cancelled" {
 }
 
 fn waitForFlagTrue(flag: *const std.atomic.Value(bool), timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (!flag.load(.acquire)) {
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
 }
 
 fn expectFlagStaysFalse(flag: *const std.atomic.Value(bool), duration_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (true) {
         try testing.expect(!flag.load(.acquire));
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= duration_ns) return;
         std.Thread.yield() catch {};
     }

@@ -46,7 +46,7 @@ pub fn SlotMap(comptime T: type) type {
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
         budget_reserved_capacity: usize = 0,
-        slots: std.ArrayListUnmanaged(Slot) = .{},
+        slots: std.ArrayListUnmanaged(Slot) = .empty,
         free_head: ?u32 = null,
         live: usize = 0,
 

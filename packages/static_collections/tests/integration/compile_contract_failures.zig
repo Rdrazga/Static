@@ -49,7 +49,7 @@ fn expectCompileFailure(
     };
     const result = try std.process.run(testing.allocator, testing.io, .{
         .argv = &argv,
-        .cwd = compile_fail_dir,
+        .cwd = .{ .path = compile_fail_dir },
     });
     defer testing.allocator.free(result.stdout);
     defer testing.allocator.free(result.stderr);

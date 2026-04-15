@@ -494,7 +494,7 @@ test "Pool blockFromPtr rejects non-owned pointers and double free" {
     try testing.expectEqual(@intFromPtr(a.ptr), @intFromPtr(roundtrip.ptr));
     try testing.expectEqual(a.len, roundtrip.len);
 
-    var other = try testing.allocator.alloc(u8, 16);
+    const other = try testing.allocator.alloc(u8, 16);
     defer testing.allocator.free(other);
     try testing.expectError(error.InvalidBlock, pool.blockFromPtr(other.ptr));
     try testing.expect(!pool.ownsPtr(other.ptr));

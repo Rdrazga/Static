@@ -1,6 +1,8 @@
 # Architecture
 
 This workspace is organized as a layered set of `static_*` packages rather than a single monolithic library.
+The supported workspace baseline is Zig `0.16.0` stable through the root and
+package-local `build.zig.zon` metadata.
 
 ## Layers
 
@@ -126,9 +128,24 @@ Examples:
   wiring has been removed.
 - `static_sync` keeps synchronization ownership package-local while now using
   `static_testing` for replay-backed single-object campaigns, wait/wake
-  simulation and temporal proof, package-owned `Barrier` phase/generation and
-  `SeqLock` token/retry model coverage, retained misuse persistence, and
-  shared fast-path plus bounded-contention benchmark workflows.
+  simulation and temporal proof, package-owned `Barrier` phase/generation,
+  `SeqLock` token/retry, `Cancel` registration/reset, `Semaphore` permit
+  progression, and capability-gated `wait_queue` sequential-contract model
+  coverage, primitive-facing retained misuse persistence with replay-validated
+  bundle roundtrips, simulation and temporal coverage for wait_queue, condvar,
+  event, semaphore, and cancel ordering protocols, and shared fast-path plus
+  bounded-contention benchmark workflows, admitted lifecycle, barrier-wait,
+  seqlock, capability, timeout-path, and neutral-reference review owners, and
+  bounded watchdog-backed blocking benchmarks plus contention metadata that
+  distinguishes parking-backed waits from polling-fallback runs, with condvar
+  signal/broadcast owners remaining capability-gated behind OS-backend builds,
+  plus bounded delayed-wake and cancel-reset fault-injection runtime proof for
+  hostile-host assumptions; the focused runtime follow-up also keeps
+  single-permit semaphore wakeups at one-waiter signal scope, keeps
+  parking-backed `Event.set()` from doing redundant wake work when already
+  signaled, keeps `Cancel` registration filtering obvious occupied slots before
+  exchanging, and keeps polling-fallback plus benchmark-watchdog loops on
+  phased backoff rather than pure aggressive spin.
 - `static_meta` keeps compile-time identity and bounded registry ownership
   package-local while now using `static_testing` narrowly for runtime registry
   mutation and lookup sequence review.

@@ -11,6 +11,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
 const spsc = @import("../spsc.zig");
 const ring = @import("../ring_buffer.zig");
 const sync = @import("static_sync");
@@ -63,7 +64,7 @@ pub fn SpscChannel(comptime T: type) type {
         pub const SendTimeoutError = error{ Closed, Cancelled, Timeout, Unsupported };
         pub const RecvTimeoutError = error{ Closed, Cancelled, Timeout, Unsupported };
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         can_send: sync.condvar.Condvar = .{},
         can_recv: sync.condvar.Condvar = .{},
         closed: bool = false,
@@ -433,7 +434,7 @@ pub fn SpscChannel(comptime T: type) type {
         pub const BatchWakeMode = BatchWakeModeType;
         pub const ChannelBatchOptions = ChannelBatchOptionsType;
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         closed: bool = false,
         queue: spsc.SpscQueue(T),
 
@@ -1240,28 +1241,28 @@ fn waitForFlagTrue(flag: *const std.atomic.Value(bool), iterations_max: u32) boo
 }
 
 fn waitForBlockedReceiver(channel: anytype, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
     while (true) {
         channel.mutex.lock();
         const is_blocked = channel.recv_waiters.load(.acquire) > 0 and channel.queue.len() == 0 and !channel.closed;
         channel.mutex.unlock();
         if (is_blocked) return;
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
 }
 
 fn waitForBlockedSender(channel: anytype, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
     while (true) {
         channel.mutex.lock();
         const is_blocked = channel.send_waiters.load(.acquire) > 0 and channel.queue.len() == channel.queue.capacity() and !channel.closed;
         channel.mutex.unlock();
         if (is_blocked) return;
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }

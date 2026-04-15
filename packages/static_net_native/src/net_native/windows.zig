@@ -7,7 +7,7 @@ const common = @import("common.zig");
 
 pub const Endpoint = common.Endpoint;
 
-const windows = std.os.windows;
+const windows = @import("windows_compat.zig");
 const af_inet_family: u16 = 2;
 const af_inet6_family: u16 = 23;
 
@@ -90,28 +90,40 @@ pub fn endpointFromStorage(storage: *const windows.ws2_32.sockaddr.storage) ?End
 /// Returns the current local endpoint for a socket, or `null` on syscall failure.
 pub fn socketLocalEndpoint(sock: windows.ws2_32.SOCKET) ?Endpoint {
     var storage: windows.ws2_32.sockaddr.storage = undefined;
-    var len: i32 = @intCast(@sizeOf(windows.ws2_32.sockaddr.storage));
-    const rc = windows.ws2_32.getsockname(sock, @ptrCast(&storage), &len);
-    if (rc == windows.ws2_32.SOCKET_ERROR) return null;
+    if (!readSockaddrStorage(sock, .local, &storage)) return null;
     return endpointFromStorage(&storage);
 }
 
 /// Returns the current peer endpoint for a socket, or `null` on syscall failure.
 pub fn socketPeerEndpoint(sock: windows.ws2_32.SOCKET) ?Endpoint {
     var storage: windows.ws2_32.sockaddr.storage = undefined;
-    var len: i32 = @intCast(@sizeOf(windows.ws2_32.sockaddr.storage));
-    const rc = windows.ws2_32.getpeername(sock, @ptrCast(&storage), &len);
-    if (rc == windows.ws2_32.SOCKET_ERROR) return null;
+    if (!readSockaddrStorage(sock, .peer, &storage)) return null;
     return endpointFromStorage(&storage);
 }
 
 /// Returns the socket family discovered from `getsockname`, or `null` on failure.
 pub fn socketFamily(sock: windows.ws2_32.SOCKET) ?i32 {
     var storage: windows.ws2_32.sockaddr.storage = undefined;
-    var len: i32 = @intCast(@sizeOf(windows.ws2_32.sockaddr.storage));
-    const rc = windows.ws2_32.getsockname(sock, @ptrCast(&storage), &len);
-    if (rc == windows.ws2_32.SOCKET_ERROR) return null;
+    if (!readSockaddrStorage(sock, .local, &storage)) return null;
     return @intCast(storage.family);
+}
+
+const SocketQuery = enum {
+    local,
+    peer,
+};
+
+fn readSockaddrStorage(
+    sock: windows.ws2_32.SOCKET,
+    comptime query: SocketQuery,
+    storage: *windows.ws2_32.sockaddr.storage,
+) bool {
+    var len: i32 = @intCast(@sizeOf(windows.ws2_32.sockaddr.storage));
+    const rc = switch (query) {
+        .local => windows.ws2_32.getsockname(sock, @ptrCast(storage), &len),
+        .peer => windows.ws2_32.getpeername(sock, @ptrCast(storage), &len),
+    };
+    return rc != windows.ws2_32.SOCKET_ERROR;
 }
 
 test "windows sockaddr ipv4 round trips through storage" {

@@ -116,7 +116,7 @@ fn accessFields(comptime Accesses: anytype) []const std.builtin.Type.StructField
 }
 
 fn validateAccesses(comptime Registry: type, comptime Accesses: anytype) void {
-    const fields = accessFields(Accesses);
+    const fields = comptime accessFields(Accesses);
 
     inline for (fields, 0..) |field_i, index_i| {
         const descriptor = @field(Accesses, field_i.name);
@@ -165,7 +165,7 @@ fn validateDescriptorShape(comptime Descriptor: type) void {
 }
 
 fn queryMatches(comptime Registry: type, key: anytype, comptime Accesses: anytype) bool {
-    const fields = accessFields(Accesses);
+    const fields = comptime accessFields(Accesses);
     inline for (fields) |field| {
         const descriptor = @field(Accesses, field.name);
         const component_id = Registry.typeId(descriptor.Component).?;
@@ -180,7 +180,7 @@ fn queryMatches(comptime Registry: type, key: anytype, comptime Accesses: anytyp
 }
 
 fn accessModeOf(comptime Accesses: anytype, comptime T: type) ?AccessMode {
-    const fields = accessFields(Accesses);
+    const fields = comptime accessFields(Accesses);
     inline for (fields) |field| {
         const descriptor = @field(Accesses, field.name);
         if (descriptor.Component == T) return descriptor.access_mode;

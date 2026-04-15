@@ -123,6 +123,13 @@ fn addStaticTestingModule(b: *std.Build, options: ModuleOptions) *std.Build.Modu
         .enable_os_backends = options.enable_os_backends,
         .enable_tracing = options.enable_tracing,
     });
+    const sync_dep = b.dependency("static_sync", .{
+        .target = options.target,
+        .optimize = options.optimize,
+        .single_threaded = options.single_threaded,
+        .enable_os_backends = options.enable_os_backends,
+        .enable_tracing = options.enable_tracing,
+    });
     const queues_dep = b.dependency("static_queues", .{
         .target = options.target,
         .optimize = options.optimize,
@@ -161,6 +168,7 @@ fn addStaticTestingModule(b: *std.Build, options: ModuleOptions) *std.Build.Modu
             .{ .name = "static_core", .module = core_dep.module("static_core") },
             .{ .name = "static_rng", .module = rng_dep.module("static_rng") },
             .{ .name = "static_profile", .module = profile_dep.module("static_profile") },
+            .{ .name = "static_sync", .module = sync_dep.module("static_sync") },
             .{ .name = "static_queues", .module = queues_dep.module("static_queues") },
             .{ .name = "static_scheduling", .module = scheduling_dep.module("static_scheduling") },
             .{ .name = "static_bits", .module = bits_dep.module("static_bits") },

@@ -6,7 +6,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const caps = @import("caps.zig");
-const mutex = std.Thread;
+const mutex = @import("threading.zig");
 const padded_atomic = @import("padded_atomic.zig");
 
 pub const Once = struct {

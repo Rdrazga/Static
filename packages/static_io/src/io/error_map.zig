@@ -109,10 +109,25 @@ pub const fromWindowsErrorCode = windows_impl.fromWindowsErrorCode;
 
 const windows_impl = if (builtin.os.tag == .windows) struct {
     const windows = std.os.windows;
+    const wsae_would_block: u32 = 10035;
+    const wsae_access: u32 = 10013;
+    const wsae_addr_in_use: u32 = 10048;
+    const wsae_addr_not_avail: u32 = 10049;
+    const wsae_net_down: u32 = 10050;
+    const wsae_net_unreach: u32 = 10051;
+    const wsae_net_reset: u32 = 10052;
+    const wsae_conn_aborted: u32 = 10053;
+    const wsae_conn_reset: u32 = 10054;
+    const wsae_no_bufs: u32 = 10055;
+    const wsae_not_conn: u32 = 10057;
+    const wsae_shutdown: u32 = 10058;
+    const wsae_timed_out: u32 = 10060;
+    const wsae_conn_refused: u32 = 10061;
+    const wsae_name_too_long: u32 = 10063;
+    const wsae_host_unreach: u32 = 10065;
 
     /// Maps Win32 and Winsock errors returned by overlapped I/O.
     pub fn fromWindowsErrorCode(err_code: u32) MappedCompletionError {
-        const wsa = windows.ws2_32;
         const tag: types.CompletionErrorTag = switch (err_code) {
             @intFromEnum(windows.Win32Error.WAIT_TIMEOUT) => .timeout,
 
@@ -148,23 +163,23 @@ const windows_impl = if (builtin.os.tag == .windows) struct {
             => .connection_reset,
 
             // Winsock errors can surface as `DWORD` values in IOCP completions.
-            @intFromEnum(wsa.WinsockError.EWOULDBLOCK) => .would_block,
-            @intFromEnum(wsa.WinsockError.EADDRINUSE) => .address_in_use,
-            @intFromEnum(wsa.WinsockError.EADDRNOTAVAIL) => .address_unavailable,
-            @intFromEnum(wsa.WinsockError.EACCES) => .access_denied,
-            @intFromEnum(wsa.WinsockError.ENOBUFS) => .no_space_left,
-            @intFromEnum(wsa.WinsockError.ECONNREFUSED) => .connection_refused,
-            @intFromEnum(wsa.WinsockError.ECONNABORTED) => .connection_reset,
-            @intFromEnum(wsa.WinsockError.ECONNRESET) => .connection_reset,
-            @intFromEnum(wsa.WinsockError.ENOTCONN) => .invalid_input,
-            @intFromEnum(wsa.WinsockError.ESHUTDOWN) => .broken_pipe,
-            @intFromEnum(wsa.WinsockError.ENETDOWN),
-            @intFromEnum(wsa.WinsockError.ENETRESET),
+            wsae_would_block => .would_block,
+            wsae_addr_in_use => .address_in_use,
+            wsae_addr_not_avail => .address_unavailable,
+            wsae_access => .access_denied,
+            wsae_no_bufs => .no_space_left,
+            wsae_conn_refused => .connection_refused,
+            wsae_conn_aborted => .connection_reset,
+            wsae_conn_reset => .connection_reset,
+            wsae_not_conn => .invalid_input,
+            wsae_shutdown => .broken_pipe,
+            wsae_net_down,
+            wsae_net_reset,
             => .address_unavailable,
-            @intFromEnum(wsa.WinsockError.ETIMEDOUT) => .timeout,
-            @intFromEnum(wsa.WinsockError.ENAMETOOLONG) => .name_too_long,
-            @intFromEnum(wsa.WinsockError.EHOSTUNREACH),
-            @intFromEnum(wsa.WinsockError.ENETUNREACH),
+            wsae_timed_out => .timeout,
+            wsae_name_too_long => .name_too_long,
+            wsae_host_unreach,
+            wsae_net_unreach,
             => .address_unavailable,
 
             // Named pipe style errors.
@@ -233,12 +248,11 @@ test "windows error code maps to stable tags" {
     if (builtin.os.tag != .windows) return error.SkipZigTest;
 
     const windows = std.os.windows;
-    const wsa = windows.ws2_32;
 
     try testing.expectEqual(types.CompletionErrorTag.not_found, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.FILE_NOT_FOUND)).tag);
     try testing.expectEqual(types.CompletionErrorTag.access_denied, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.ACCESS_DENIED)).tag);
-    try testing.expectEqual(types.CompletionErrorTag.connection_refused, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.ECONNREFUSED)).tag);
-    try testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.ECONNABORTED)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.connection_refused, fromWindowsErrorCode(10061).tag);
+    try testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(10053).tag);
     try testing.expectEqual(types.CompletionErrorTag.connection_reset, fromWindowsErrorCode(@intFromEnum(windows.Win32Error.NETNAME_DELETED)).tag);
-    try testing.expectEqual(types.CompletionErrorTag.would_block, fromWindowsErrorCode(@intFromEnum(wsa.WinsockError.EWOULDBLOCK)).tag);
+    try testing.expectEqual(types.CompletionErrorTag.would_block, fromWindowsErrorCode(10035).tag);
 }

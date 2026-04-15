@@ -68,7 +68,7 @@ pub fn Channel(comptime T: type) type {
         pub const SendTimeoutError = error{ Closed, Cancelled, Timeout, Unsupported };
         pub const RecvTimeoutError = error{ Closed, Cancelled, Timeout, Unsupported };
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         can_send: sync.condvar.Condvar = .{},
         can_recv: sync.condvar.Condvar = .{},
         closed: bool = false,
@@ -497,7 +497,7 @@ pub fn Channel(comptime T: type) type {
         pub const BatchWakeMode = BatchWakeModeType;
         pub const ChannelBatchOptions = ChannelBatchOptionsType;
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         closed: bool = false,
         rb: ring.RingBuffer(T),
 

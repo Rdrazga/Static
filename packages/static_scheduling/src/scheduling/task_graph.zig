@@ -38,7 +38,7 @@ pub const Plan = struct {
 pub const TaskGraph = struct {
     allocator: std.mem.Allocator,
     node_count: usize,
-    edges: std.ArrayListUnmanaged(topo.Edge) = .{},
+    edges: std.ArrayListUnmanaged(topo.Edge) = .empty,
 
     pub fn init(allocator: std.mem.Allocator, node_count: usize) TaskGraph {
         // Precondition: a graph with zero nodes cannot schedule any work and

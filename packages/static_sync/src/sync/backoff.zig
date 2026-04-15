@@ -11,6 +11,7 @@ pub const Backoff = struct {
 
     exponent: u8 = 0,
     max_exponent: u8 = 10,
+    yield_threshold_exponent: u8 = 6,
 
     pub fn reset(self: *Backoff) void {
         assert(self.exponent <= self.max_exponent);
@@ -21,6 +22,7 @@ pub const Backoff = struct {
     pub fn step(self: *Backoff) void {
         assert(self.max_exponent <= max_supported_exponent);
         assert(self.exponent <= self.max_exponent);
+        assert(self.yield_threshold_exponent <= max_supported_exponent);
 
         const spins: usize = @as(usize, 1) << @intCast(self.exponent);
         assert(spins > 0);
@@ -28,6 +30,10 @@ pub const Backoff = struct {
         var i: usize = 0;
         while (i < spins) : (i += 1) {
             std.atomic.spinLoopHint();
+        }
+
+        if (self.exponent >= self.yield_threshold_exponent) {
+            std.Thread.yield() catch {};
         }
 
         if (self.exponent < self.max_exponent) self.exponent += 1;

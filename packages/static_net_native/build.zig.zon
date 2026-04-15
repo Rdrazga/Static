@@ -2,7 +2,7 @@
     .name = .static_net_native,
     .version = "0.0.0",
     .fingerprint = 0x956b342516fa2b65, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .static_net = .{ .path = "../static_net" },
     },

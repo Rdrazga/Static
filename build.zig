@@ -542,6 +542,38 @@ fn addBenchStep(
             .name = "static_sync_contention",
             .src = "packages/static_sync/benchmarks/contention_baselines.zig",
         },
+        .{
+            .name = "static_sync_cancel_lifecycle",
+            .src = "packages/static_sync/benchmarks/cancel_lifecycle_baselines.zig",
+        },
+        .{
+            .name = "static_sync_barrier_phase",
+            .src = "packages/static_sync/benchmarks/barrier_phase_baselines.zig",
+        },
+        .{
+            .name = "static_sync_barrier_wait",
+            .src = "packages/static_sync/benchmarks/barrier_wait_baselines.zig",
+        },
+        .{
+            .name = "static_sync_seqlock",
+            .src = "packages/static_sync/benchmarks/seqlock_baselines.zig",
+        },
+        .{
+            .name = "static_sync_benchmark_references",
+            .src = "packages/static_sync/benchmarks/benchmark_references.zig",
+        },
+        .{
+            .name = "static_sync_condvar",
+            .src = "packages/static_sync/benchmarks/condvar_baselines.zig",
+        },
+        .{
+            .name = "static_sync_once_and_grant",
+            .src = "packages/static_sync/benchmarks/once_and_grant_baselines.zig",
+        },
+        .{
+            .name = "static_sync_timeout_path",
+            .src = "packages/static_sync/benchmarks/timeout_path_baselines.zig",
+        },
     };
 
     for (static_sync_benchmarks) |bm| {
@@ -552,6 +584,7 @@ fn addBenchStep(
                 .target = target,
                 .optimize = bench_optimize,
                 .imports = &.{
+                    .{ .name = "static_core", .module = mods.static_core },
                     .{ .name = "static_sync", .module = mods.static_sync },
                     .{ .name = "static_testing", .module = mods.static_testing },
                 },
@@ -559,6 +592,8 @@ fn addBenchStep(
         });
         const run = b.addRunArtifact(exe);
         step.dependOn(&run.step);
+        const single_step = b.step(bm.name, b.fmt("Run benchmark {s}", .{bm.name}));
+        single_step.dependOn(&run.step);
     }
 
     const static_scheduling_benchmarks = [_]struct {
@@ -1035,6 +1070,7 @@ fn createWorkspaceModules(
             .{ .name = "static_core", .module = static_core_mod },
             .{ .name = "static_rng", .module = static_rng_mod },
             .{ .name = "static_profile", .module = static_profile_mod },
+            .{ .name = "static_sync", .module = static_sync_mod },
             .{ .name = "static_queues", .module = static_queues_mod },
             .{ .name = "static_scheduling", .module = static_scheduling_mod },
             .{ .name = "static_bits", .module = static_bits_mod },

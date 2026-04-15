@@ -6,7 +6,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const windows = std.os.windows;
+const windows = @import("windows_compat.zig");
 const ws2_32 = windows.ws2_32;
 
 /// Signature of `AcceptEx`.

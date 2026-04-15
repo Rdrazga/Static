@@ -73,7 +73,7 @@ pub fn SparseGrid(comptime T: type) type {
             const key = self.cellKey(x, y);
             const gop = self.cells.getOrPut(key) catch return SparseGridError.OutOfMemory;
             if (!gop.found_existing) {
-                gop.value_ptr.* = .{};
+                gop.value_ptr.* = .empty;
             }
             gop.value_ptr.append(self.allocator, item) catch return SparseGridError.OutOfMemory;
         }
@@ -151,7 +151,7 @@ pub fn SparseGrid3D(comptime T: type) type {
             const key = self.cellKey(x, y, z);
             const gop = self.cells.getOrPut(key) catch return SparseGridError.OutOfMemory;
             if (!gop.found_existing) {
-                gop.value_ptr.* = .{};
+                gop.value_ptr.* = .empty;
             }
             gop.value_ptr.append(self.allocator, item) catch return SparseGridError.OutOfMemory;
         }

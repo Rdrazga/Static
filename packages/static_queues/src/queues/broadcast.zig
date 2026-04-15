@@ -53,7 +53,7 @@ pub fn Broadcast(comptime T: type) type {
 
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         buf: []T,
         consumers: []Consumer,
         write_seq: u64 = 0,

@@ -78,7 +78,7 @@ pub fn writeTextAndOptionalBaselineReport(
         };
     }
 
-    var workflow = workflow_config.?;
+    const workflow = workflow_config.?;
     const derived_stats = try baseline.deriveStats(run_result, workflow.stats_storage);
     const summary: WorkflowSummary = switch (workflow.mode) {
         .report_only => WorkflowSummary{
@@ -238,10 +238,10 @@ fn currentUnixMsPosix() WorkflowError!u64 {
 fn currentUnixMsWindows() WorkflowError!u64 {
     var file_time: std.os.windows.FILETIME = undefined;
     GetSystemTimeAsFileTime(&file_time);
-    const now_ns = std.os.windows.fileTimeToNanoSeconds(file_time);
-    const now_ms = now_ns.toMilliseconds();
-    if (now_ms < 0) return error.Unsupported;
-    return @intCast(now_ms);
+    const intervals_100ns = (@as(u64, file_time.dwHighDateTime) << 32) | file_time.dwLowDateTime;
+    const unix_epoch_offset_100ns: u64 = 116_444_736_000_000_000;
+    if (intervals_100ns < unix_epoch_offset_100ns) return error.Unsupported;
+    return @divTrunc(intervals_100ns - unix_epoch_offset_100ns, 10_000);
 }
 
 extern "kernel32" fn GetSystemTimeAsFileTime(system_time_as_file_time: *std.os.windows.FILETIME) callconv(.winapi) void;

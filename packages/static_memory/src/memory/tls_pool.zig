@@ -61,7 +61,7 @@ pub fn TlsPool(comptime T: type) type {
         generation: u64,
 
         const Allocator = std.mem.Allocator;
-        const Mutex = std.Thread.Mutex;
+        const Mutex = sync.threading.Mutex;
         // `maxInt(u64)` is never a real thread identifier, so it is a stable empty-slot marker.
         const empty_slot_sentinel: u64 = std.math.maxInt(u64);
 

@@ -1,9 +1,9 @@
 //! Condvar: capability-gated condition variable for package-owned blocking waits.
 //!
-//! Callers pair this with `std.Thread.Mutex` directly. The value this module adds
+//! Callers pair this with `static_sync.threading.Mutex` directly. The value this module adds
 //! over raw std usage is compile-time gating of blocking wait support and a stable
 //! unavailable shape in single-threaded or no-OS-backend builds.
-//! Direct app-local host wait/signal code should still prefer `std.Thread.Condition`.
+//! Direct app-local host wait/signal code should still prefer `static_sync.threading.Condition`.
 //!
 //! Thread safety: safe for concurrent use when `-Denable_os_backends=true`.
 //! Single-threaded mode: blocking `wait`/`timedWait` are absent; the type exists as a zero-size placeholder.
@@ -11,11 +11,12 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const core = @import("static_core");
+const time = core.time_compat;
 const caps = @import("caps.zig");
-const mutex = std.Thread;
+const mutex = @import("threading.zig");
 
 pub const supports_blocking_wait = caps.Caps.os_backends_enabled and caps.Caps.threads_enabled;
-pub const StdCondition = std.Thread.Condition;
+pub const StdCondition = mutex.Condition;
 
 comptime {
     core.errors.assertVocabularySubset(error{Timeout});
@@ -191,7 +192,7 @@ test "condvar broadcast wakes all blocked waiters" {
 }
 
 fn waitForBlockedWaiters(state: anytype, expected: u8, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (true) {
         state.mutex.lock();
         const current = state.waiting_count;
@@ -201,16 +202,16 @@ fn waitForBlockedWaiters(state: anytype, expected: u8, timeout_ns: u64) !void {
         // the mutex through `cond.wait(...)` and is now parked on the condvar.
         if (current == expected) return;
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
 }
 
 fn waitForAwokenCount(counter: anytype, expected: u8, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (counter.load(.acquire) != expected) {
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }

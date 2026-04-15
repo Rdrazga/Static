@@ -4,6 +4,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const builtin = @import("builtin");
+const core = @import("static_core");
 const collections = @import("static_collections");
 const io_caps = @import("caps.zig");
 const backend = @import("backend.zig");
@@ -11,6 +12,7 @@ const config = @import("config.zig");
 const error_map = @import("error_map.zig");
 const fake_backend = @import("fake_backend.zig");
 const platform = @import("platform/selected_backend.zig");
+const windows = @import("platform/windows/windows_compat.zig");
 const threaded_backend = @import("threaded_backend.zig");
 const types = @import("types.zig");
 const static_net_native = @import("static_net_native");
@@ -21,7 +23,6 @@ const socketLocalEndpointPosix = static_net_native.posix.socketLocalEndpoint;
 const socketLocalEndpointWindows = static_net_native.windows.socketLocalEndpoint;
 
 const windows_platform = if (builtin.os.tag == .windows) struct {
-    const windows = std.os.windows;
     pub extern "kernel32" fn DeleteFileW(lpFileName: windows.LPCWSTR) callconv(.winapi) windows.BOOL;
 } else struct {};
 
@@ -526,7 +527,7 @@ pub const Runtime = struct {
             }
         }
 
-        const start_instant = if (timeout_ns != null) std.time.Instant.now() catch return error.Unsupported else null;
+        const start_instant = if (timeout_ns != null) core.time_compat.Instant.now() catch return error.Unsupported else null;
         while (true) {
             if (cancel_token) |token| {
                 if (token.isCancelled()) return error.Cancelled;
@@ -733,7 +734,6 @@ fn openNativeFile(allocator: std.mem.Allocator, path: []const u8, flags: FileOpe
 }
 
 fn openNativeFileWindows(allocator: std.mem.Allocator, path: []const u8, flags: FileOpenFlags) OpenFileError!types.NativeHandle {
-    const windows = std.os.windows;
     const kernel32 = windows.kernel32;
 
     const path_w = std.unicode.utf8ToUtf16LeAllocZ(allocator, path) catch |err| switch (err) {
@@ -816,8 +816,6 @@ fn listenNative(allocator: std.mem.Allocator, endpoint: types.Endpoint, options:
 }
 
 fn listenNativeWindows(endpoint: types.Endpoint, options: ListenOptions) ListenError!types.NativeHandle {
-    const windows = std.os.windows;
-
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
     const family: i32 = switch (endpoint) {
         .ipv4 => windows.ws2_32.AF.INET,
@@ -944,8 +942,8 @@ fn wakeThreadedBackend(ctx: ?*anyopaque) void {
     backend_ptr.wakeup();
 }
 
-fn elapsedSince(start: std.time.Instant) ?u64 {
-    const now = std.time.Instant.now() catch return null;
+fn elapsedSince(start: core.time_compat.Instant) ?u64 {
+    const now = core.time_compat.Instant.now() catch return null;
     return now.since(start);
 }
 
@@ -1327,13 +1325,13 @@ fn connectLoopbackPair(runtime_impl: *Runtime) !struct {
     const connect_id = try runtime_impl.submitConnect(bound, null);
 
     const deadline_ns: u64 = 5 * std.time.ns_per_s;
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
 
     var server: ?types.Stream = null;
     var client: ?types.Stream = null;
 
     while (server == null or client == null) {
-        const elapsed_ns = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed_ns = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed_ns >= deadline_ns) return error.Timeout;
 
         _ = runtime_impl.wait(2, 50 * std.time.ns_per_ms, null) catch |err| switch (err) {
@@ -1633,7 +1631,6 @@ test "runtime wait cancellation wakes windows iocp backend wait" {
         delay_ns: u64,
 
         pub fn run(ctx: *@This()) void {
-            const windows = std.os.windows;
             const delay_ms_u64 = ctx.delay_ns / std.time.ns_per_ms;
             const delay_ms: windows.DWORD = @intCast(@max(@as(u64, 1), delay_ms_u64));
             _ = windows.kernel32.SleepEx(delay_ms, windows.FALSE);
@@ -1648,9 +1645,9 @@ test "runtime wait cancellation wakes windows iocp backend wait" {
     const canceller = try std.Thread.spawn(.{}, CancelCtx.run, .{&cancel_ctx});
     defer canceller.join();
 
-    const start = std.time.Instant.now() catch return;
+    const start = core.time_compat.Instant.now() catch return;
     try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
-    const elapsed_ns = (std.time.Instant.now() catch return).since(start);
+    const elapsed_ns = (core.time_compat.Instant.now() catch return).since(start);
     try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
     try testing.expect(elapsed_ns < timeout_ns / 2);
 }
@@ -1675,9 +1672,9 @@ test "runtime wait cancellation wakes threaded backend wait" {
         delay_ns: u64,
 
         pub fn run(ctx: *@This()) void {
-            const start = std.time.Instant.now() catch return;
+            const start = core.time_compat.Instant.now() catch return;
             while (true) {
-                const elapsed_ns = (std.time.Instant.now() catch return).since(start);
+                const elapsed_ns = (core.time_compat.Instant.now() catch return).since(start);
                 if (elapsed_ns >= ctx.delay_ns) break;
                 std.Thread.yield() catch {};
             }
@@ -1692,9 +1689,9 @@ test "runtime wait cancellation wakes threaded backend wait" {
     const canceller = try std.Thread.spawn(.{}, CancelCtx.run, .{&cancel_ctx});
     defer canceller.join();
 
-    const start = std.time.Instant.now() catch return;
+    const start = core.time_compat.Instant.now() catch return;
     try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
-    const elapsed_ns = (std.time.Instant.now() catch return).since(start);
+    const elapsed_ns = (core.time_compat.Instant.now() catch return).since(start);
     try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
     try testing.expect(elapsed_ns < timeout_ns / 2);
 }
@@ -1722,9 +1719,9 @@ test "runtime wait cancellation wakes linux io_uring backend wait" {
         delay_ns: u64,
 
         pub fn run(ctx: *@This()) void {
-            const start = std.time.Instant.now() catch return;
+            const start = core.time_compat.Instant.now() catch return;
             while (true) {
-                const elapsed_ns = (std.time.Instant.now() catch return).since(start);
+                const elapsed_ns = (core.time_compat.Instant.now() catch return).since(start);
                 if (elapsed_ns >= ctx.delay_ns) break;
                 std.Thread.yield() catch {};
             }
@@ -1739,9 +1736,9 @@ test "runtime wait cancellation wakes linux io_uring backend wait" {
     const canceller = try std.Thread.spawn(.{}, CancelCtx.run, .{&cancel_ctx});
     defer canceller.join();
 
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
     try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
-    const elapsed_ns = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+    const elapsed_ns = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
     try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
     try testing.expect(elapsed_ns < timeout_ns / 2);
 }
@@ -1769,9 +1766,9 @@ test "runtime wait cancellation wakes bsd kqueue backend wait" {
         delay_ns: u64,
 
         pub fn run(ctx: *@This()) void {
-            const start = std.time.Instant.now() catch return;
+            const start = core.time_compat.Instant.now() catch return;
             while (true) {
-                const elapsed_ns = (std.time.Instant.now() catch return).since(start);
+                const elapsed_ns = (core.time_compat.Instant.now() catch return).since(start);
                 if (elapsed_ns >= ctx.delay_ns) break;
                 std.Thread.yield() catch {};
             }
@@ -1786,9 +1783,9 @@ test "runtime wait cancellation wakes bsd kqueue backend wait" {
     const canceller = try std.Thread.spawn(.{}, CancelCtx.run, .{&cancel_ctx});
     defer canceller.join();
 
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
     try testing.expectError(error.Cancelled, runtime_impl.wait(1, timeout_ns, cancel_source.token()));
-    const elapsed_ns = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+    const elapsed_ns = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
     try testing.expect(elapsed_ns >= cancel_delay_ns / 2);
     try testing.expect(elapsed_ns < timeout_ns / 2);
 }

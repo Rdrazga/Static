@@ -8,6 +8,8 @@ const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
+const sync = @import("static_sync");
 const driver_protocol = @import("driver_protocol.zig");
 
 /// Operating errors surfaced by process driver lifecycle and protocol I/O.
@@ -68,7 +70,7 @@ pub const ProcessDriver = struct {
 
         var child = std.process.spawn(io, .{
             .argv = config.argv,
-            .cwd = config.cwd,
+            .cwd = if (config.cwd) |cwd| .{ .path = cwd } else .inherit,
             .environ_map = config.environ_map,
             .expand_arg0 = config.expand_arg0,
             .stdin = .pipe,
@@ -290,8 +292,8 @@ pub const ProcessDriver = struct {
 };
 
 const WaitThreadState = struct {
-    mutex: std.Thread.Mutex = .{},
-    cond: std.Thread.Condition = .{},
+    mutex: sync.threading.Mutex = .{},
+    cond: sync.threading.Condition = .{},
     done: bool = false,
     result: ?WaitResult = null,
     child: *std.process.Child,
@@ -389,7 +391,7 @@ fn waitForChildWithTimeout(
     };
     defer waiter.join();
 
-    const start_instant = std.time.Instant.now() catch return error.Unsupported;
+    const start_instant = core.time_compat.Instant.now() catch return error.Unsupported;
     wait_state.mutex.lock();
     defer wait_state.mutex.unlock();
 
@@ -404,7 +406,7 @@ fn waitForChildWithTimeout(
         };
 
         if (!wait_state.done) {
-            const elapsed_ns = (std.time.Instant.now() catch return error.Unsupported).since(start_instant);
+            const elapsed_ns = (core.time_compat.Instant.now() catch return error.Unsupported).since(start_instant);
             if (elapsed_ns >= timeout_ns_max) {
                 wait_state.mutex.unlock();
                 try terminateTimedOutChildAndReap(&wait_state, child_id);
@@ -435,7 +437,7 @@ fn terminateTimedOutChildAndReap(
 fn terminateChildId(child_id: std.process.Child.Id) ProcessDriverError!void {
     switch (builtin.os.tag) {
         .windows => {
-            if (std.os.windows.kernel32.TerminateProcess(child_id, 1) == 0) {
+            if (TerminateProcess(child_id, 1) == .FALSE) {
                 return error.ProcessFailed;
             }
         },
@@ -448,6 +450,11 @@ fn terminateChildId(child_id: std.process.Child.Id) ProcessDriverError!void {
         },
     }
 }
+
+extern "kernel32" fn TerminateProcess(
+    process: std.os.windows.HANDLE,
+    exit_code: std.os.windows.UINT,
+) callconv(.winapi) std.os.windows.BOOL;
 
 fn assertSuccessfulTerm(term: std.process.Child.Term) ProcessDriverError!void {
     switch (term) {
@@ -496,6 +503,7 @@ fn mapSpawnError(err: std.process.SpawnError) ProcessDriverError {
         error.BadPathName => error.InvalidConfig,
         error.InvalidUserId => error.InvalidConfig,
         error.InvalidProcessGroupId => error.InvalidConfig,
+        else => error.ProcessFailed,
     };
 }
 
@@ -513,7 +521,7 @@ fn mapWriteError(err: FileWriteStreamingError) ProcessDriverError {
 fn mapReadError(err: FileReadStreamingError) ProcessDriverError {
     return switch (err) {
         error.AccessDenied => error.AccessDenied,
-        error.BrokenPipe => error.BrokenPipe,
+        error.ConnectionResetByPeer, error.SocketUnconnected => error.BrokenPipe,
         error.SystemResources => error.SystemResources,
         else => error.ProcessFailed,
     };

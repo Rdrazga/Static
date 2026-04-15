@@ -1,5 +1,6 @@
 const std = @import("std");
 const testing = std.testing;
+const core = @import("static_core");
 const caps = @import("../queues/caps.zig");
 const lock_free_mpsc_mod = @import("../queues/lock_free_mpsc.zig");
 const chase_lev_mod = @import("../queues/chase_lev_deque.zig");
@@ -28,7 +29,7 @@ pub fn runLockFreeMpscStress(allocator: std.mem.Allocator, cfg: StressConfig) !v
     defer allocator.free(seen);
     for (seen) |*slot| slot.* = std.atomic.Value(u8).init(0);
 
-    const start_instant = std.time.Instant.now() catch return error.SkipZigTest;
+    const start_instant = core.time_compat.Instant.now() catch return error.SkipZigTest;
     var producer_done = std.atomic.Value(u32).init(0);
     var sent_count = std.atomic.Value(u32).init(0);
     var received_count = std.atomic.Value(u32).init(0);
@@ -38,7 +39,7 @@ pub fn runLockFreeMpscStress(allocator: std.mem.Allocator, cfg: StressConfig) !v
     const Producer = struct {
         queue: *Q,
         producer_id: u32,
-        start_instant: std.time.Instant,
+        start_instant: core.time_compat.Instant,
         time_budget_ms_max: u64,
         producer_done: *std.atomic.Value(u32),
         sent_count: *std.atomic.Value(u32),
@@ -191,7 +192,7 @@ pub fn runChaseLevStress(allocator: std.mem.Allocator, cfg: StressConfig) !void 
         thread.* = try std.Thread.spawn(.{}, Thief.run, .{state});
     }
 
-    const start_instant = std.time.Instant.now() catch return error.SkipZigTest;
+    const start_instant = core.time_compat.Instant.now() catch return error.SkipZigTest;
     var next_value: u32 = 0;
     while (next_value < total_items) : (next_value += 1) {
         var attempts: u32 = 0;
@@ -278,8 +279,8 @@ fn recordConsumedValue(
     _ = duplicate_count.fetchAdd(1, .acq_rel);
 }
 
-fn timeBudgetExceeded(start: std.time.Instant, time_budget_ms_max: u64) bool {
-    const now = std.time.Instant.now() catch return true;
+fn timeBudgetExceeded(start: core.time_compat.Instant, time_budget_ms_max: u64) bool {
+    const now = core.time_compat.Instant.now() catch return true;
     const elapsed_ns = now.since(start);
     const budget_ns = std.math.mul(u64, time_budget_ms_max, std.time.ns_per_ms) catch return true;
     return elapsed_ns >= budget_ns;

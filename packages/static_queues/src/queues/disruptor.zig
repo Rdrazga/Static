@@ -49,7 +49,7 @@ pub fn Disruptor(comptime T: type) type {
 
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
-        registration_mutex: std.Thread.Mutex = .{},
+        registration_mutex: sync.threading.Mutex = .{},
         buf: []T,
         consumer_seq: []AtomicSeq,
         consumer_active: []AtomicFlag,

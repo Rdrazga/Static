@@ -12,10 +12,11 @@ const assert = std.debug.assert;
 const testing = std.testing;
 const core = @import("static_core");
 const memory = @import("static_memory");
+const sync = @import("static_sync");
 
 /// Guard returned by `lockConstMutex`.
 pub const ConstMutexGuard = struct {
-    mutex: *std.Thread.Mutex,
+    mutex: *sync.threading.Mutex,
 
     pub fn unlock(self: *ConstMutexGuard) void {
         self.mutex.unlock();
@@ -28,8 +29,8 @@ pub const ConstMutexGuard = struct {
 /// callers may expose a logically read-only API (`*const Self`) while still taking a
 /// synchronization lock. The helper centralizes the `@constCast` pattern so call sites
 /// remain uniform and auditable.
-pub fn lockConstMutex(mutex_const: *const std.Thread.Mutex) ConstMutexGuard {
-    const mutex: *std.Thread.Mutex = @constCast(mutex_const);
+pub fn lockConstMutex(mutex_const: *const sync.threading.Mutex) ConstMutexGuard {
+    const mutex: *sync.threading.Mutex = @constCast(mutex_const);
     mutex.lock();
     return .{ .mutex = mutex };
 }

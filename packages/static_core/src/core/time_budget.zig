@@ -8,6 +8,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const errors = @import("errors.zig");
+const time_compat = @import("time_compat.zig");
 
 pub const TimeoutBudgetError = error{
     Timeout,
@@ -19,7 +20,7 @@ comptime {
 }
 
 pub const TimeoutBudget = struct {
-    start_instant: std.time.Instant,
+    start_instant: time_compat.Instant,
     timeout_ns: u64,
 
     pub fn init(timeout_ns: u64) TimeoutBudgetError!TimeoutBudget {
@@ -32,7 +33,7 @@ pub const TimeoutBudget = struct {
 
     fn initWithNowFn(
         timeout_ns: u64,
-        now_fn: *const fn () error{Unsupported}!std.time.Instant,
+        now_fn: *const fn () error{Unsupported}!time_compat.Instant,
     ) TimeoutBudgetError!TimeoutBudget {
         assert(timeout_ns <= std.math.maxInt(u64));
         if (timeout_ns == 0) return error.Timeout;
@@ -46,7 +47,7 @@ pub const TimeoutBudget = struct {
 
     fn remainingOrTimeoutWithNowFn(
         self: *const TimeoutBudget,
-        now_fn: *const fn () error{Unsupported}!std.time.Instant,
+        now_fn: *const fn () error{Unsupported}!time_compat.Instant,
     ) TimeoutBudgetError!u64 {
         assert(self.timeout_ns > 0);
 
@@ -69,8 +70,8 @@ pub const TimeoutBudget = struct {
     }
 };
 
-fn monotonicNow() error{Unsupported}!std.time.Instant {
-    return std.time.Instant.now() catch return error.Unsupported;
+fn monotonicNow() error{Unsupported}!time_compat.Instant {
+    return time_compat.Instant.now() catch return error.Unsupported;
 }
 
 test "timeout budget rejects zero timeout at init" {
@@ -87,7 +88,7 @@ test "timeout budget returns bounded remaining for positive timeout" {
 
 test "timeout budget surfaces unsupported clock from init" {
     const FailingClock = struct {
-        fn now() error{Unsupported}!std.time.Instant {
+        fn now() error{Unsupported}!time_compat.Instant {
             return error.Unsupported;
         }
     };
@@ -100,7 +101,7 @@ test "timeout budget surfaces unsupported clock from init" {
 
 test "timeout budget surfaces unsupported clock from remaining" {
     const FailingClock = struct {
-        fn now() error{Unsupported}!std.time.Instant {
+        fn now() error{Unsupported}!time_compat.Instant {
             return error.Unsupported;
         }
     };

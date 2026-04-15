@@ -10,6 +10,8 @@ const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
+const sync = @import("static_sync");
 const config_mod = @import("config.zig");
 const runner = @import("runner.zig");
 
@@ -131,8 +133,8 @@ const ChildRunResult = struct {
 };
 
 const WaitThreadState = struct {
-    mutex: std.Thread.Mutex = .{},
-    cond: std.Thread.Condition = .{},
+    mutex: sync.threading.Mutex = .{},
+    cond: sync.threading.Condition = .{},
     done: bool = false,
     result: ?WaitResult = null,
     child: *std.process.Child,
@@ -291,11 +293,11 @@ fn runChildOnce(
     benchmark_case: *const ProcessBenchmarkCase,
     benchmark_config: ProcessBenchmarkConfig,
 ) ProcessBenchmarkError!ChildRunResult {
-    const start_instant = std.time.Instant.now() catch return error.Unsupported;
+    const start_instant = core.time_compat.Instant.now() catch return error.Unsupported;
 
     var child = std.process.spawn(io, .{
         .argv = benchmark_case.argv,
-        .cwd = benchmark_case.cwd,
+        .cwd = if (benchmark_case.cwd) |cwd| .{ .path = cwd } else .inherit,
         .environ_map = benchmark_case.environ_map,
         .expand_arg0 = benchmark_case.expand_arg0,
         .stdin = .ignore,
@@ -312,7 +314,7 @@ fn runChildOnce(
         child.wait(io) catch |err| return mapWaitError(err);
 
     try assertSuccessfulTerm(term);
-    const stop_instant = std.time.Instant.now() catch return error.Unsupported;
+    const stop_instant = core.time_compat.Instant.now() catch return error.Unsupported;
 
     return .{
         .elapsed_ns = stop_instant.since(start_instant),
@@ -338,7 +340,7 @@ fn waitForChildWithTimeout(
     };
     defer waiter.join();
 
-    const start_instant = std.time.Instant.now() catch return error.Unsupported;
+    const start_instant = core.time_compat.Instant.now() catch return error.Unsupported;
     wait_state.mutex.lock();
     defer wait_state.mutex.unlock();
 
@@ -353,7 +355,7 @@ fn waitForChildWithTimeout(
         };
 
         if (!wait_state.done) {
-            const elapsed_ns = (std.time.Instant.now() catch return error.Unsupported).since(start_instant);
+            const elapsed_ns = (core.time_compat.Instant.now() catch return error.Unsupported).since(start_instant);
             if (elapsed_ns >= timeout_ns_max) {
                 wait_state.mutex.unlock();
                 try terminateTimedOutChildAndReap(&wait_state, child_id);
@@ -384,7 +386,7 @@ fn terminateTimedOutChildAndReap(
 fn terminateChildId(child_id: std.process.Child.Id) ProcessBenchmarkError!void {
     switch (builtin.os.tag) {
         .windows => {
-            if (std.os.windows.kernel32.TerminateProcess(child_id, 1) == 0) {
+            if (TerminateProcess(child_id, 1) == .FALSE) {
                 return error.ProcessFailed;
             }
         },
@@ -397,6 +399,11 @@ fn terminateChildId(child_id: std.process.Child.Id) ProcessBenchmarkError!void {
         },
     }
 }
+
+extern "kernel32" fn TerminateProcess(
+    process: std.os.windows.HANDLE,
+    exit_code: std.os.windows.UINT,
+) callconv(.winapi) std.os.windows.BOOL;
 
 fn assertSuccessfulTerm(term: std.process.Child.Term) ProcessBenchmarkError!void {
     switch (term) {
@@ -435,6 +442,7 @@ fn mapSpawnError(err: std.process.SpawnError) ProcessBenchmarkError {
         error.BadPathName => error.InvalidConfig,
         error.InvalidUserId => error.InvalidConfig,
         error.InvalidProcessGroupId => error.InvalidConfig,
+        else => error.ProcessFailed,
     };
 }
 
@@ -494,7 +502,7 @@ fn successCommandArgv() []const []const u8 {
 
 fn timeoutCommandArgv() []const []const u8 {
     return switch (builtin.os.tag) {
-        .windows => &[_][]const u8{ "cmd.exe", "/C", "ping 127.0.0.1 -n 3 >NUL" },
+        .windows => &[_][]const u8{ "ping.exe", "127.0.0.1", "-n", "6" },
         else => &[_][]const u8{ "sh", "-c", "sleep 1" },
     };
 }

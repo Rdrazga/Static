@@ -18,7 +18,7 @@ pub const TimerSource = enum(u8) {
 /// Minimal monotonic timer for in-process benchmark loops.
 pub const MonotonicTimer = struct {
     source: TimerSource = .monotonic,
-    start_instant: ?std.time.Instant = null,
+    start_instant: ?core.time_compat.Instant = null,
 
     /// Construct an inactive monotonic timer.
     pub fn init() MonotonicTimer {
@@ -33,7 +33,7 @@ pub const MonotonicTimer = struct {
     /// Start timing one measured interval.
     pub fn start(self: *MonotonicTimer) TimerError!void {
         assert(!self.isActive());
-        self.start_instant = std.time.Instant.now() catch return error.Unsupported;
+        self.start_instant = core.time_compat.Instant.now() catch return error.Unsupported;
         assert(self.isActive());
     }
 
@@ -42,7 +42,7 @@ pub const MonotonicTimer = struct {
         assert(self.isActive());
 
         const start_instant = self.start_instant.?;
-        const stop_instant = std.time.Instant.now() catch return error.Unsupported;
+        const stop_instant = core.time_compat.Instant.now() catch return error.Unsupported;
         const elapsed_ns = stop_instant.since(start_instant);
         self.start_instant = null;
 

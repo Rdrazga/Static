@@ -39,7 +39,7 @@ pub fn Vec(comptime T: type) type {
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
         budget_reserved_capacity: u32 = 0,
-        storage: std.ArrayListUnmanaged(T) = .{},
+        storage: std.ArrayListUnmanaged(T) = .empty,
 
         const max_capacity_supported: usize = std.math.maxInt(u32);
 

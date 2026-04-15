@@ -10,6 +10,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
 const io_caps = @import("../../caps.zig");
 const static_queues = @import("static_queues");
 const backend = @import("../../backend.zig");
@@ -21,7 +22,7 @@ const error_map = @import("../../error_map.zig");
 const winsock_extensions = @import("winsock_extensions.zig");
 const static_net_native = @import("static_net_native");
 
-const windows = std.os.windows;
+const windows = @import("windows_compat.zig");
 const kernel32 = windows.kernel32;
 const IdQueue = static_queues.ring_buffer.RingBuffer(u32);
 const DecodedOperationId = operation_ids.DecodedOperationId;
@@ -64,7 +65,7 @@ const Slot = struct {
     completion: types.Completion = undefined,
     manual_completion: bool = false,
     cancel_reason: CancelReason = .none,
-    timeout_start: ?std.time.Instant = null,
+    timeout_start: ?core.time_compat.Instant = null,
     target_handle_a: ?types.Handle = null,
     target_handle_b: ?types.Handle = null,
     native_for_cancel: types.NativeHandle = 0,
@@ -279,7 +280,7 @@ pub const IocpBackend = struct {
 
         if (operationTimeoutNs(checked_op)) |timeout_ns| {
             if (timeout_ns != 0) {
-                slot.timeout_start = std.time.Instant.now() catch return error.Unsupported;
+                slot.timeout_start = core.time_compat.Instant.now() catch return error.Unsupported;
             }
         }
 
@@ -615,7 +616,7 @@ pub const IocpBackend = struct {
     /// Drains completion entries without blocking.
     pub fn pump(self: *IocpBackend, max_completions: u32) backend.PumpError!u32 {
         assert(max_completions > 0);
-        const now = std.time.Instant.now() catch return error.Unsupported;
+        const now = core.time_compat.Instant.now() catch return error.Unsupported;
         self.cancelExpiredTimeouts(now);
         var saw_wakeup = false;
         return self.dequeueFromPort(0, max_completions, &saw_wakeup);
@@ -647,10 +648,10 @@ pub const IocpBackend = struct {
             return self.dequeueFromPort(0, max_completions, &saw_wakeup);
         }
 
-        const global_start = if (timeout_ns != null) std.time.Instant.now() catch return error.Unsupported else null;
+        const global_start = if (timeout_ns != null) core.time_compat.Instant.now() catch return error.Unsupported else null;
         var drained: u32 = 0;
         while (drained < max_completions) {
-            const now = std.time.Instant.now() catch return error.Unsupported;
+            const now = core.time_compat.Instant.now() catch return error.Unsupported;
             self.cancelExpiredTimeouts(now);
 
             var remaining_timeout_ms: u32 = std.math.maxInt(u32);
@@ -822,7 +823,7 @@ pub const IocpBackend = struct {
         assert(self.free_len <= self.free_slots.len);
     }
 
-    fn cancelExpiredTimeouts(self: *IocpBackend, now: std.time.Instant) void {
+    fn cancelExpiredTimeouts(self: *IocpBackend, now: core.time_compat.Instant) void {
         var index: usize = 0;
         while (index < self.slots.len) : (index += 1) {
             var slot = &self.slots[index];
@@ -852,7 +853,7 @@ pub const IocpBackend = struct {
         }
     }
 
-    fn msUntilNextDeadline(self: *IocpBackend, now: std.time.Instant) ?u32 {
+    fn msUntilNextDeadline(self: *IocpBackend, now: core.time_compat.Instant) ?u32 {
         var best: ?u32 = null;
         var index: usize = 0;
         while (index < self.slots.len) : (index += 1) {
@@ -1191,7 +1192,7 @@ fn timeoutNsToMs(timeout_ns: ?u64) u32 {
     return @intCast(rounded_ms);
 }
 
-const wsa_io_pending: i32 = 997; // == WSA_IO_PENDING / ERROR_IO_PENDING
+const wsa_io_pending: u32 = 997; // == WSA_IO_PENDING / ERROR_IO_PENDING
 const sol_socket: i32 = 0xFFFF;
 const so_update_accept_context: i32 = 0x700B;
 const so_update_connect_context: i32 = 0x7010;

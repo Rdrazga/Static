@@ -2,7 +2,7 @@
     .name = .static_hash,
     .version = "0.0.0",
     .fingerprint = 0x4a163b0d83e152f5, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",

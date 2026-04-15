@@ -506,8 +506,8 @@ fn makeViolationsDocument(result: checker.CheckResult) ViolationsDocument {
     return .{
         .passed = result.passed,
         .checkpoint_digest = if (result.checkpoint_digest) |digest| .{
-            .upper = @intCast(digest.value >> 64),
-            .lower = @intCast(digest.value),
+            .upper = @as(u64, @truncate(digest.value >> 64)),
+            .lower = @as(u64, @truncate(digest.value)),
         } else null,
         .violations = result.violations,
     };
@@ -816,6 +816,84 @@ test "writeFailureBundle and readFailureBundle preserve replay artifact and side
     try testing.expect(bundle.stderr_capture != null);
     try testing.expectEqualStrings(stdout_capture, bundle.stdout_capture.?);
     try testing.expectEqualStrings(stderr_capture, bundle.stderr_capture.?);
+}
+
+test "writeFailureBundle preserves full-width checkpoint digests" {
+    var tmp_dir = testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    var threaded_io = std.Io.Threaded.init(testing.allocator, .{
+        .environ = .empty,
+    });
+    defer threaded_io.deinit();
+
+    const io = threaded_io.io();
+    const violations = [_]checker.Violation{
+        .{ .code = "failed", .message = "bundle failure" },
+    };
+    const run_identity = identity.makeRunIdentity(.{
+        .package_name = "static_testing",
+        .run_name = "failure_bundle_full_width_digest",
+        .seed = .{ .value = 29 },
+        .build_mode = .debug,
+        .case_index = 4,
+        .run_index = 2,
+    });
+    const trace_metadata: trace.TraceMetadata = .{
+        .event_count = 1,
+        .truncated = false,
+        .has_range = true,
+        .first_sequence_no = 11,
+        .last_sequence_no = 11,
+        .first_timestamp_ns = 100,
+        .last_timestamp_ns = 100,
+    };
+    const expected_digest = checker.CheckpointDigest.init(0xfedc_ba98_7654_3210_0123_4567_89ab_cdef);
+
+    var entry_name_buffer: [128]u8 = undefined;
+    var artifact_buffer: [256]u8 = undefined;
+    var manifest_buffer: [1024]u8 = undefined;
+    var trace_buffer: [256]u8 = undefined;
+    var violations_buffer: [512]u8 = undefined;
+
+    const written = try writeFailureBundle(.{
+        .io = io,
+        .dir = tmp_dir.dir,
+        .entry_name_buffer = &entry_name_buffer,
+        .artifact_buffer = &artifact_buffer,
+        .manifest_buffer = &manifest_buffer,
+        .trace_buffer = &trace_buffer,
+        .violations_buffer = &violations_buffer,
+    }, run_identity, trace_metadata, checker.CheckResult.fail(
+        &violations,
+        expected_digest,
+    ), .{});
+
+    var read_artifact_buffer: [256]u8 = undefined;
+    var read_manifest_source: [recommended_manifest_source_len]u8 = undefined;
+    var read_manifest_parse: [recommended_manifest_parse_len]u8 = undefined;
+    var read_trace_source: [recommended_trace_source_len]u8 = undefined;
+    var read_trace_parse: [recommended_trace_parse_len]u8 = undefined;
+    var read_violations_source: [recommended_violations_source_len]u8 = undefined;
+    var read_violations_parse: [recommended_violations_parse_len]u8 = undefined;
+    const bundle = try readFailureBundle(io, tmp_dir.dir, written.entry_name, .{
+        .selection = .{
+            .trace_artifact = .summary,
+            .text_capture = .none,
+        },
+        .artifact_buffer = &read_artifact_buffer,
+        .manifest_buffer = &read_manifest_source,
+        .manifest_parse_buffer = &read_manifest_parse,
+        .trace_buffer = &read_trace_source,
+        .trace_parse_buffer = &read_trace_parse,
+        .violations_buffer = &read_violations_source,
+        .violations_parse_buffer = &read_violations_parse,
+    });
+
+    try testing.expect(bundle.violations_document.checkpoint_digest != null);
+    const actual_digest = bundle.violations_document.checkpoint_digest.?;
+    try testing.expectEqual(@as(u64, 0xfedc_ba98_7654_3210), actual_digest.upper);
+    try testing.expectEqual(@as(u64, 0x0123_4567_89ab_cdef), actual_digest.lower);
 }
 
 test "writeFailureBundle can omit the trace summary when callers select replay-only retention" {

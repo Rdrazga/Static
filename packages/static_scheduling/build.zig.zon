@@ -2,7 +2,7 @@
     .name = .static_scheduling,
     .version = "0.0.0",
     .fingerprint = 0xde650dae92a5dfa8, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .static_core = .{ .path = "../static_core" },
         .static_sync = .{ .path = "../static_sync" },

@@ -453,7 +453,7 @@ const BsdKqueueBackend = struct {
 
     fn completeImmediate(self: *BsdKqueueBackend, op: types.Operation, completion: types.Completion) backend.SubmitError!types.OperationId {
         const slot_index = try self.allocSlot();
-        var slot = &self.slots[slot_index];
+        const slot = &self.slots[slot_index];
         assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);
@@ -542,7 +542,7 @@ const BsdKqueueBackend = struct {
     }
 
     fn cancelSlot(self: *BsdKqueueBackend, slot_index: u32, reason: CancelReason) void {
-        var slot = &self.slots[slot_index];
+        const slot = &self.slots[slot_index];
         if (slot.state != .in_flight) return;
         if (slot.cancel_reason == .none) slot.cancel_reason = reason;
 
@@ -622,7 +622,7 @@ const BsdKqueueBackend = struct {
         const slot_index = try self.allocSlot();
         errdefer self.freeSlot(slot_index);
 
-        var slot = &self.slots[slot_index];
+        const slot = &self.slots[slot_index];
         assert(slot.state == .free);
 
         const operation_id = encodeOperationId(slot_index, slot.generation);
@@ -931,7 +931,7 @@ const BsdKqueueBackend = struct {
         const decoded = decodeOperationId(operation_id) orelse return false;
         if (decoded.index >= self.slots.len) return false;
         const slot_index: u32 = @intCast(decoded.index);
-        var slot = &self.slots[slot_index];
+        const slot = &self.slots[slot_index];
         if (slot.generation != decoded.generation) return false;
         if (slot.state != .in_flight) return false;
         if (slot.operation_id != operation_id) return false;
@@ -1233,7 +1233,7 @@ const BsdKqueueBackend = struct {
         const decoded = decodeOperationId(operation_id) orelse return error.NotFound;
         if (decoded.index >= self.slots.len) return error.NotFound;
         const slot_index: u32 = @intCast(decoded.index);
-        var slot = &self.slots[slot_index];
+        const slot = &self.slots[slot_index];
         if (slot.generation != decoded.generation) return error.NotFound;
         if (slot.state != .in_flight) return error.NotFound;
         if (slot.operation_id != operation_id) return error.NotFound;

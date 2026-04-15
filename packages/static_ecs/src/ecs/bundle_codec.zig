@@ -160,7 +160,7 @@ fn tupleFields(comptime BundleType: type, comptime err: []const u8) []const std.
 }
 
 fn tupleContainsType(comptime BundleType: type, comptime T: type) bool {
-    const fields = tupleFields(BundleType, "bundle values must be passed as a comptime tuple.");
+    const fields = comptime tupleFields(BundleType, "bundle values must be passed as a comptime tuple.");
     inline for (fields) |field| {
         if (field.type == T) return true;
     }
@@ -168,7 +168,7 @@ fn tupleContainsType(comptime BundleType: type, comptime T: type) bool {
 }
 
 fn tupleValueOfType(bundle: anytype, comptime T: type) ?T {
-    const fields = tupleFields(@TypeOf(bundle), "bundle values must be passed as a comptime tuple.");
+    const fields = comptime tupleFields(@TypeOf(bundle), "bundle values must be passed as a comptime tuple.");
     inline for (fields) |field| {
         const value = @field(bundle, field.name);
         if (@TypeOf(value) == T) return value;
@@ -177,7 +177,7 @@ fn tupleValueOfType(bundle: anytype, comptime T: type) ?T {
 }
 
 fn validateBundleTuple(comptime Registry: type, comptime BundleType: type) void {
-    const fields = tupleFields(BundleType, "bundle values must be passed as a comptime tuple.");
+    const fields = comptime tupleFields(BundleType, "bundle values must be passed as a comptime tuple.");
     inline for (fields, 0..) |field_i, index_i| {
         const T = field_i.type;
         if (!Registry.contains(T)) {

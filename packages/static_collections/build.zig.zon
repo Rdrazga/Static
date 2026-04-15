@@ -2,7 +2,7 @@
     .name = .static_collections,
     .version = "0.0.0",
     .fingerprint = 0x2fbfad840381776b, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .static_core = .{ .path = "../static_core" },
         .static_memory = .{ .path = "../static_memory" },

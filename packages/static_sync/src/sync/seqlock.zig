@@ -5,7 +5,8 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
-const mutex = std.Thread;
+const core = @import("static_core");
+const mutex = @import("threading.zig");
 const padded_atomic = @import("padded_atomic.zig");
 
 pub const SeqLock = struct {
@@ -127,7 +128,7 @@ test "seqlock readBegin returns a stable token after writer contention" {
     var l = SeqLock{};
     l.max_read_spins = 1;
     l.writeLock();
-    var wait_timer = try std.time.Timer.start();
+    var wait_timer = try core.time_compat.Timer.start();
     const reader_start_timeout_ns = std.time.ns_per_s;
     const reader_finish_timeout_ns = std.time.ns_per_s;
 

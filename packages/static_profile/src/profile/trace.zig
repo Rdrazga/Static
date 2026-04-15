@@ -56,7 +56,7 @@ pub const TraceEvent = union(enum) {
 pub const EnabledTrace = struct {
     allocator: std.mem.Allocator,
     max_events: usize,
-    events: std.ArrayListUnmanaged(TraceEvent) = .{},
+    events: std.ArrayListUnmanaged(TraceEvent) = .empty,
     /// Tracks open zone depth in debug builds to detect unpaired begin/end calls.
     /// Always zero in non-debug builds (never read or written outside of debug guards).
     zone_depth: u32 = 0,

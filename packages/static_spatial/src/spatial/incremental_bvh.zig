@@ -58,8 +58,8 @@ pub fn IncrementalBVH(comptime T: type) type {
 
         pub fn init(allocator: std.mem.Allocator) Self {
             const self = Self{
-                .nodes = .{},
-                .free_list = .{},
+                .nodes = .empty,
+                .free_list = .empty,
                 .root = INVALID,
                 .leaf_count = 0,
                 .allocator = allocator,

@@ -304,7 +304,7 @@ fn currentExePathAlloc(allocator: std.mem.Allocator) ![]u8 {
     switch (builtin.os.tag) {
         .windows => {
             var path_w_buf: [std.fs.max_path_bytes]u16 = undefined;
-            const path_w = std.os.windows.kernel32.GetModuleFileNameW(null, &path_w_buf, path_w_buf.len);
+            const path_w = GetModuleFileNameW(null, &path_w_buf, @intCast(path_w_buf.len));
             return std.unicode.utf16LeToUtf8Alloc(allocator, path_w_buf[0..path_w]);
         },
         .linux, .serenity => {
@@ -315,6 +315,12 @@ fn currentExePathAlloc(allocator: std.mem.Allocator) ![]u8 {
         else => return error.Unavailable,
     }
 }
+
+extern "kernel32" fn GetModuleFileNameW(
+    module: ?*anyopaque,
+    filename: [*]u16,
+    size: u32,
+) callconv(.winapi) u32;
 
 const over_release_child_env = "STATIC_MEMORY_BUDGET_OVER_RELEASE_CHILD";
 

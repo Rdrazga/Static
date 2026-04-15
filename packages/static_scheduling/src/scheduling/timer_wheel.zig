@@ -119,7 +119,7 @@ pub fn TimerWheel(comptime T: type) type {
             const bucket_index: u32 = @intCast(@mod(due_tick, wheel_period));
             const rounds_remaining: u64 = @divFloor(due_offset - 1, wheel_period);
 
-            var slot = &self.slots[slot_index];
+            const slot = &self.slots[slot_index];
             slot.state = .scheduled;
             slot.bucket_index = bucket_index;
             slot.rounds_remaining = rounds_remaining;
@@ -133,7 +133,7 @@ pub fn TimerWheel(comptime T: type) type {
 
         pub fn cancel(self: *Self, id: TimerId) TimerError!T {
             const slot_index = self.validateId(id) catch return error.NotFound;
-            var slot = &self.slots[slot_index];
+            const slot = &self.slots[slot_index];
             if (slot.state != .scheduled) return error.NotFound;
 
             self.removeFromBucket(slot_index, slot.bucket_index);

@@ -265,7 +265,7 @@ pub fn IntrusiveMpscQueue(comptime T: type, comptime node_field: []const u8) typ
         pub const TrySendError = error{WouldBlock};
         pub const TryRecvError = error{WouldBlock};
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         head: ?*Node = null,
         tail: ?*Node = null,
         len_value: usize = 0,

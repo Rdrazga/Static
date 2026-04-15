@@ -9,16 +9,11 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const static_sync = @import("static_sync");
-const static_testing = @import("static_testing");
+const support = @import("support.zig");
 
-const bench = static_testing.bench;
-
-const bench_config = bench.config.BenchmarkConfig{
-    .mode = .full,
-    .warmup_iterations = 16,
-    .measure_iterations = 8192,
-    .sample_count = 8,
-};
+const bench = support.bench;
+const bench_config = support.fast_path_benchmark_config;
+const benchmark_name = "fast_paths";
 
 const CaseOp = enum {
     event_set_reset_cycle,
@@ -28,6 +23,56 @@ const CaseOp = enum {
     cancel_is_cancelled_clear,
     cancel_throw_if_cancelled_clear,
     once_call_done_fastpath,
+};
+
+const event_set_reset_cycle_tags = &[_][]const u8{
+    "static_sync",
+    "event",
+    "uncontended",
+    "set_reset_cycle",
+    "baseline",
+};
+const event_try_wait_signaled_tags = &[_][]const u8{
+    "static_sync",
+    "event",
+    "uncontended",
+    "try_wait_signaled",
+    "baseline",
+};
+const semaphore_post_try_wait_cycle_tags = &[_][]const u8{
+    "static_sync",
+    "semaphore",
+    "uncontended",
+    "post_try_wait_cycle",
+    "baseline",
+};
+const semaphore_try_wait_success_restore_tags = &[_][]const u8{
+    "static_sync",
+    "semaphore",
+    "uncontended",
+    "try_wait_success_restore",
+    "baseline",
+};
+const cancel_is_cancelled_clear_tags = &[_][]const u8{
+    "static_sync",
+    "cancel",
+    "uncontended",
+    "is_cancelled_clear",
+    "baseline",
+};
+const cancel_throw_if_cancelled_clear_tags = &[_][]const u8{
+    "static_sync",
+    "cancel",
+    "uncontended",
+    "throw_if_cancelled_clear",
+    "baseline",
+};
+const once_call_done_fastpath_tags = &[_][]const u8{
+    "static_sync",
+    "once",
+    "uncontended",
+    "done_fastpath",
+    "baseline",
 };
 
 const FastPathContext = struct {
@@ -86,9 +131,7 @@ pub fn main() !void {
     defer threaded_io.deinit();
 
     const io = threaded_io.io();
-    const cwd = std.Io.Dir.cwd();
-    const output_dir_path = ".zig-cache/static_sync/benchmarks/fast_paths";
-    var output_dir = try cwd.createDirPathOpen(io, output_dir_path, .{});
+    var output_dir = try support.openOutputDir(io, benchmark_name);
     defer output_dir.close(io);
 
     var contexts = [_]FastPathContext{
@@ -110,7 +153,7 @@ pub fn main() !void {
     inline for (&contexts) |*context| {
         try group.addCase(bench.case.BenchmarkCase.init(.{
             .name = context.name,
-            .tags = &[_][]const u8{ "static_sync", "fast_path", "baseline" },
+            .tags = tagsForOp(context.op),
             .context = context,
             .run_fn = FastPathContext.run,
         }));
@@ -124,62 +167,18 @@ pub fn main() !void {
         &case_result_storage,
     );
 
-    std.debug.print("== static_sync fast paths ==\n", .{});
-    var stats_storage: [contexts.len]bench.stats.BenchmarkStats = undefined;
-    var baseline_document_buffer: [4096]u8 = undefined;
-    var read_source_buffer: [4096]u8 = undefined;
-    var read_parse_buffer: [16_384]u8 = undefined;
-    var comparisons: [contexts.len * 2]bench.baseline.BaselineCaseComparison = undefined;
-    var history_existing_buffer: [32_768]u8 = undefined;
-    var history_record_buffer: [16_384]u8 = undefined;
-    var history_frame_buffer: [16_384]u8 = undefined;
-    var history_output_buffer: [32_768]u8 = undefined;
-    var history_file_buffer: [32_768]u8 = undefined;
-    var history_cases: [contexts.len]bench.stats.BenchmarkStats = undefined;
-    var history_names: [2048]u8 = undefined;
-    var history_tags: [4][]const u8 = undefined;
-    var history_comparisons: [contexts.len * 2]bench.baseline.BaselineCaseComparison = undefined;
-    var aw: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
-    _ = try bench.workflow.writeTextAndOptionalBaselineReport(&aw.writer, run_result, .{
-        .io = io,
-        .dir = output_dir,
-        .sub_path = "baseline.zon",
-        .mode = .record_if_missing_then_compare,
-        .compare_config = .{
-            .thresholds = .{
-                .median_ratio_ppm = 250_000,
-                .p95_ratio_ppm = 350_000,
-            },
+    try support.writeGroupReport(
+        contexts.len,
+        benchmark_name,
+        run_result,
+        io,
+        output_dir,
+        support.fast_path_compare_config,
+        .{
+            .environment_note = support.default_environment_note,
+            .environment_tags = support.fast_path_environment_tags,
         },
-        .enforce_gate = false,
-        .stats_storage = &stats_storage,
-        .baseline_document_buffer = &baseline_document_buffer,
-        .read_buffers = .{
-            .source_buffer = &read_source_buffer,
-            .parse_buffer = &read_parse_buffer,
-        },
-        .comparison_storage = &comparisons,
-        .history = .{
-            .sub_path = "history.binlog",
-            .package_name = "static_sync",
-            .append_buffers = .{
-                .existing_file_buffer = &history_existing_buffer,
-                .record_buffer = &history_record_buffer,
-                .frame_buffer = &history_frame_buffer,
-                .output_file_buffer = &history_output_buffer,
-            },
-            .read_buffers = .{
-                .file_buffer = &history_file_buffer,
-                .case_storage = &history_cases,
-                .string_buffer = &history_names,
-                .tag_storage = &history_tags,
-            },
-            .comparison_storage = &history_comparisons,
-        },
-    });
-    var out = aw.toArrayList();
-    defer out.deinit(std.heap.page_allocator);
-    std.debug.print("{s}", .{out.items});
+    );
 }
 
 fn validateSemanticPreflight() void {
@@ -226,6 +225,18 @@ fn preCompletedOnce() static_sync.once.Once {
     var once = static_sync.once.Once{};
     once.call(noop);
     return once;
+}
+
+fn tagsForOp(op: CaseOp) []const []const u8 {
+    return switch (op) {
+        .event_set_reset_cycle => event_set_reset_cycle_tags,
+        .event_try_wait_signaled => event_try_wait_signaled_tags,
+        .semaphore_post_try_wait_cycle => semaphore_post_try_wait_cycle_tags,
+        .semaphore_try_wait_success_restore => semaphore_try_wait_success_restore_tags,
+        .cancel_is_cancelled_clear => cancel_is_cancelled_clear_tags,
+        .cancel_throw_if_cancelled_clear => cancel_throw_if_cancelled_clear_tags,
+        .once_call_done_fastpath => once_call_done_fastpath_tags,
+    };
 }
 
 fn noop() void {}

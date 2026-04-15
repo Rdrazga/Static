@@ -3,8 +3,11 @@ const sync = @import("static_sync");
 const testing = @import("static_testing");
 
 const checker = testing.testing.checker;
+const corpus = testing.testing.corpus;
 const fuzz_runner = testing.testing.fuzz_runner;
 const identity = testing.testing.identity;
+const replay_artifact = testing.testing.replay_artifact;
+const replay_runner = testing.testing.replay_runner;
 const trace = testing.testing.trace;
 
 const event_violation = [_]checker.Violation{
@@ -62,6 +65,12 @@ test "deterministic replay-backed event campaign preserves state-machine invaria
     };
 
     const summary = try runner.run();
+    try expectNoFailureOrReplay(
+        threaded_io.io(),
+        tmp_dir.dir,
+        summary,
+        EventTarget.replay,
+    );
     try std.testing.expect(summary.failed_case == null);
     try std.testing.expectEqual(@as(u32, 64), summary.executed_case_count);
 }
@@ -100,6 +109,12 @@ test "deterministic replay-backed semaphore campaign preserves permit invariants
     };
 
     const summary = try runner.run();
+    try expectNoFailureOrReplay(
+        threaded_io.io(),
+        tmp_dir.dir,
+        summary,
+        SemaphoreTarget.replay,
+    );
     try std.testing.expect(summary.failed_case == null);
     try std.testing.expectEqual(@as(u32, 64), summary.executed_case_count);
 }
@@ -138,6 +153,12 @@ test "deterministic replay-backed cancel campaign preserves registration invaria
     };
 
     const summary = try runner.run();
+    try expectNoFailureOrReplay(
+        threaded_io.io(),
+        tmp_dir.dir,
+        summary,
+        CancelTarget.replay,
+    );
     try std.testing.expect(summary.failed_case == null);
     try std.testing.expectEqual(@as(u32, 64), summary.executed_case_count);
 }
@@ -147,6 +168,17 @@ const EventTarget = struct {
         const result = evaluateEventCase(run_identity.seed.value);
         return .{
             .trace_metadata = makeTraceMetadata(run_identity, result.event_count),
+            .check_result = result.check_result,
+        };
+    }
+
+    fn replay(
+        _: *const anyopaque,
+        artifact: replay_artifact.ReplayArtifactView,
+    ) error{}!replay_runner.ReplayExecution {
+        const result = evaluateEventCase(artifact.identity.seed.value);
+        return .{
+            .trace_metadata = makeTraceMetadata(artifact.identity, result.event_count),
             .check_result = result.check_result,
         };
     }
@@ -160,6 +192,17 @@ const SemaphoreTarget = struct {
             .check_result = result.check_result,
         };
     }
+
+    fn replay(
+        _: *const anyopaque,
+        artifact: replay_artifact.ReplayArtifactView,
+    ) error{}!replay_runner.ReplayExecution {
+        const result = evaluateSemaphoreCase(artifact.identity.seed.value);
+        return .{
+            .trace_metadata = makeTraceMetadata(artifact.identity, result.event_count),
+            .check_result = result.check_result,
+        };
+    }
 };
 
 const CancelTarget = struct {
@@ -167,6 +210,17 @@ const CancelTarget = struct {
         const result = evaluateCancelCase(run_identity.seed.value);
         return .{
             .trace_metadata = makeTraceMetadata(run_identity, result.event_count),
+            .check_result = result.check_result,
+        };
+    }
+
+    fn replay(
+        _: *const anyopaque,
+        artifact: replay_artifact.ReplayArtifactView,
+    ) error{}!replay_runner.ReplayExecution {
+        const result = evaluateCancelCase(artifact.identity.seed.value);
+        return .{
+            .trace_metadata = makeTraceMetadata(artifact.identity, result.event_count),
             .check_result = result.check_result,
         };
     }
@@ -406,4 +460,31 @@ fn modelDigest(flag: bool, count: usize, step: u32) u128 {
 fn cancelWakeCounter(ctx: ?*anyopaque) void {
     const counter: *std.atomic.Value(u32) = @ptrCast(@alignCast(ctx.?));
     _ = counter.fetchAdd(1, .acq_rel);
+}
+
+fn expectNoFailureOrReplay(
+    io: std.Io,
+    dir: std.Io.Dir,
+    summary: fuzz_runner.FuzzRunSummary,
+    replay_fn: *const fn (*const anyopaque, replay_artifact.ReplayArtifactView) error{}!replay_runner.ReplayExecution,
+) !void {
+    if (summary.failed_case) |failed_case| {
+        try std.testing.expect(failed_case.persisted_entry_name != null);
+
+        var read_buffer: [512]u8 = undefined;
+        const entry = try corpus.readCorpusEntry(
+            io,
+            dir,
+            failed_case.persisted_entry_name.?,
+            &read_buffer,
+        );
+        const outcome = try replay_runner.runReplay(error{}, read_buffer[0..@as(usize, @intCast(entry.meta.artifact_bytes_len))], .{
+            .context = undefined,
+            .run_fn = replay_fn,
+        }, .{
+            .expected_identity_hash = entry.meta.identity_hash,
+        });
+        try std.testing.expectEqual(replay_runner.ReplayOutcome.violation_reproduced, outcome);
+        return error.TestUnexpectedResult;
+    }
 }

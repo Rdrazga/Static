@@ -11,7 +11,7 @@ fn successCommandArgv() []const []const u8 {
 
 fn timeoutCommandArgv() []const []const u8 {
     return switch (builtin.os.tag) {
-        .windows => &[_][]const u8{ "cmd.exe", "/C", "ping 127.0.0.1 -n 3 >NUL" },
+        .windows => &[_][]const u8{ "ping.exe", "127.0.0.1", "-n", "6" },
         else => &[_][]const u8{ "sh", "-c", "sleep 1" },
     };
 }

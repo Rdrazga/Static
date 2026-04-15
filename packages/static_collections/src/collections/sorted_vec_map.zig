@@ -43,7 +43,7 @@ pub fn SortedVecMap(comptime K: type, comptime V: type, comptime Cmp: type) type
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
         budget_reserved_capacity: usize = 0,
-        entries: std.ArrayListUnmanaged(Entry) = .{},
+        entries: std.ArrayListUnmanaged(Entry) = .empty,
 
         fn entryBytesForCapacity(cap: usize) error{Overflow}!usize {
             return std.math.mul(usize, cap, @sizeOf(Entry));

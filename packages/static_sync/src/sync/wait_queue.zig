@@ -9,9 +9,11 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const core = @import("static_core");
+const time = core.time_compat;
 const builtin = @import("builtin");
 const caps = @import("caps.zig");
 const cancel = @import("cancel.zig");
+const threading = @import("threading.zig");
 
 const platform_supports_futex = switch (builtin.os.tag) {
     .windows,
@@ -80,7 +82,7 @@ pub fn waitValue(
             else
                 remaining_ns;
 
-            std.Thread.Futex.timedWait(futex_ptr, futex_expected, wait_ns) catch |err| switch (err) {
+            threading.Futex.timedWait(futex_ptr, futex_expected, wait_ns) catch |err| switch (err) {
                 error.Timeout => {
                     if (options.cancel) |token| {
                         token.throwIfCancelled() catch return error.Cancelled;
@@ -96,7 +98,7 @@ pub fn waitValue(
 
     while (atomicLoadValue(T, ptr) == expected) {
         if (options.cancel) |token| try token.throwIfCancelled();
-        std.Thread.Futex.wait(futex_ptr, futex_expected);
+        threading.Futex.wait(futex_ptr, futex_expected);
     }
 }
 
@@ -112,7 +114,7 @@ pub fn wakeValue(
     if (max_waiters == 0) return;
 
     const futex_ptr = asFutexPtr(T, ptr);
-    std.Thread.Futex.wake(futex_ptr, max_waiters);
+    threading.Futex.wake(futex_ptr, max_waiters);
 }
 
 fn asFutexPtr(comptime T: type, ptr: *align(@alignOf(u32)) const T) *const std.atomic.Value(u32) {
@@ -123,8 +125,8 @@ fn atomicLoadValue(comptime T: type, ptr: *align(@alignOf(u32)) const T) T {
     return @atomicLoad(T, ptr, .acquire);
 }
 
-fn elapsedSince(start: std.time.Instant) ?u64 {
-    const now = std.time.Instant.now() catch return null;
+fn elapsedSince(start: time.Instant) ?u64 {
+    const now = time.Instant.now() catch return null;
     return now.since(start);
 }
 
@@ -228,7 +230,7 @@ test "wait queue wake one then wake all" {
     defer thread_a.join();
     defer thread_b.join();
 
-    const ready_start = std.time.Instant.now() catch return error.SkipZigTest;
+    const ready_start = time.Instant.now() catch return error.SkipZigTest;
     while (ready_count.load(.acquire) < 2) {
         if ((elapsedSince(ready_start) orelse std.math.maxInt(u64)) >= 100 * std.time.ns_per_ms) return error.Timeout;
         std.Thread.yield() catch {};
@@ -237,7 +239,7 @@ test "wait queue wake one then wake all" {
     @atomicStore(u32, &state, 1, .release);
     wakeValue(u32, &state, 1);
 
-    const first_start = std.time.Instant.now() catch return error.SkipZigTest;
+    const first_start = time.Instant.now() catch return error.SkipZigTest;
     while (done_count.load(.acquire) == 0) {
         if ((elapsedSince(first_start) orelse std.math.maxInt(u64)) >= 100 * std.time.ns_per_ms) return error.Timeout;
         std.Thread.yield() catch {};
@@ -245,7 +247,7 @@ test "wait queue wake one then wake all" {
     try testing.expect(done_count.load(.acquire) >= 1);
 
     wakeValue(u32, &state, std.math.maxInt(u32));
-    const all_start = std.time.Instant.now() catch return error.SkipZigTest;
+    const all_start = time.Instant.now() catch return error.SkipZigTest;
     while (done_count.load(.acquire) < 2) {
         if ((elapsedSince(all_start) orelse std.math.maxInt(u64)) >= 100 * std.time.ns_per_ms) return error.Timeout;
         std.Thread.yield() catch {};
@@ -309,7 +311,7 @@ test "wait queue cancellation wins over pending timeout after wait starts" {
     var thread = try std.Thread.spawn(.{}, Worker.run, .{&worker});
     defer thread.join();
 
-    const start_wait = std.time.Instant.now() catch return error.SkipZigTest;
+    const start_wait = time.Instant.now() catch return error.SkipZigTest;
     while (!started.load(.acquire)) {
         if ((elapsedSince(start_wait) orelse std.math.maxInt(u64)) >= 100 * std.time.ns_per_ms) return error.Timeout;
         std.Thread.yield() catch {};
@@ -318,7 +320,7 @@ test "wait queue cancellation wins over pending timeout after wait starts" {
     sleepBusy(2 * cancel_poll_ns);
     cancel_source.cancel();
 
-    const finish_wait = std.time.Instant.now() catch return error.SkipZigTest;
+    const finish_wait = time.Instant.now() catch return error.SkipZigTest;
     while (!finished.load(.acquire)) {
         if ((elapsedSince(finish_wait) orelse std.math.maxInt(u64)) >= 100 * std.time.ns_per_ms) {
             @atomicStore(u32, &state, 1, .release);
@@ -332,7 +334,7 @@ test "wait queue cancellation wins over pending timeout after wait starts" {
 }
 
 fn sleepBusy(duration_ns: u64) void {
-    const start = std.time.Instant.now() catch return;
+    const start = time.Instant.now() catch return;
     while ((elapsedSince(start) orelse duration_ns) < duration_ns) {
         std.Thread.yield() catch {};
     }

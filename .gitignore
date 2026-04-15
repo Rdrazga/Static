@@ -21,6 +21,13 @@ docs/design/*
 docs/designs/*
 docs/plans/*
 docs/reviews/*
+!docs/plans/README.md
+!docs/plans/active/
+!docs/plans/active/*.md
+!docs/plans/active/packages/
+!docs/plans/active/packages/*.md
+!docs/plans/completed/
+!docs/plans/completed/*.md
 
 # OS
 .DS_Store

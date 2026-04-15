@@ -171,7 +171,7 @@ fn expectCompileFailure(repo_root: []const u8, case: CompileFailCase) !void {
 
     const result = try std.process.run(testing.allocator, testing.io, .{
         .argv = argv.items,
-        .cwd = repo_root,
+        .cwd = .{ .path = repo_root },
     });
     defer testing.allocator.free(result.stdout);
     defer testing.allocator.free(result.stderr);

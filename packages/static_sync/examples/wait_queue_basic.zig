@@ -2,13 +2,14 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
 const sync = @import("static_sync");
 
 pub fn main() !void {
     var state: u32 = 0;
     var waiter_started = std.atomic.Value(bool).init(false);
     var waiter_finished = std.atomic.Value(bool).init(false);
-    var start_timer = try std.time.Timer.start();
+    var start_timer = try core.time_compat.Timer.start();
     const waiter_start_timeout_ns = 1 * std.time.ns_per_s;
 
     if (!sync.wait_queue.supports_wait_queue) {

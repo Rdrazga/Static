@@ -7,10 +7,11 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const core = @import("static_core");
+const time = core.time_compat;
 const backoff = @import("backoff.zig");
 const caps = @import("caps.zig");
 const condvar = @import("condvar.zig");
-const mutex = std.Thread;
+const mutex = @import("threading.zig");
 const padded_atomic = @import("padded_atomic.zig");
 
 const supports_parking_wait = condvar.supports_blocking_wait;
@@ -88,7 +89,11 @@ pub const Semaphore = if (supports_blocking_wait) struct {
         if (supports_parking_wait and previous_permits == 0 and next_permits > 0) {
             self.wait_mutex.lock();
             defer self.wait_mutex.unlock();
-            self.wait_condvar.broadcast();
+            if (permit_count == 1) {
+                self.wait_condvar.signal();
+            } else {
+                self.wait_condvar.broadcast();
+            }
         }
 
         // Racy assertion removed: a concurrent tryWait can decrement permits between
@@ -421,21 +426,21 @@ test "semaphore timedWait unblocks after post from another thread" {
 }
 
 fn waitForFlag(flag: *std.atomic.Value(bool), timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (!flag.load(.acquire)) {
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
 }
 
-fn waitForMutexHold(m: *std.Thread.Mutex, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+fn waitForMutexHold(m: *mutex.Mutex, timeout_ns: u64) !void {
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (true) {
         if (!m.tryLock()) return;
         m.unlock();
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }

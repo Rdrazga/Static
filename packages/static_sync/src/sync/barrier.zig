@@ -8,10 +8,11 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const core = @import("static_core");
+const time = core.time_compat;
 const backoff = @import("backoff.zig");
 const caps = @import("caps.zig");
 const condvar = @import("condvar.zig");
-const mutex = std.Thread;
+const mutex = @import("threading.zig");
 const padded_atomic = @import("padded_atomic.zig");
 
 const supports_parking_wait = condvar.supports_blocking_wait;
@@ -588,9 +589,9 @@ test "barrier arriveAndWait keeps non-final arrival blocked until final party ar
 }
 
 fn waitForFlag(flag: *std.atomic.Value(bool), timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (!flag.load(.acquire)) {
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
@@ -604,7 +605,7 @@ fn waitForBarrierArrival(
 ) !void {
     if (!supports_blocking_wait) return error.SkipZigTest;
 
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = time.Instant.now() catch return error.SkipZigTest;
     while (true) {
         barrier.state_mutex.lock();
         const arrived_count = barrier.arrived_count;
@@ -613,7 +614,7 @@ fn waitForBarrierArrival(
 
         if (arrived_count == expected_arrived_count and generation_now == expected_generation) return;
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (time.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }

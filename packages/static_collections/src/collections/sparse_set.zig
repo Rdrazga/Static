@@ -27,7 +27,7 @@ pub const SparseSet = struct {
     budget: ?*memory.budget.Budget,
     budget_reserved_bytes: usize = 0,
     sparse: []u32,
-    dense: std.ArrayListUnmanaged(u32) = .{},
+    dense: std.ArrayListUnmanaged(u32) = .empty,
 
     pub const Config = struct {
         universe_size: usize,
@@ -99,7 +99,7 @@ pub const SparseSet = struct {
 
         const dense_cap = self.dense.capacity;
         const dense_len = self.dense.items.len;
-        var new_dense: std.ArrayListUnmanaged(u32) = .{};
+        var new_dense: std.ArrayListUnmanaged(u32) = .empty;
         if (dense_cap > 0) {
             new_dense.ensureTotalCapacityPrecise(self.allocator, dense_cap) catch return error.OutOfMemory;
             @memcpy(new_dense.items.ptr[0..dense_len], self.dense.items);

@@ -5,6 +5,8 @@ Workspace for the `static_*` Zig packages.
 ## Current status
 
 - The root workspace build is the supported entry point.
+- The workspace now targets Zig `0.16.0` stable through the root and
+  package-local `build.zig.zon` metadata.
 - Repository guidance is anchored in `AGENTS.md`, `docs/architecture.md`, and `docs/plans/README.md`.
 - The shared simulator boundary is locked by
   `docs/decisions/2026-03-21_static_testing_simulator_boundary.md`.
@@ -21,7 +23,8 @@ Workspace for the `static_*` Zig packages.
   `manifest.zon` / `violations.zon` plus optional `trace.zon` /
   `trace_events.binlog` failure-bundle sidecars, optional typed `actions.zon`
   model sidecars, optional typed retained pending-reason metadata in
-  `manifest.zon`, bounded causal/provenance trace summaries, bounded temporal
+  `manifest.zon`, full-width checkpoint-digest preservation through bundle
+  write/read, bounded causal/provenance trace summaries, bounded temporal
   assertions over deterministic traces, deterministic simulation-fixture
   workflows, bounded `testing.sim.explore` portfolio and PCT-style
   schedule-exploration modes, bounded subsystem simulators for network delivery, storage
@@ -89,8 +92,21 @@ Workspace for the `static_*` Zig packages.
 - `static_sync` now serves as the first synchronization-heavy downstream proof
   for replay, shared `testing.sim.fixture` wait/wake modeling, temporal
   ordering checks, retained failures, package-owned `testing.model` coverage
-  for `Barrier` phase/generation closure and reuse semantics plus `SeqLock`
-  token/retry invariants, and shared fast-path/contention benchmark workflows.
+  for `Barrier` phase/generation closure and reuse semantics, `SeqLock`
+  token/retry invariants, `Cancel` registration/reset lifecycle, `Semaphore`
+  permit progression, and a capability-gated `wait_queue` sequential contract,
+  plus simulation and temporal proofs for wait_queue, condvar, event,
+  semaphore, and cancel ordering protocols, shared fast-path/contention
+  benchmark workflows, new direct lifecycle, barrier-wait, seqlock,
+  capability, timeout-path, and neutral-reference benchmark owners, and
+  bounded watchdog-backed blocking benchmark runs, with contention metadata now
+  separating parking-backed waits from polling-fallback runs, with retained
+  failures now coming from primitive-facing misuse traces and replay-validated
+  bundle roundtrips, bounded delayed-wake and cancel-reset fault-injection
+  runtime proofs, with polling-fallback and watchdog loops now using phased
+  backoff rather than pure aggressive spin, with single-permit semaphore
+  wakeups no longer broadcasting to every parked waiter, and with condvar
+  handoff owners remaining capability-gated behind OS-backend builds.
 - `static_io` remains the runtime-heavy downstream adopter for
   `testing.system`, `testing.process_driver`, shared subsystem simulators,
   seeded runtime/buffer fuzzing, and shared benchmark workflows, and it now

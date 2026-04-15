@@ -42,7 +42,7 @@ pub fn WorkStealingDeque(comptime T: type) type {
 
         allocator: std.mem.Allocator,
         budget: ?*memory.budget.Budget,
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         buf: []T,
         head: usize = 0,
         len_value: usize = 0,

@@ -3,6 +3,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
 const sync = @import("static_sync");
 
 pub const ThreadPoolError = error{
@@ -33,7 +34,7 @@ pub const ThreadPool = if (supports_thread_pool) struct {
     pub const supports_thread_pool = true;
 
     const State = struct {
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         not_empty: sync.condvar.Condvar = .{},
         queue: []Task,
         head: usize = 0,
@@ -772,25 +773,25 @@ fn waitForIdleWorker(pool: *ThreadPool, timeout_ns: u64) !void {
 }
 
 fn waitForIdleWorkers(pool: *ThreadPool, waiting_count_min: usize, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
     while (true) {
         pool.state.mutex.lock();
         const is_idle_waiting = pool.state.len == 0 and pool.state.waiting_workers >= waiting_count_min and !pool.state.closed;
         pool.state.mutex.unlock();
         if (is_idle_waiting) return;
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }
 }
 
 fn waitForCounterAtLeast(counter: *const std.atomic.Value(u32), target: u32, timeout_ns: u64) !void {
-    const start = std.time.Instant.now() catch return error.SkipZigTest;
+    const start = core.time_compat.Instant.now() catch return error.SkipZigTest;
     while (true) {
         if (counter.load(.acquire) >= target) return;
 
-        const elapsed = (std.time.Instant.now() catch return error.SkipZigTest).since(start);
+        const elapsed = (core.time_compat.Instant.now() catch return error.SkipZigTest).since(start);
         if (elapsed >= timeout_ns) return error.Timeout;
         std.Thread.yield() catch {};
     }

@@ -7,6 +7,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
 const static_queues = @import("static_queues");
 const backend = @import("backend.zig");
 const config = @import("config.zig");
@@ -44,7 +45,7 @@ const Slot = struct {
     completion: types.Completion = undefined,
     cancelled: bool = false,
     closed_on_pump: bool = false,
-    submitted_at: ?std.time.Instant = null,
+    submitted_at: ?core.time_compat.Instant = null,
 };
 
 const HandleState = enum {
@@ -194,7 +195,7 @@ pub const FakeBackend = struct {
         slot.cancelled = false;
         slot.closed_on_pump = false;
         slot.submitted_at = if (operationHasFiniteTimeout(checked_op))
-            std.time.Instant.now() catch null
+            core.time_compat.Instant.now() catch null
         else
             null;
 
@@ -300,7 +301,7 @@ pub const FakeBackend = struct {
         _ = owned;
         if (!handle.isValid()) return;
         if (handle.index >= self.handles.len) return;
-        var slot = &self.handles[handle.index];
+        const slot = &self.handles[handle.index];
         slot.generation = handle.generation;
         slot.state = .open;
         slot.kind = kind;
@@ -595,7 +596,7 @@ pub const FakeBackend = struct {
     fn openStreamHandle(self: *FakeBackend, handle: types.Handle) void {
         if (!handle.isValid()) return;
         if (handle.index >= self.handles.len) return;
-        var slot = &self.handles[handle.index];
+        const slot = &self.handles[handle.index];
         slot.generation = handle.generation;
         slot.state = .open;
         slot.kind = .stream;
@@ -617,7 +618,7 @@ pub const FakeBackend = struct {
     fn validateHandle(self: *FakeBackend, handle: types.Handle, expected_kind: types.HandleKind) error{ InvalidInput, Closed }!*HandleSlot {
         if (!handle.isValid()) return error.InvalidInput;
         if (handle.index >= self.handles.len) return error.InvalidInput;
-        var slot = &self.handles[handle.index];
+        const slot = &self.handles[handle.index];
         if (slot.generation != handle.generation) return error.InvalidInput;
         if (slot.kind != expected_kind) return error.InvalidInput;
         return switch (slot.state) {
@@ -696,7 +697,7 @@ fn endpointPort(endpoint: types.Endpoint) u16 {
     };
 }
 
-fn hasOperationTimedOut(op: types.Operation, start_instant: ?std.time.Instant) bool {
+fn hasOperationTimedOut(op: types.Operation, start_instant: ?core.time_compat.Instant) bool {
     const timeout_ns = operationTimeoutNs(op) orelse return false;
     if (timeout_ns == 0) return true;
     const start = start_instant orelse return true;

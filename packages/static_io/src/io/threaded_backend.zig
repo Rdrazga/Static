@@ -4,8 +4,11 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 const builtin = @import("builtin");
+const core = @import("static_core");
 const io_caps = @import("caps.zig");
 const static_queues = @import("static_queues");
+const static_sync = @import("static_sync");
+const windows = @import("platform/windows/windows_compat.zig");
 const backend = @import("backend.zig");
 const config = @import("config.zig");
 const types = @import("types.zig");
@@ -72,8 +75,8 @@ const Shared = struct {
     closed: bool = false,
     wakeup_pending: bool = false,
     wsa_started: bool = false,
-    mutex: std.Thread.Mutex = .{},
-    cond: std.Thread.Condition = .{},
+    mutex: static_sync.threading.Mutex = .{},
+    cond: static_sync.threading.Condition = .{},
 };
 
 pub const ThreadedBackend = struct {
@@ -182,7 +185,6 @@ pub const ThreadedBackend = struct {
 
         var wsa_started = false;
         if (comptime builtin.os.tag == .windows) {
-            const windows = std.os.windows;
             var wsa_data: windows.ws2_32.WSADATA = undefined;
             const wsa_version: windows.WORD = 0x0202;
             if (windows.ws2_32.WSAStartup(wsa_version, &wsa_data) != 0) {
@@ -192,7 +194,6 @@ pub const ThreadedBackend = struct {
         }
         errdefer if (wsa_started) {
             if (comptime builtin.os.tag == .windows) {
-                const windows = std.os.windows;
                 _ = windows.ws2_32.WSACleanup();
             }
         };
@@ -316,7 +317,6 @@ pub const ThreadedBackend = struct {
         shared.worker_completed.deinit();
         shared.pending.deinit();
         if (shared.wsa_started and builtin.os.tag == .windows) {
-            const windows = std.os.windows;
             _ = windows.ws2_32.WSACleanup();
         }
         shared.allocator.free(shared.handle_owned);
@@ -411,7 +411,7 @@ pub const ThreadedBackend = struct {
         if (timeout_ns) |limit_ns| {
             if (limit_ns == 0) return 0;
 
-            const start = std.time.Instant.now() catch return error.Unsupported;
+            const start = core.time_compat.Instant.now() catch return error.Unsupported;
             while (true) {
                 const elapsed_ns = elapsedSince(start) orelse return error.Unsupported;
                 if (elapsed_ns >= limit_ns) return 0;
@@ -780,7 +780,6 @@ fn closeNativeHandle(kind: types.HandleKind, native: types.NativeHandle) void {
 }
 
 fn closeNativeHandleWindows(kind: types.HandleKind, native: types.NativeHandle) void {
-    const windows = std.os.windows;
     switch (kind) {
         .file => {
             const handle: windows.HANDLE = @ptrFromInt(native);
@@ -901,11 +900,11 @@ fn timeoutNsToPollMs(timeout_ns: ?u64) i32 {
 }
 
 const poll_in: i16 = if (builtin.os.tag == .windows)
-    @intCast(std.os.windows.ws2_32.POLL.IN)
+    @intCast(windows.ws2_32.POLL.IN)
 else
     0x0001;
 const poll_out: i16 = if (builtin.os.tag == .windows)
-    @intCast(std.os.windows.ws2_32.POLL.OUT)
+    @intCast(windows.ws2_32.POLL.OUT)
 else
     0x0004;
 
@@ -916,7 +915,6 @@ fn executeStreamReadWindows(
     buffer: types.Buffer,
     request_len: u32,
 ) types.Completion {
-    const windows = std.os.windows;
     const sock: windows.ws2_32.SOCKET = @ptrFromInt(native);
 
     if (op.timeout_ns != null) {
@@ -954,7 +952,6 @@ fn executeStreamWriteWindows(
     native: types.NativeHandle,
     request_len: u32,
 ) types.Completion {
-    const windows = std.os.windows;
     const sock: windows.ws2_32.SOCKET = @ptrFromInt(native);
 
     if (op.timeout_ns != null) {
@@ -985,7 +982,6 @@ fn executeStreamWriteWindows(
 }
 
 fn executeAcceptWindows(shared: *Shared, operation_id: types.OperationId, op: @FieldType(types.Operation, "accept"), listener_native: types.NativeHandle) types.Completion {
-    const windows = std.os.windows;
     const listen_sock: windows.ws2_32.SOCKET = @ptrFromInt(listener_native);
 
     if (op.timeout_ns != null) {
@@ -1039,7 +1035,6 @@ fn executeAcceptWindows(shared: *Shared, operation_id: types.OperationId, op: @F
 }
 
 fn executeConnectWindows(shared: *Shared, operation_id: types.OperationId, op: @FieldType(types.Operation, "connect")) types.Completion {
-    const windows = std.os.windows;
     const family: i32 = switch (op.endpoint) {
         .ipv4 => windows.ws2_32.AF.INET,
         .ipv6 => windows.ws2_32.AF.INET6,
@@ -1445,7 +1440,7 @@ fn executeFileWriteAt(operation_id: types.OperationId, op: @FieldType(types.Oper
     };
 }
 
-fn setOverlappedOffset(overlapped: *std.os.windows.OVERLAPPED, offset_bytes: u64) void {
+fn setOverlappedOffset(overlapped: *windows.OVERLAPPED, offset_bytes: u64) void {
     overlapped.DUMMYUNIONNAME.DUMMYSTRUCTNAME.Offset = @intCast(offset_bytes & 0xFFFF_FFFF);
     overlapped.DUMMYUNIONNAME.DUMMYSTRUCTNAME.OffsetHigh = @intCast((offset_bytes >> 32) & 0xFFFF_FFFF);
 }
@@ -1457,7 +1452,6 @@ fn executeFileReadAtWindows(
     buffer: types.Buffer,
     request_len: u32,
 ) types.Completion {
-    const windows = std.os.windows;
     const kernel32 = windows.kernel32;
     var overlapped = std.mem.zeroes(windows.OVERLAPPED);
     setOverlappedOffset(&overlapped, op.offset_bytes);
@@ -1497,7 +1491,6 @@ fn executeFileWriteAtWindows(
     native_handle: types.NativeHandle,
     request_len: u32,
 ) types.Completion {
-    const windows = std.os.windows;
     const kernel32 = windows.kernel32;
     var overlapped = std.mem.zeroes(windows.OVERLAPPED);
     setOverlappedOffset(&overlapped, op.offset_bytes);
@@ -1671,7 +1664,6 @@ test "threaded backend supports connect/accept and stream read/write" {
     var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
-    const windows = std.os.windows;
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
     const listen_sock = windows.ws2_32.WSASocketW(
         windows.ws2_32.AF.INET,
@@ -1795,7 +1787,6 @@ test "threaded backend close of pending accept completes closed" {
     var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
-    const windows = std.os.windows;
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
     const listen_sock = windows.ws2_32.WSASocketW(
         windows.ws2_32.AF.INET,
@@ -1850,7 +1841,6 @@ test "threaded backend close of in-flight stream_read completes closed" {
     var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
-    const windows = std.os.windows;
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
     const listen_sock = windows.ws2_32.WSASocketW(
         windows.ws2_32.AF.INET,
@@ -1939,7 +1929,6 @@ test "threaded backend close of pending stream_write completes closed" {
     var backend_impl = try ThreadedBackend.init(testing.allocator, cfg);
     defer backend_impl.deinit();
 
-    const windows = std.os.windows;
     const wsa_flag_overlapped: windows.DWORD = 0x00000001;
     const listen_sock = windows.ws2_32.WSASocketW(
         windows.ws2_32.AF.INET,
@@ -2057,7 +2046,6 @@ test "threaded backend supports file read/write via adopted handle" {
     const filename_wz = filename_w[0..filename_utf8.len :0].ptr;
     defer _ = DeleteFileW(filename_wz);
 
-    const windows = std.os.windows;
     const kernel32 = windows.kernel32;
     const desired_access: windows.ACCESS_MASK = .{ .GENERIC = .{ .READ = true, .WRITE = true } };
     const share_mode: windows.DWORD = 0x00000001 | 0x00000002 | 0x00000004;

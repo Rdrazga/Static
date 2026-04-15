@@ -7,6 +7,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
+const core = @import("static_core");
 const backend = @import("backend.zig");
 const types = @import("types.zig");
 
@@ -108,8 +109,8 @@ pub fn operationUsesHandle(operation: types.Operation, handle: types.Handle) boo
     return targets.a == handle or targets.b == handle;
 }
 
-pub fn elapsedSince(start: std.time.Instant) ?u64 {
-    const now = std.time.Instant.now() catch return null;
+pub fn elapsedSince(start: core.time_compat.Instant) ?u64 {
+    const now = core.time_compat.Instant.now() catch return null;
     return now.since(start);
 }
 

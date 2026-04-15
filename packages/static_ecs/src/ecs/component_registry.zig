@@ -2,7 +2,7 @@ const std = @import("std");
 const assert = std.debug.assert;
 const testing = std.testing;
 
-pub const ComponentTypeId = packed struct {
+pub const ComponentTypeId = packed struct(u32) {
     value: u32,
 
     comptime {
@@ -39,7 +39,8 @@ pub fn ComponentRegistry(comptime Components: anytype) type {
         }
 
         fn indexOf(comptime T: type) ?usize {
-            inline for (universeFields(Components), 0..) |field, index| {
+            const fields = comptime universeFields(Components);
+            inline for (fields, 0..) |field, index| {
                 const component = @field(Components, field.name);
                 if (component == T) return index;
             }
@@ -49,7 +50,7 @@ pub fn ComponentRegistry(comptime Components: anytype) type {
 }
 
 fn validateComponentUniverse(comptime Components: anytype) void {
-    const fields = universeFields(Components);
+    const fields = comptime universeFields(Components);
 
     inline for (fields, 0..) |field_i, index_i| {
         const component_i = @field(Components, field_i.name);
@@ -71,7 +72,7 @@ fn componentCount(comptime Components: anytype) usize {
 }
 
 fn componentAt(comptime Components: anytype, comptime index: usize) type {
-    const fields = universeFields(Components);
+    const fields = comptime universeFields(Components);
     comptime assert(index < fields.len);
 
     const component = @field(Components, fields[index].name);

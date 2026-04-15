@@ -2,7 +2,7 @@
     .name = .static_spatial,
     .version = "0.0.0",
     .fingerprint = 0x3d6ecdf0bb6fbe2a,
-    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .static_testing = .{ .path = "../static_testing" },
     },

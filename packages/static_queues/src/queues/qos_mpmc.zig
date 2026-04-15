@@ -51,7 +51,7 @@ pub fn QosMpmcQueue(comptime T: type, comptime lane_count_max: usize) type {
         scheduling_policy: SchedulingPolicy,
         next_lane_index: usize = 0,
         lane_budget_remaining: u16 = 0,
-        recv_scheduler_mutex: std.Thread.Mutex = .{},
+        recv_scheduler_mutex: sync.threading.Mutex = .{},
 
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {
             var lane_index: usize = 0;

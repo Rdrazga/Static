@@ -39,7 +39,7 @@ pub fn LockedQueue(comptime T: type) type {
             items_max: usize = std.math.maxInt(usize),
         };
 
-        mutex: std.Thread.Mutex = .{},
+        mutex: sync.threading.Mutex = .{},
         rb: ring.RingBuffer(T),
 
         pub fn init(allocator: std.mem.Allocator, cfg: Config) Error!Self {

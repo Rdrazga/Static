@@ -237,7 +237,7 @@ fn includedFields(comptime Included: anytype) []const std.builtin.Type.StructFie
 }
 
 fn tupleContainsType(comptime Included: anytype, comptime T: type) bool {
-    const fields = includedFields(Included);
+    const fields = comptime includedFields(Included);
     inline for (fields) |field| {
         const candidate = @field(Included, field.name);
         if (@TypeOf(candidate) != type) {
@@ -249,7 +249,7 @@ fn tupleContainsType(comptime Included: anytype, comptime T: type) bool {
 }
 
 fn validateIncludedSubset(comptime Included: anytype, comptime Registry: type) void {
-    const fields = includedFields(Included);
+    const fields = comptime includedFields(Included);
     inline for (fields, 0..) |field_i, index_i| {
         const component_i = @field(Included, field_i.name);
         if (@TypeOf(component_i) != type) {

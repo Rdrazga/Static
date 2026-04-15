@@ -2,7 +2,7 @@
     .name = .static_string,
     .version = "0.0.0",
     .fingerprint = 0x15bb9aaa286c51a3, // Changing this has security and trust implications.
-    .minimum_zig_version = "0.16.0-dev.2368+380ea6fb5",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .static_hash = .{ .path = "../static_hash" },
     },

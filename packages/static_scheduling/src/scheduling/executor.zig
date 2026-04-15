@@ -55,7 +55,7 @@ pub const Executor = struct {
     allocator: std.mem.Allocator,
     cfg: Config,
 
-    mutex: std.Thread.Mutex = .{},
+    mutex: sync.threading.Mutex = .{},
     completion_cond: if (supports_completion_wait) sync.condvar.Condvar else void = if (supports_completion_wait) .{} else {},
 
     slots: []Slot,
